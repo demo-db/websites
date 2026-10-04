@@ -1,0 +1,45 @@
+---
+import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import { databases, publicDataPath, recordsetPath } from '../../../../data/db';
+import { relatedRecordsets } from '../../../../data/similarity';
+import type { Database, Recordset } from '../../../../data/types';
+export function getStaticPaths() {
+  return databases.flatMap((db) => db.tables.map((table) => ({ params: { id: db.id, table: table.name }, props: { db, table } })));
+}
+const { db, table } = Astro.props as { db: Database; table: Recordset };
+const related = [...new Set(table.foreignKeys.map((fk) => fk.table))];
+const inbound = db.tables.filter((candidate) => candidate.foreignKeys.some((fk) => fk.table === table.name));
+const similar = relatedRecordsets(db, table, databases);
+const previewColumns = table.columns.slice(0, 7);
+const previewRows = table.rows.slice(0, 8);
+const jsonUrl = publicDataPath(db, 'json', table.name);
+const csvUrl = publicDataPath(db, 'csv', table.name);
+const sqlUrl = publicDataPath(db, 'sql', table.name);
+const yamlUrl = publicDataPath(db, 'yaml', table.name);
+---
+<SiteLayout db={db} title={`${table.name} — ${db.name} schema | DemoDB`} description={`${table.description || `${table.name} ${table.kind} schema`} in ${db.name}: columns, keys, relationships, preview records, and downloads.`} canonical={recordsetPath(table.name)}>
+  <section class="table-hero shell"><div><a class="back-link" href="/tables/">← All tables and views</a><p class="eyebrow">{db.name} {table.kind}</p><h1>{table.name}</h1><p>{table.description || `Native ${table.kind} in the ${db.name} sample database.`}</p></div><div class="table-hero-stat"><strong>{table.rowCount == null ? '—' : table.rowCount.toLocaleString()}</strong><span>rows</span></div></section>
+  <section class="shell table-layout"><div class="table-main">
+    <div class="content-card"><div class="card-heading"><h2>{table.columns.length} columns</h2><span class="muted">Schema from the provider contract</span></div><div class="schema-scroll"><table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Key</th><th>References</th></tr></thead><tbody>{table.columns.map((column) => { const fks = table.foreignKeys.filter((fk) => fk.column === column.name); const keyColumns = table.columns.filter((candidate) => candidate.primaryKey); return <tr><th scope="row"><code>{column.name}</code></th><td><code>{column.type}</code></td><td>{column.nullable ? 'yes' : 'no'}</td><td>{column.primaryKey ? <span class="key-badge">PK{keyColumns.length > 1 ? ` ${column.primaryKeyPosition ?? keyColumns.indexOf(column) + 1}/${keyColumns.length}` : ''}</span> : '—'}</td><td>{fks.length ? fks.map((fk) => <a href={recordsetPath(fk.table)}><code>{fk.table}.{fk.referencedColumn}</code> </a>) : '—'}</td></tr>; })}</tbody></table></div></div>
+    {table.kind === 'view' && table.viewSql && <div class="content-card"><div class="card-heading"><h2>View definition</h2></div><pre class="query-code"><code>{table.viewSql}</code></pre></div>}
+    <div class="content-card"><div class="card-heading"><div><p class="eyebrow">Data preview</p><h2>Sample records</h2></div><span class="muted">{table.rowCount == null ? '' : `${table.rowCount.toLocaleString()} rows available`}</span></div>{previewRows.length ? <div class="preview-scroll"><table class="preview-table"><thead><tr>{previewColumns.map((column) => <th>{column.name}</th>)}</tr></thead><tbody>{previewRows.map((row) => <tr>{previewColumns.map((column) => <td>{row[column.name] == null ? <span class="null-value">NULL</span> : String(row[column.name])}</td>)}</tr>)}</tbody></table></div> : <p class="muted">This recordset has no sample rows.</p>}{jsonUrl && <div class="preview-actions"><a class="text-link" href={jsonUrl}>Open complete JSON data →</a>{csvUrl && <a class="text-link" href={csvUrl}>Download CSV ↓</a>}</div>}</div>
+    {db.capabilities.datatug && jsonUrl && <div class="content-card"><div class="card-heading"><div><p class="eyebrow">Interactive explorer</p><h2>Explore {table.name}</h2></div><span class="muted">Powered by DataTug</span></div><datatug-grid data-url={jsonUrl}></datatug-grid><noscript><p>The interactive grid needs JavaScript. Download this table as JSON or CSV instead.</p></noscript></div>}
+  </div><aside class="table-aside">
+    <div class="content-card download-card"><p class="eyebrow">Download this recordset</p><h2>Choose a format</h2><div class="download-links">{jsonUrl && <a href={jsonUrl} download><span>JSON</span><b>↓</b></a>}{yamlUrl && <a href={yamlUrl} download><span>YAML</span><b>↓</b></a>}{csvUrl && <a href={csvUrl} download><span>CSV</span><b>↓</b></a>}{sqlUrl && <a href={sqlUrl} download><span>SQL</span><b>↓</b></a>}</div></div>
+    <div class="content-card"><p class="eyebrow">Relationships</p><h2>Connected recordsets</h2>{related.length || inbound.length ? <div class="related-list">{related.map((name) => <a href={recordsetPath(name)}><span>→</span>{name}</a>)}{inbound.map((other) => <a href={recordsetPath(other.name)}><span>←</span>{other.name}</a>)}</div> : <p class="muted">No declared foreign-key relationships.</p>}</div>
+    {similar.length > 0 && <div class="content-card"><p class="eyebrow">Similar tables</p><h2>Across DemoDB</h2><p class="muted">Ranked by shared concepts, names, columns, and key shape.</p><div class="similar-list">{similar.map((match) => <a href={`https://${match.database.siteHost}${recordsetPath(match.table.name)}`}><strong>{match.table.name}</strong><span>{match.database.name} · {match.table.rowCount?.toLocaleString() ?? '—'} rows</span><small>{match.evidence.join(' · ')}</small></a>)}</div></div>}
+    <div class="content-card source-card"><p class="eyebrow">Provider</p><p>Schema and data come from the pinned database repository contract.</p><a class="text-link" href={`${db.sourceRepository.replace(/\.git$/, '')}/tree/${db.sourceCommit ?? 'main'}`}>View source →</a></div>
+  </aside></section>
+  {db.capabilities.datatug && jsonUrl && <script is:inline type="module" src="/embed/datatug.js"></script>}
+</SiteLayout>
+<style>
+  .schema-scroll { margin-bottom:-25px; }
+  .schema-table tbody tr:last-child > * { border-bottom:0; }
+  .preview-actions { display:flex; flex-wrap:wrap; gap:22px; margin-top:18px; }
+  .similar-list { display:grid; gap:10px; margin-top:16px; }
+  .similar-list a { border-top:1px solid var(--line); padding-top:10px; display:grid; gap:2px; }
+  .similar-list strong { color:var(--ink); }
+  .similar-list span,.similar-list small { color:var(--muted); font-size:11px; }
+  .similar-list small { font-family:'DM Mono',monospace; line-height:1.5; }
+  datatug-grid { display:block; min-height:240px; --datatug-bg:var(--panel); --datatug-fg:var(--ink); --datatug-muted:var(--muted); --datatug-border:var(--line); --datatug-header-bg:var(--panel-2); --datatug-hover:#1b304b; --datatug-selected:#25415e; --datatug-accent:var(--lime); --datatug-button-bg:var(--panel-2); --datatug-error:#ff9ca5; --datatug-radius:0 0 7px 7px; }
+</style>

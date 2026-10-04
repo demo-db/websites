@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "catalogueHost": "demodb.dev",
+  "databases": [
+    {
+      "id": "chinook",
+      "repository": "https://github.com/demo-db/chinook",
+      "commit": "184f9ee22101f8f56016c7963d18a406beffa013",
+      "contractSha256": "3e31adb5051a452265162d360bb7123237be3585e54bef69da0c5a43dd77c0d9"
+    },
+    {
+      "id": "northwind",
+      "repository": "https://github.com/demo-db/northwind",
+      "commit": "8e9755ae30bb99f15601a7dd3833199f59d37035",
+      "contractSha256": "00db83710a31689f5d17f6157a4d372c7bc1dae0a32d99519a52f84fadf4025b"
+    }
+  ]
+}

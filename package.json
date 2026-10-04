@@ -1,0 +1,27 @@
+{
+  "name": "@demo-db/websites",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "prepare:databases": "node scripts/prepare-databases.mjs",
+    "dev": "pnpm build && wrangler dev --env local",
+    "build": "pnpm prepare:databases && astro check && astro build && node scripts/finalize-static.mjs && node scripts/write-build-info.mjs",
+    "check": "astro check",
+    "preview": "wrangler dev --local",
+    "test": "node --import tsx/esm --test scripts/test-registry.ts scripts/test-similarity.ts scripts/test-worker.ts && node --test scripts/test-build-info.mjs scripts/test-workflow.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "astro": "^5.14.1",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.38.0"
+  }
+}

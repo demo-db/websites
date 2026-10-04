@@ -1,0 +1,25 @@
+---
+import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import RecordsetCard from '../../../../components/RecordsetCard.astro';
+import { databases, recordsetPath } from '../../../../data/db';
+import type { Database } from '../../../../data/types';
+export function getStaticPaths() { return databases.map((db) => ({ params: { id: db.id }, props: { db } })); }
+const { db } = Astro.props as { db: Database };
+const recordsets = db.tables;
+const relationships = db.tables.flatMap((table) => table.foreignKeys.map((fk) => ({ from: table.name, column: fk.column, to: fk.table, referencedColumn: fk.referencedColumn })));
+const connected = (name: string) => new Set([...db.tables.find((table) => table.name === name)!.foreignKeys.map((fk) => fk.table), ...db.tables.filter((table) => table.foreignKeys.some((fk) => fk.table === name)).map((table) => table.name)]).size;
+---
+<SiteLayout db={db} title={`Tables and views — ${db.name} | DemoDB`} description={`Browse ${db.name} tables and views with keys, relationships, previews, and direct data downloads.`} canonical="/tables/">
+  <section class="page-intro shell"><p class="eyebrow">{db.name} schema</p><h1>Tables and views</h1><p>Explore the native recordsets with their real names, schema, relationships, row counts, and direct downloads.</p></section>
+  <section class="shell section"><div class="table-grid">{recordsets.map((table) => <RecordsetCard recordset={table} relatedCount={connected(table.name)} />)}</div><div class="relationship-section"><div class="section-heading compact"><div><p class="eyebrow">Relationship map</p><h2>How recordsets connect.</h2></div><span class="muted">{relationships.length} foreign keys</span></div><div class="relationship-list">{relationships.map((relation) => <div class="relationship-row"><a class="relationship-table" href={recordsetPath(relation.from)}>{relation.from}</a><code>{relation.column}</code><span class="relationship-arrow" aria-hidden="true">→</span><a class="relationship-table" href={recordsetPath(relation.to)}>{relation.to}</a><code>{relation.referencedColumn}</code></div>)}</div></div></section>
+</SiteLayout>
+<style>
+  .relationship-section { border-top: 1px solid var(--line); margin-top: 74px; padding-top: 64px; }
+  .relationship-list { border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; }
+  .relationship-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(90px,1.2fr) 24px minmax(100px,1fr) minmax(90px,1.2fr); align-items:center; gap:10px; padding:13px 10px; border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+  .relationship-row:nth-child(odd) { border-right:1px solid var(--line); }
+  .relationship-table { font-weight:700; color:var(--ink); overflow-wrap:anywhere; }
+  .relationship-row code { font-size:10px; color:var(--cyan); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .relationship-arrow { color:var(--lime); text-align:center; }
+  @media (max-width:800px) { .relationship-list { grid-template-columns:1fr; } .relationship-row:nth-child(odd) { border-right:0; } }
+</style>

@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "demodb-websites",
+  "main": "src/worker.ts",
+  "workers_dev": false,
+  "compatibility_date": "2026-10-04",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "html_handling": "none",
+    "run_worker_first": true
+  },
+  "routes": [
+    { "pattern": "demodb.dev", "custom_domain": true },
+    { "pattern": "chinook.demodb.dev", "custom_domain": true },
+    { "pattern": "northwind.demodb.dev", "custom_domain": true }
+  ],
+  "vars": {
+    "ENABLE_LEGACY_REDIRECTS": "false"
+  },
+  "env": {
+    "local": {
+      "name": "demodb-websites-local",
+      "routes": [],
+      "vars": {
+        "LOCAL_DB_HOSTS": "{\"chinook.localhost\":\"chinook\",\"northwind.localhost\":\"northwind\"}",
+        "LOCAL_CATALOGUE_HOSTS": "[\"localhost\",\"127.0.0.1\"]"
+      }
+    }
+  }
+}

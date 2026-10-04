@@ -1,0 +1,9 @@
+# Adding a database
+
+1. Create or update a provider repository with the native SQLite fixture, reproducible provenance, a `manifest.json`, `metadata/contract.json`, `metadata/checksums.json`, and the exports and model/meaning files named by the provider contract. Preserve the source schema and names; do not prepare a second hand-edited schema for the website. Add OVDB publication metadata and declare table concepts only where the provider’s meaning metadata supports them.
+2. Validate and publish the provider repository. Add one entry to `config/databases.json` with its stable ID, repository URL, full immutable main commit, and SHA-256 of that commit’s `metadata/contract.json`. Rebuild locally from a checkout override, inspect all routes and downloads, and run the website checks.
+3. Add the new hostname as an explicit `custom_domain` in `wrangler.jsonc` after the domain is owned and ready to attach. Confirm its `siteHost` equals `<id>.demodb.dev`, then merge through the normal CI deploy. The Worker resolver and static pages derive the database from the registry.
+
+For example, adding Sakila would mean a `demo-db/sakila` provider, a pinned `sakila` registry entry, and `sakila.demodb.dev` in the Worker custom-domain list. The catalogue card, database landing page, tables, schema, downloads, queries, about page, model page, similarity ranking, CORS, discovery, and OVDB redirects use the same components and host mapping; no Sakila-specific UI code is added.
+
+Provider table names, exports, model entity aliases, row counts, views, and capabilities come from each provider’s contract and manifest. The provider publisher validates the manifest’s table/entity mapping before website builds consume it. A missing pinned export or checksum fails the build instead of quietly producing a partial site.

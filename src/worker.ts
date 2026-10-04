@@ -1,5 +1,6 @@
 import runtime from './data/generated/runtime.json';
 import providerIndex from './data/generated/index.json';
+import ovdbIndex from './data/generated/ovdb.json';
 
 type Runtime = {
   catalogueHost: string;
@@ -23,9 +24,13 @@ type Env = {
   LOCAL_CATALOGUE_HOSTS?: string;
 };
 
+type OVDBManifest = { id: string; localId: string; apiUrl: string; capabilities: { query: boolean }; deployment: { url: string }; [key: string]: unknown };
+
 const sites = runtime as Runtime;
 const databaseList = providerIndex.databases as Database[];
 const databases = new Map(databaseList.map((database) => [database.id, database]));
+const ovdbDatabases = new Map((ovdbIndex.databases as OVDBManifest[]).map((database) => [database.localId, database]));
+const ovdbApiOrigin = 'https://cloud.openvaultdb.com';
 const contentTypes: Record<string, string> = {
   '.sqlite': 'application/vnd.sqlite3', '.db': 'application/vnd.sqlite3', '.sql': 'application/sql; charset=utf-8',
   '.yaml': 'application/yaml; charset=utf-8', '.yml': 'application/yaml; charset=utf-8',
@@ -49,6 +54,10 @@ export default {
       const aliasDatabase = databases.get(aliasId);
       if (env.ENABLE_LEGACY_REDIRECTS !== 'true' || !aliasDatabase) return notFound();
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
+      const apiAlias = /^\/ovdb\/v1\/databases\/([a-z][a-z0-9-]{0,39})(?:\/.*)?$/.exec(url.pathname);
+      if (apiAlias && ovdbDatabases.has(apiAlias[1])) return redirectPreservingRequest(request, `https://demodb.dev${url.pathname}${url.search}`);
+      const profileAlias = /^\/ovdb\/(?:dbs|db)\/([a-z][a-z0-9-]{0,39})\/?$/.exec(url.pathname);
+      if (profileAlias && ovdbDatabases.has(profileAlias[1])) return redirectPreservingRequest(request, `https://demodb.dev/${profileAlias[1]}/${url.search}`);
       return redirectPreservingRequest(request, `https://${aliasDatabase.siteHost}${url.pathname}${url.search}`);
     }
 
@@ -63,9 +72,33 @@ export default {
     }
 
     if (catalogue) {
-      if (url.pathname.startsWith('/ovdb') || url.pathname === '/.well-known/openvaultdb' || url.pathname.startsWith('/data/') || url.pathname.startsWith('/model/')) return notFound();
+      if (url.pathname === '/.well-known/openvaultdb') return serverDiscovery(request);
+      if (url.pathname.startsWith('/data/') || url.pathname.startsWith('/model/')) return notFound();
+      if (url.pathname === '/ovdb/v1' || url.pathname === '/ovdb/v1/') return serverApiIndex(request);
+      if (url.pathname.startsWith('/ovdb/v1/')) return proxyOVDB(request, url);
+      const legacyDbRoute = /^\/ovdb\/(?:dbs\/([a-z][a-z0-9-]{0,39})\/?|db\/([a-z][a-z0-9-]{0,39}))$/.exec(url.pathname);
+      const legacyDbId = legacyDbRoute?.[1] ?? legacyDbRoute?.[2];
+      if (legacyDbId && ovdbDatabases.has(legacyDbId)) {
+        if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+        return redirectPreservingRequest(request, `https://demodb.dev/${legacyDbId}/${url.search}`);
+      }
+      if (url.pathname.startsWith('/ovdb/db/')) {
+        const id = /^\/ovdb\/db\/([a-z][a-z0-9-]{0,39})\//.exec(url.pathname)?.[1];
+        if (!id || !ovdbDatabases.has(id)) return notFound();
+      }
+      if (/^\/[a-z][a-z0-9-]{0,39}\/ovdb-database\.json$/.test(url.pathname)) {
+        const id = url.pathname.split('/')[1];
+        if (!ovdbDatabases.has(id)) return notFound();
+      }
+      if (request.method === 'OPTIONS' && isOVDBPublicJson(url.pathname)) return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
       if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
-      return serveAsset(request, env, url, url.pathname === '/' ? '/index.html' : url.pathname);
+      const target = url.pathname === '/' ? '/index.html'
+        : url.pathname === '/ovdb' || url.pathname === '/ovdb/' ? '/ovdb/index.html'
+          : /^\/[a-z][a-z0-9-]{0,39}\/$/.test(url.pathname) ? `${url.pathname}index.html`
+            : /^\/ovdb\/db\/[a-z][a-z0-9-]{0,39}\/$/.test(url.pathname) ? `${url.pathname}index.html`
+              : url.pathname;
+      const response = await serveAsset(request, env, url, target);
+      return isOVDBPublicJson(url.pathname) ? withDataHeaders(response, request.method) : response;
     }
 
     const db = databaseId ? databases.get(databaseId) : undefined;
@@ -183,6 +216,151 @@ function discovery(request: Request, db: Database): Response {
   return new Response(request.method === 'HEAD' ? null : body, { headers: { ...readonlyCorsHeaders(), 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300' } });
 }
 
+function serverDiscovery(request: Request): Response {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
+  const body = JSON.stringify({
+    name: 'DemoDB OpenVaultDB server', protocol: 'openvaultdb/0.1', authEnabled: false,
+    databases: [...ovdbDatabases.values()].map((database) => ({
+      id: database.localId, url: database.id, apiUrl: database.apiUrl,
+      manifestUrl: `https://demodb.dev/ovdb/db/${database.localId}/ovdb-database.json`,
+      capabilities: { read: true, query: database.capabilities.query, write: false },
+    })),
+  });
+  return new Response(request.method === 'HEAD' ? null : body, { headers: { ...readonlyCorsHeaders(), 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300', ...securityHeaders() } });
+}
+
+function serverApiIndex(request: Request): Response {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
+  const body = JSON.stringify(ovdbIndex.server);
+  return new Response(request.method === 'HEAD' ? null : body, { headers: { ...readonlyCorsHeaders(), 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300', ...securityHeaders() } });
+}
+
+function isOVDBPublicJson(pathname: string): boolean {
+  return pathname === '/.well-known/openvaultdb'
+    || pathname === '/ovdb/ovdb-server.json'
+    || /^\/ovdb\/schemas\/ovdb-(?:server|database)-draft-1\.schema\.json$/.test(pathname)
+    || /^\/ovdb\/db\/[a-z][a-z0-9-]{0,39}\/ovdb-database\.json$/.test(pathname)
+    || /^\/[a-z][a-z0-9-]{0,39}\/ovdb-database\.json$/.test(pathname);
+}
+
+async function proxyOVDB(request: Request, url: URL): Promise<Response> {
+  const match = /^\/ovdb\/v1\/databases\/([a-z][a-z0-9-]{0,39})(\/.*)?$/.exec(url.pathname);
+  const database = match && ovdbDatabases.get(match[1]);
+  if (!database) return notFound();
+  const suffix = match[2] ?? '';
+  if (suffix === '' || suffix === '/') return databaseApiIndex(request, database);
+  const query = suffix === '/dtql' || suffix === '/query';
+  const recordRead = /^\/records\/[^/]+(?:\/[^/]+)+$/.test(suffix);
+  const readPath = suffix === '/read' || suffix === '/inferred-schema' || recordRead;
+  if (!query && !readPath) return notFound();
+  if (query && !database.capabilities.query) return notFound();
+  const methods = query ? ['GET', 'HEAD', 'POST', 'OPTIONS'] : ['GET', 'HEAD', 'OPTIONS'];
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: apiCorsHeaders(methods) });
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !(query && request.method === 'POST')) {
+    return new Response('OpenVaultDB is read-only', { status: 403, headers: { ...apiCorsHeaders(methods), Allow: methods.join(', ') } });
+  }
+  if (!methods.includes(request.method)) {
+    return new Response('Method Not Allowed', { status: 405, headers: { ...apiCorsHeaders(methods), Allow: methods.join(', ') } });
+  }
+  const target = new URL(`/v1/databases/${database.localId}${suffix}${url.search}`, ovdbApiOrigin);
+  const headers = new Headers({ Accept: request.headers.get('Accept') ?? 'application/json' });
+  let body: ArrayBuffer | undefined;
+  if (query) {
+    if (request.method === 'POST') {
+      const length = Number(request.headers.get('Content-Length'));
+      if (Number.isFinite(length) && length > 1 * 1024 * 1024) return new Response('Query request is too large', { status: 413, headers: apiCorsHeaders(methods) });
+      const limitedBody = await readLimitedBody(request, 1 * 1024 * 1024);
+      if (!limitedBody) return new Response('Query request is too large', { status: 413, headers: apiCorsHeaders(methods) });
+      body = limitedBody;
+      const contentType = request.headers.get('Content-Type');
+      if (contentType) headers.set('Content-Type', contentType);
+    }
+  }
+  for (const name of ['OVDB-Page-Size', 'OVDB-Page-Token', 'OVDB-Page-Close']) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  try {
+    const response = await fetch(target, { method: request.method, headers, body, redirect: 'error' });
+    if (response.status >= 300 && response.status < 400) return new Response('The OVDB backend returned a redirect', { status: 502, headers: securityHeaders() });
+    const outputHeaders = new Headers();
+    for (const name of ['Content-Type', 'Cache-Control', 'ETag', 'Last-Modified', 'Vary', 'Link', 'OVDB-Page-Size', 'OVDB-Page-Token']) {
+      const value = response.headers.get(name);
+      if (value) outputHeaders.set(name, value);
+    }
+    for (const [name, value] of Object.entries(apiCorsHeaders(methods))) outputHeaders.set(name, value);
+    for (const [name, value] of Object.entries(securityHeaders())) outputHeaders.set(name, value);
+    return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, statusText: response.statusText, headers: outputHeaders });
+  } catch {
+    return new Response('OpenVaultDB is temporarily unavailable', { status: 502, headers: { ...apiCorsHeaders(methods), ...securityHeaders() } });
+  }
+}
+
+async function databaseApiIndex(request: Request, database: OVDBManifest): Promise<Response> {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) return new Response('OpenVaultDB is read-only', { status: 403, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
+  return fetchDatabaseMetadata(request, database);
+}
+
+async function fetchDatabaseMetadata(request: Request, database: OVDBManifest): Promise<Response> {
+  const target = new URL(`/v1/databases/${database.localId}`, ovdbApiOrigin);
+  try {
+    const upstream = await fetch(target, { method: request.method, headers: { Accept: 'application/json' }, redirect: 'error' });
+    if (upstream.status >= 300 && upstream.status < 400) return new Response('The OVDB backend returned a redirect', { status: 502, headers: securityHeaders() });
+    const outputHeaders = new Headers();
+    for (const name of ['Content-Type', 'Cache-Control', 'ETag', 'Last-Modified', 'Vary', 'Link']) {
+      const value = upstream.headers.get(name);
+      if (value) outputHeaders.set(name, value);
+    }
+    for (const [name, value] of Object.entries({ ...readonlyCorsHeaders(), 'Access-Control-Expose-Headers': 'Cache-Control, ETag, Last-Modified, Link, Vary', ...securityHeaders() })) outputHeaders.set(name, value);
+    if (request.method === 'HEAD' || !upstream.ok) return new Response(request.method === 'HEAD' ? null : upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: outputHeaders });
+
+    const metadata = await upstream.json() as { id?: unknown; endpoints?: { dtql?: unknown }; [key: string]: unknown };
+    if (!metadata || metadata.id !== database.localId || typeof metadata.endpoints?.dtql !== 'string') return new Response('The OVDB backend returned invalid database metadata', { status: 502, headers: { ...readonlyCorsHeaders(), ...securityHeaders() } });
+    const expectedBackendEndpoint = `https://cloud.openvaultdb.com/v1/databases/${database.localId}/dtql`;
+    if (metadata.endpoints.dtql !== expectedBackendEndpoint) return new Response('The OVDB backend returned an unexpected query endpoint', { status: 502, headers: { ...readonlyCorsHeaders(), ...securityHeaders() } });
+    metadata.endpoints.dtql = `https://demodb.dev/ovdb/v1/databases/${database.localId}/dtql`;
+    outputHeaders.set('Content-Type', 'application/json; charset=utf-8');
+    outputHeaders.delete('ETag');
+    return new Response(JSON.stringify(metadata), { status: upstream.status, statusText: upstream.statusText, headers: outputHeaders });
+  } catch {
+    return new Response('OpenVaultDB is temporarily unavailable', { status: 502, headers: { ...readonlyCorsHeaders(), ...securityHeaders() } });
+  }
+}
+
+async function readLimitedBody(request: Request, maximum: number): Promise<ArrayBuffer | null> {
+  if (!request.body) return new ArrayBuffer(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maximum) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+  return combined.buffer;
+}
+
+function apiCorsHeaders(methods: string[]): Record<string, string> {
+  const allowed = [...new Set([...methods, 'GET', 'HEAD', 'OPTIONS'])];
+  return {
+    'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': allowed.join(', '),
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, OVDB-Page-Size, OVDB-Page-Token, OVDB-Page-Close',
+    'Access-Control-Expose-Headers': 'Cache-Control, ETag, Last-Modified, Link, OVDB-Page-Size, OVDB-Page-Token, Vary', 'Access-Control-Max-Age': '86400',
+  };
+}
+
 function hostMetadata(method: string, host: string, path: string, db?: Database): Response {
   const body = path === '/robots.txt'
     ? `User-agent: *\nAllow: /\n\nSitemap: https://${host}/sitemap.xml\n`
@@ -195,7 +373,7 @@ function hostMetadata(method: string, host: string, path: string, db?: Database)
 function sitemap(host: string, db?: Database): string {
   const urls = db
     ? ['/', '/tables/', '/schema/', '/downloads/', '/queries/', '/about/', '/model/', ...db.tables.map((table) => `/tables/${encodeURIComponent(table.name)}/`)].map((path) => `https://${host}${path}`)
-    : [`https://${host}/`, ...databaseList.map((database) => `https://${database.siteHost}/`)];
+    : [`https://${host}/`, 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json', ...[...ovdbDatabases.keys()].flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]), ...databaseList.map((database) => `https://${database.siteHost}/`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${xmlEscape(url)}</loc></url>`).join('')}</urlset>\n`;
 }
 
@@ -207,8 +385,8 @@ function redirectOvdb(request: Request, url: URL, db: Database): Response {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
   if (!db.ovdb.available) return new Response('OpenVaultDB is unavailable for this database', { status: 404, headers: securityHeaders() });
   let target: URL;
-  if (url.pathname.startsWith('/ovdb/v1/')) {
-    target = new URL(url.pathname.slice('/ovdb'.length) + url.search, db.ovdb.connection);
+  if (url.pathname === '/ovdb/v1' || url.pathname.startsWith('/ovdb/v1/')) {
+    target = new URL(`${url.pathname}${url.search}`, 'https://demodb.dev');
   } else {
     const prefix = `/ovdb/dbs/${db.id}`;
     const rest = url.pathname === '/ovdb' || url.pathname === '/ovdb/' ? '' : url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : url.pathname.slice('/ovdb'.length);
@@ -228,7 +406,7 @@ function notFound(): Response {
 }
 
 function corsHeaders(): Record<string, string> {
-  return { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' };
+  return { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS, POST', 'Access-Control-Allow-Headers': 'Content-Type, Accept, OVDB-Page-Size, OVDB-Page-Token, OVDB-Page-Close', 'Access-Control-Max-Age': '86400' };
 }
 function readonlyCorsHeaders(): Record<string, string> {
   return { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' };

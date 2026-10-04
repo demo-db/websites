@@ -1,0 +1,11 @@
+---
+import OVDBDatabasePage from '../../components/OVDBDatabasePage.astro';
+import { ovdbDatabases } from '../../data/ovdb';
+
+export function getStaticPaths() {
+  return ovdbDatabases.map((database) => ({ params: { id: database.localId }, props: { database } }));
+}
+
+const { database } = Astro.props;
+---
+<OVDBDatabasePage database={database} />

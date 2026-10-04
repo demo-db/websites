@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
@@ -15,17 +16,36 @@ if (!localRoot && registry.databases.some((db) => !isSha(db.commit) || !isHash(d
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
+const websiteDatabaseSchemaSha256 = sha256(await readFile(join(root, 'schemas/ovdb-database-draft-1.schema.json')));
+const previousManifestIds = await readFile(join(generatedDir, 'public-manifest-ids.json'), 'utf8')
+  .then((value) => JSON.parse(value))
+  .catch(() => []);
+for (const id of Array.isArray(previousManifestIds) ? previousManifestIds : []) {
+  if (!/^[a-z][a-z0-9-]{0,39}$/.test(id)) continue;
+  await rm(join(root, 'public', id, 'ovdb-database.json'), { force: true });
+  await rm(join(root, 'public/ovdb/db', id, 'ovdb-database.json'), { force: true });
+}
+await rm(join(root, 'public/ovdb/ovdb-server.json'), { force: true });
+await rm(join(root, 'public/ovdb/schemas/ovdb-database-draft-1.schema.json'), { force: true });
+await rm(join(root, 'public/ovdb/schemas/ovdb-server-draft-1.schema.json'), { force: true });
 await rm(generatedDir, { recursive: true, force: true });
 await rm(internalAssets, { recursive: true, force: true });
 await mkdir(generatedDir, { recursive: true });
 await mkdir(internalAssets, { recursive: true });
 
 const databases = [];
+const ovdbDescriptors = [];
 for (const entry of registry.databases) {
   const source = await loadProvider(entry);
   validateDatabaseEntry(entry, source.manifest, source.contract);
   const db = normalizeProvider(entry, source);
   databases.push(db);
+  const descriptor = validateDatabaseDescriptor(source.ovdbDescriptor, entry.id);
+  validateDescriptorSchemaProjection(descriptor, db.schema.tables);
+  validateDescriptorAssetReferences(descriptor, db);
+  if (descriptor.title !== source.ovdb.title || descriptor.description !== source.ovdb.description) throw new Error(`${entry.id}: OVDB descriptor text disagrees with the publisher metadata`);
+  if (descriptor.capabilities.query !== db.ovdb.query) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
+  ovdbDescriptors.push({ descriptor, bytes: source.ovdbDescriptorBytes });
   await materializeExports(db, source);
   await materializeModels(db, source);
   const schemaPath = join(internalAssets, db.id, 'metadata/schema.json');
@@ -57,6 +77,38 @@ await writeFile(join(generatedDir, 'runtime.json'), `${JSON.stringify({
   legacyAliases: Object.fromEntries(databases.flatMap((db) => db.aliases.map((host) => [host, db.id]))),
   databaseIds: [...ids],
 }, null, 2)}\n`);
+const ovdbServer = validateServerDescriptor({
+  format: 'ovdb-server/draft-1',
+  id: 'https://demodb.dev/ovdb',
+  title: 'DemoDB OpenVaultDB server',
+  description: 'A shared, read-only OpenVaultDB server for the curated DemoDB sample databases.',
+  homepage: 'https://demodb.dev/ovdb/',
+  apiUrl: 'https://demodb.dev/ovdb/v1',
+  databases: ovdbDescriptors.map(({ descriptor }) => ({
+    id: descriptor.id,
+    localId: descriptor.localId,
+    serverDbBaseUrl: descriptor.serverDbBaseUrl,
+    manifestUrl: `${descriptor.serverDbBaseUrl}ovdb-database.json`,
+    apiUrl: descriptor.apiUrl,
+  })),
+});
+const publicOvdb = join(root, 'public/ovdb');
+await mkdir(join(publicOvdb, 'schemas'), { recursive: true });
+await writeFile(join(publicOvdb, 'ovdb-server.json'), `${JSON.stringify(ovdbServer, null, 2)}\n`);
+for (const name of ['ovdb-server-draft-1.schema.json', 'ovdb-database-draft-1.schema.json']) {
+  await writeFile(join(publicOvdb, 'schemas', name), await readFile(join(root, 'schemas', name)));
+}
+for (const { descriptor, bytes } of ovdbDescriptors) {
+  for (const target of [
+    join(root, 'public/ovdb/db', descriptor.localId, 'ovdb-database.json'),
+    join(root, 'public', descriptor.localId, 'ovdb-database.json'),
+  ]) {
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, bytes);
+  }
+}
+await writeFile(join(generatedDir, 'public-manifest-ids.json'), `${JSON.stringify(ovdbDescriptors.map(({ descriptor }) => descriptor.localId))}\n`);
+await writeFile(join(generatedDir, 'ovdb.json'), `${JSON.stringify({ server: ovdbServer, databases: ovdbDescriptors.map(({ descriptor }) => descriptor) }, null, 2)}\n`);
 console.log(`Prepared ${databases.length} provider contracts: ${databases.map((db) => db.id).join(', ')}`);
 
 async function loadProvider(entry) {
@@ -70,19 +122,23 @@ async function loadProvider(entry) {
     files.set(path, bytes);
     return bytes;
   };
-  const [contractBytes, checksumBytes, manifestBytes, ovdbBytes] = await Promise.all([
-    read('metadata/contract.json'), read('metadata/checksums.json'), read('manifest.json'), read('ovdb.yaml'),
+  const [contractBytes, checksumBytes, manifestBytes, ovdbBytes, ovdbDescriptorBytes, databaseSchemaBytes] = await Promise.all([
+    read('metadata/contract.json'), read('metadata/checksums.json'), read('manifest.json'), read('ovdb.yaml'), read('ovdb-database.json'), read('schemas/ovdb-database-draft-1.schema.json'),
   ]);
   const contract = JSON.parse(contractBytes.toString('utf8'));
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   const checksums = JSON.parse(checksumBytes.toString('utf8'));
+  const ovdbDescriptor = JSON.parse(ovdbDescriptorBytes.toString('utf8'));
   if (sha256(contractBytes) !== entry.contractSha256 && !localRoot) throw new Error(`${entry.id}: contract SHA does not match registry pin`);
   verifyChecksum(checksums, 'metadata/contract.json', contractBytes);
   verifyChecksum(checksums, 'manifest.json', manifestBytes);
+  verifyChecksum(checksums, 'ovdb-database.json', ovdbDescriptorBytes);
+  verifyChecksum(checksums, 'schemas/ovdb-database-draft-1.schema.json', databaseSchemaBytes);
+  if (sha256(databaseSchemaBytes) !== websiteDatabaseSchemaSha256) throw new Error(`${entry.id}: vendored OVDB database schema differs from the website-published schema`);
   const ovdb = parseYaml(ovdbBytes.toString('utf8'));
   if (ovdb.id !== entry.id) throw new Error(`${entry.id}: ovdb.yaml declares ${ovdb.id}`);
   if (!Array.isArray(contract.exports)) throw new Error(`${entry.id}: contract has no export list`);
-  return { contract, manifest, checksums, ovdb, read };
+  return { contract, manifest, checksums, ovdb, ovdbDescriptor, ovdbDescriptorBytes, read };
 }
 
 async function fetchPinned(entry, path) {
@@ -216,6 +272,60 @@ function validateDatabaseEntry(entry, manifest, contract) {
   if (manifest.id !== entry.id || contract.manifest?.id !== entry.id) throw new Error(`${entry.id}: ID disagrees across registry and contract`);
   if (!isSha(entry.commit) && !localRoot) throw new Error(`${entry.id}: provider commit must be a full immutable SHA`);
   if (!isHash(entry.contractSha256) && !localRoot) throw new Error(`${entry.id}: provider contract SHA must be a full SHA-256`);
+}
+
+function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
+  const nativeByName = new Map(nativeRecordsets.map((recordset) => [recordset.name, recordset]));
+  for (const published of descriptor.recordsets) {
+    const native = nativeByName.get(published.name);
+    if (!native) throw new Error(`${descriptor.localId}: OVDB recordset ${published.name} is absent from the native schema contract`);
+    const columns = native.columns.map((column) => ({
+      name: column.name,
+      type: column.type,
+      nullable: column.nullable,
+      primaryKey: column.primaryKey,
+      primaryKeyPosition: column.primaryKeyPosition ?? null,
+      defaultValue: column.defaultValue ?? null,
+    }));
+    const expected = {
+      modelEntity: native.modelEntity ?? null,
+      kind: native.kind,
+      description: native.description,
+      rowCount: native.rowCount,
+      columns,
+      primaryKey: native.primaryKey,
+      foreignKeys: native.foreignKeys,
+    };
+    const actual = {
+      modelEntity: published.modelEntity ?? null,
+      kind: published.kind,
+      description: published.description,
+      rowCount: published.rowCount,
+      columns: published.columns.map((column) => ({
+        name: column.name,
+        type: column.type,
+        nullable: column.nullable,
+        primaryKey: column.primaryKey,
+        primaryKeyPosition: column.primaryKeyPosition ?? null,
+        defaultValue: column.defaultValue ?? null,
+      })),
+      primaryKey: published.primaryKey,
+      foreignKeys: published.foreignKeys,
+    };
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${descriptor.localId}: OVDB recordset ${published.name} disagrees with the native schema contract`);
+  }
+}
+
+function validateDescriptorAssetReferences(descriptor, db) {
+  const publicAssetUrl = (path) => `https://${db.siteHost}/model/${encodeURIComponent(path.split('/').pop())}`;
+  const expectedModel = publicAssetUrl(db.model.modelspec);
+  const expectedMeaning = publicAssetUrl(db.meaning.file);
+  if (descriptor.model.url !== expectedModel || descriptor.meaning.url !== expectedMeaning) throw new Error(`${db.id}: model or meaning reference does not match the generated public model assets`);
+  if (db.model.hcl) {
+    if (descriptor.model.hclUrl !== publicAssetUrl(db.model.hcl)) throw new Error(`${db.id}: HCL reference does not match the generated public model asset`);
+  } else if (descriptor.model.hclUrl) {
+    throw new Error(`${db.id}: descriptor references an HCL file that the site does not publish`);
+  }
 }
 
 function repoSlug(repository) {

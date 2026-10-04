@@ -5,14 +5,14 @@
     {
       "id": "chinook",
       "repository": "https://github.com/demo-db/chinook",
-      "commit": "f11b1192ed9f48cdd4f788d1d4ffde0e972ee04b",
-      "contractSha256": "f45550cf29832c832584cfac62478e3a034808e700d11eab725b721ba8465ba5"
+      "commit": "26e852cca00101f53a84ef8ee1f1ae389067f5cf",
+      "contractSha256": "576b4ecb21bd3b263b7a3523b6a3c952c8388298eb0fa56a7950b42f63958272"
     },
     {
       "id": "northwind",
       "repository": "https://github.com/demo-db/northwind",
-      "commit": "f5855699eafaba6f09b7f4897abdb2a304698b67",
-      "contractSha256": "14985669d869c4081e6c595e09ebd8215aca18bb834e403ed3370052746a6447"
+      "commit": "e74726515c3833620b54b7a50d1d273276dd23c1",
+      "contractSha256": "88a7e21b1ed16b27c3195c8ee10dc60ebef60fba6c70df6f9325d8e4adaaea22"
     }
   ]
 }

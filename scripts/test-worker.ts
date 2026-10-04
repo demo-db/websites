@@ -45,7 +45,10 @@ assert.equal(rootDocs.status, 404, 'internal static namespace cannot be requeste
 assert.equal((await fetch('demodb.dev', '/', 'POST')).status, 405, 'catalogue pages are read-only');
 const siteMap = await fetch('demodb.dev', '/sitemap.xml');
 assert.equal(siteMap.status, 200);
-assert.match(await siteMap.text(), /https:\/\/northwind\.demodb\.dev\//);
+const siteMapXml = await siteMap.text();
+assert.match(siteMapXml, /https:\/\/northwind\.demodb\.dev\//);
+assert.match(siteMapXml, /https:\/\/demodb\.dev\/ovdb\//);
+assert.match(siteMapXml, /https:\/\/demodb\.dev\/northwind\//);
 assert.match(await (await fetch('chinook.demodb.dev', '/sitemap.xml')).text(), /\/tables\/Artist\//);
 assert.match(await (await fetch('northwind.demodb.dev', '/robots.txt')).text(), /https:\/\/northwind\.demodb\.dev\/sitemap\.xml/);
 assert.equal((await fetch('evil.example', '/')).status, 404, 'unknown hosts fail closed');
@@ -121,18 +124,142 @@ for (const [host, id] of [['chinook.demodb.dev', 'chinook'], ['northwind.demodb.
   const body = await discovery.json() as { databases: { id: string; url: string; apiUrl: string }[] };
   assert.equal(body.databases.length, 1);
   assert.equal(body.databases[0].id, id);
-  assert.equal(body.databases[0].apiUrl, `https://cloud.openvaultdb.com/v1/databases/${id}`);
+  assert.equal(body.databases[0].apiUrl, `https://demodb.dev/ovdb/v1/databases/${id}`);
 }
+for (const id of ['chinook', 'northwind'] as const) {
+  const publicDatabasePage = await fetch('demodb.dev', `/${id}/`);
+  assert.equal(publicDatabasePage.status, 200, `canonical ${id} database page exists`);
+  assert.match(await publicDatabasePage.text(), new RegExp(`${id === 'chinook' ? 'Chinook' : 'Northwind'}`));
+  const nestedHuman = await fetch('demodb.dev', `/ovdb/db/${id}/`);
+  assert.equal(nestedHuman.status, 200, 'server database resource has a human-readable page');
+  const nestedHtml = await nestedHuman.text();
+  assert.match(nestedHtml, new RegExp(`rel="canonical" href="https://demodb.dev/${id}/"`));
+  assert.doesNotMatch(nestedHtml, /0 views/, 'table-only published inventory does not imply that the server exposes no views');
+  assert.match(nestedHtml, /ModelSpec:/);
+  assert.match(nestedHtml, /MeaningGraph:/);
+  assert.equal((await fetch('demodb.dev', `/ovdb/db/${id}`)).headers.get('Location'), `https://demodb.dev/${id}/`);
+  assert.equal((await fetch('demodb.dev', `/ovdb/dbs/${id}/`)).headers.get('Location'), `https://demodb.dev/${id}/`);
+  const serverJson = await fetch('demodb.dev', `/ovdb/db/${id}/ovdb-database.json`);
+  const shortJson = await fetch('demodb.dev', `/${id}/ovdb-database.json`);
+  assert.equal(serverJson.status, 200);
+  assert.equal(shortJson.status, 200);
+  const serverBytes = new Uint8Array(await serverJson.arrayBuffer());
+  const shortBytes = new Uint8Array(await shortJson.arrayBuffer());
+  assert.deepEqual([...serverBytes], [...shortBytes], `${id} typed manifest mirrors are byte-identical`);
+  const descriptor = JSON.parse(new TextDecoder().decode(serverBytes)) as { id: string; localId: string; capabilities: { read: boolean; query: boolean; write: boolean }; recordsets: { name: string; kind: string; columns: unknown[] }[] };
+  assert.equal(descriptor.id, `https://demodb.dev/${id}/`);
+  assert.equal(descriptor.localId, id);
+  assert.equal(descriptor.capabilities.read, true);
+  assert.equal(descriptor.capabilities.write, false);
+  assert.ok(descriptor.recordsets.length > 0);
+  assert.ok(descriptor.recordsets.every((recordset) => Array.isArray(recordset.columns)));
+  assert.ok(descriptor.recordsets.every((recordset) => !('rows' in recordset)), 'published descriptors contain schema only, no record samples');
+  assert.equal(serverJson.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.equal((await fetch('demodb.dev', `/ovdb/db/${id}/ovdb-database.json`, 'HEAD')).status, 200);
+  assert.equal((await fetch('demodb.dev', `/ovdb/db/${id}/ovdb-database.json`, 'OPTIONS')).status, 204);
+}
+const serverManifestResponse = await fetch('demodb.dev', '/ovdb/ovdb-server.json');
+assert.equal(serverManifestResponse.status, 200);
+const serverManifest = await serverManifestResponse.json() as { format: string; id: string; databases: { id: string; localId: string; serverDbBaseUrl: string; manifestUrl: string; apiUrl: string }[] };
+assert.equal(serverManifest.format, 'ovdb-server/draft-1');
+assert.equal(serverManifest.id, 'https://demodb.dev/ovdb');
+assert.deepEqual(serverManifest.databases.map((database) => database.localId).sort(), ['chinook', 'northwind']);
+assert.ok(serverManifest.databases.every((database) => database.manifestUrl === `${database.serverDbBaseUrl}ovdb-database.json`));
+assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
+assert.equal((await fetch('demodb.dev', '/ovdb/v1')).status, 200, 'declared API root returns the server descriptor');
+assert.equal((await fetch('demodb.dev', '/ovdb/schemas/ovdb-database-draft-1.schema.json')).status, 200);
+const centralDiscovery = await fetch('demodb.dev', '/.well-known/openvaultdb');
+assert.equal(centralDiscovery.status, 200);
+assert.equal(centralDiscovery.headers.get('Access-Control-Allow-Origin'), '*');
+const discoveredDatabases = (await centralDiscovery.json() as { databases: { id: string; url: string; manifestUrl: string; apiUrl: string }[] }).databases;
+assert.deepEqual(discoveredDatabases.map((database) => database.id).sort(), ['chinook', 'northwind'], 'legacy discovery keeps local database IDs');
+assert.ok(discoveredDatabases.every((database) => database.url === `https://demodb.dev/${database.id}/` && database.manifestUrl === `https://demodb.dev/ovdb/db/${database.id}/ovdb-database.json`));
 const redirect = await fetch('northwind.demodb.dev', '/ovdb/dbs/northwind/collections/Order%20Details?limit=2');
 assert.equal(redirect.status, 308);
 assert.equal(redirect.headers.get('Location'), 'https://cloud.openvaultdb.com/ovdb/dbs/northwind/collections/Order%20Details?limit=2');
 const postRedirect = await fetch('chinook.demodb.dev', '/ovdb/v1/databases/chinook/dtql?format=json', 'POST', local, { body: '{"query":"from: {name: Artist}"}', headers: { 'Content-Type': 'application/json' } });
 assert.equal(postRedirect.status, 308);
-assert.equal(postRedirect.headers.get('Location'), 'https://cloud.openvaultdb.com/v1/databases/chinook/dtql?format=json');
+assert.equal(postRedirect.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?format=json');
 const legacyDisabled = await fetch('chinookdb.com', '/tables/Artist/?x=1', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'false' });
 assert.equal(legacyDisabled.status, 404);
 const legacy = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql?q=a%20b', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
 assert.equal(legacy.status, 308);
-assert.equal(legacy.headers.get('Location'), 'https://chinook.demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b');
+assert.equal(legacy.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b');
+const oldOVDBProfile = await fetch('chinookdb.com', '/ovdb/dbs/chinook?view=collections', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
+assert.equal(oldOVDBProfile.status, 308);
+assert.equal(oldOVDBProfile.headers.get('Location'), 'https://demodb.dev/chinook/?view=collections');
+const oldOVDBPreflight = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql', 'OPTIONS', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
+assert.match(oldOVDBPreflight.headers.get('Access-Control-Allow-Headers') ?? '', /OVDB-Page-Token/);
+
+const platformFetch = globalThis.fetch;
+const forwarded: { url: string; method: string; headers: Headers; body?: string }[] = [];
+globalThis.fetch = async (input, init) => {
+  const request = input instanceof Request ? input : new Request(input, init);
+  assert.equal(new URL(request.url).hostname, 'cloud.openvaultdb.com', 'only the fixed public backend receives proxied requests');
+  forwarded.push({ url: request.url, method: request.method, headers: request.headers, body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.clone().text() });
+  const requestedMetadata = /^\/v1\/databases\/(chinook|northwind)$/.exec(new URL(request.url).pathname);
+  const payload = requestedMetadata ? {
+    id: requestedMetadata[1], engine: 'sqlite', schemaMode: 'relational', collections: ['Orders', 'Order Details'],
+    capabilities: { read: true, query: true, dtql: true, write: false },
+    endpoints: { dtql: `https://cloud.openvaultdb.com/v1/databases/${requestedMetadata[1]}/dtql` }, queryFormat: 'dtql-yaml+json',
+  } : { records: [{ key: 'Order Details/OrderID=10248;ProductID=11', data: { id: 'OrderID=10248;ProductID=11', OrderID: 10248, ProductID: 11 } }] };
+  return new Response(JSON.stringify(payload), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': requestedMetadata ? 'no-store' : 'public, max-age=30', Vary: 'Origin, OVDB-Page-Size, OVDB-Page-Token, OVDB-Page-Close', 'OVDB-Page-Token': 'next-page', ETag: 'upstream-etag', 'Set-Cookie': 'must-not-pass=secret' },
+  });
+};
+try {
+  const databaseApiIndex = await fetch('demodb.dev', '/ovdb/v1/databases/northwind');
+  assert.equal(databaseApiIndex.status, 200, 'existing OVDB database API metadata route remains available');
+  const apiMetadata = await databaseApiIndex.json() as { id: string; engine: string; schemaMode: string; collections: string[]; capabilities: { dtql: boolean; write: boolean }; endpoints: { dtql: string }; queryFormat: string };
+  assert.equal(apiMetadata.id, 'northwind');
+  assert.equal(apiMetadata.engine, 'sqlite');
+  assert.equal(apiMetadata.schemaMode, 'relational');
+  assert.deepEqual(apiMetadata.collections, ['Orders', 'Order Details']);
+  assert.equal(apiMetadata.capabilities.dtql, true);
+  assert.equal(apiMetadata.capabilities.write, false);
+  assert.equal(apiMetadata.endpoints.dtql, 'https://demodb.dev/ovdb/v1/databases/northwind/dtql');
+  assert.equal(apiMetadata.queryFormat, 'dtql-yaml+json');
+  assert.equal(databaseApiIndex.headers.get('Cache-Control'), 'no-store');
+  assert.equal(databaseApiIndex.headers.get('ETag'), null, 'rewritten metadata does not retain the backend representation ETag');
+  const record = await fetch('demodb.dev', '/ovdb/v1/databases/northwind/records/Order%20Details/OrderID%3D10248%3BProductID%3D11');
+  assert.equal(record.status, 200);
+  assert.equal(record.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.equal(record.headers.get('Set-Cookie'), null);
+  assert.equal(record.headers.get('OVDB-Page-Token'), 'next-page');
+  assert.match(record.headers.get('Access-Control-Expose-Headers') ?? '', /OVDB-Page-Token/);
+  assert.deepEqual((await record.json() as { records: { key: string; data: { id: string } }[] }).records[0], {
+    key: 'Order Details/OrderID=10248;ProductID=11', data: { id: 'OrderID=10248;ProductID=11', OrderID: 10248, ProductID: 11 },
+  });
+  assert.equal(forwarded.at(-1)?.url, 'https://cloud.openvaultdb.com/v1/databases/northwind/records/Order%20Details/OrderID%3D10248%3BProductID%3D11');
+  const getQuery = await fetch('demodb.dev', '/ovdb/v1/databases/chinook/dtql?q=from%3A%20%7Bname%3A%20Artist%7D');
+  assert.equal(getQuery.status, 200);
+  const pagedQuery = await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'POST', local, {
+    headers: { 'Content-Type': 'application/json', 'OVDB-Page-Size': '2', 'OVDB-Page-Token': 'page-token', 'OVDB-Page-Close': 'true', Authorization: 'Bearer never-forward', Cookie: 'session=never-forward' },
+    body: JSON.stringify({ query: "from: {name: 'Order Details'}\nlimit: 2\n" }),
+  });
+  assert.equal(pagedQuery.status, 200);
+  assert.match(pagedQuery.headers.get('Vary') ?? '', /OVDB-Page-Size/);
+  const latest = forwarded.at(-1)!;
+  assert.equal(latest.method, 'POST');
+  assert.equal(latest.headers.get('OVDB-Page-Size'), '2');
+  assert.equal(latest.headers.get('OVDB-Page-Token'), 'page-token');
+  assert.equal(latest.headers.get('OVDB-Page-Close'), 'true');
+  assert.equal(latest.headers.get('Authorization'), null);
+  assert.equal(latest.headers.get('Cookie'), null);
+  const rawYaml = 'from: {name: Artist}\nlimit: 1\n';
+  const yamlQuery = await fetch('demodb.dev', '/ovdb/v1/databases/chinook/dtql', 'POST', local, { headers: { 'Content-Type': 'text/yaml' }, body: rawYaml });
+  assert.equal(yamlQuery.status, 200);
+  assert.equal(forwarded.at(-1)?.headers.get('Content-Type'), 'text/yaml');
+  assert.equal(forwarded.at(-1)?.body, rawYaml, 'raw DTQL YAML remains supported by the legacy query endpoint');
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/records/Orders/10248', 'PUT')).status, 403);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/read', 'POST')).status, 403);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'DELETE')).status, 403);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind', 'POST')).status, 403);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/unknown/dtql', 'POST')).status, 404);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/write', 'POST')).status, 404);
+  assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'OPTIONS')).headers.get('Access-Control-Allow-Origin'), '*');
+} finally {
+  globalThis.fetch = platformFetch;
+}
 
 console.log('Worker host resolution, static pages, exports, CORS, discovery, OVDB redirects, and legacy redirect pass.');

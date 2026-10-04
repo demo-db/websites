@@ -11,6 +11,12 @@ DEMODB_CONTRACTS_DIR=/path/to/demo-db pnpm dev
 
 Local preview hosts are `localhost` for the catalogue, `chinook.localhost` and `northwind.localhost` for the database sites. Wrangler maps these names without changing the release hostname registry.
 
+## OpenVaultDB
+
+The shared server page is [`/ovdb/`](https://demodb.dev/ovdb/). Its typed descriptor is [`/ovdb/ovdb-server.json`](https://demodb.dev/ovdb/ovdb-server.json), and the legacy OpenVaultDB discovery protocol remains available at `/.well-known/openvaultdb`. Database identities are canonical URLs such as `https://demodb.dev/northwind/`; each provider descriptor is published at both `/ovdb/db/{localId}/ovdb-database.json` and `/{localId}/ovdb-database.json` with identical bytes. The two JSON Schema files are published under `/ovdb/schemas/` and validated during the build.
+
+The central read-only API at `/ovdb/v1/databases/{localId}` proxies the fixed `cloud.openvaultdb.com` backend. It preserves the existing OVDB database metadata response and points its DTQL endpoint back to the central proxy; the draft-1 typed descriptor remains available at its manifest URL. It allowlists record reads, inferred schema, read queries, and DTQL query routes. POST supports bounded raw DTQL YAML and JSON wrappers; write methods are denied. API requests support CORS and the OVDB page-size, page-token, and page-close headers. Provider descriptors contain public schema/provenance/model/meaning data and no storage credentials or DSNs.
+
 Run `pnpm build`, `pnpm test`, and `pnpm typecheck` before submitting changes. Pull requests run these checks and never deploy. A push to `main` deploys the Worker and assets when the Cloudflare token and account identifier are available, then checks the live build marker and representative routes. See [`docs/architecture.md`](docs/architecture.md), [`docs/adding-a-database.md`](docs/adding-a-database.md), and [`docs/deployment.md`](docs/deployment.md).
 
 The `chinookdb.com` provider alias remains disabled in the Worker and is not attached to this Worker’s routes. The legacy host should be redirected only after the new Chinook pages and OVDB routes have been verified live; the root owner controls that production cutover.

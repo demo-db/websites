@@ -1,12 +1,16 @@
+import { createHash } from 'node:crypto';
+
 const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
 
 const sites = [
-  ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json']],
+  ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json', '/adventureworks/', '/adventureworks/ovdb-database.json', '/ovdb/db/adventureworks/ovdb-database.json', '/employees/', '/employees/ovdb-database.json', '/ovdb/db/employees/ovdb-database.json']],
   ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/data/chinook.sqlite', '/.well-known/openvaultdb']],
   ['https://northwind.demodb.dev', ['/', '/theme.js', '/tables/Order%20Details/', '/tables/Invoices/', '/data/northwind.sqlite', '/.well-known/openvaultdb']],
   ['https://pubs.demodb.dev', ['/', '/theme.js', '/tables/', '/tables/titles/', '/data/pubs.sqlite', '/.well-known/openvaultdb']],
   ['https://sakila.demodb.dev', ['/', '/theme.js', '/tables/film_actor/', '/tables/actor_info/', '/data/sakila.sqlite', '/.well-known/openvaultdb']],
+  ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
+  ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/data/employees.sqlite', '/.well-known/openvaultdb']],
 ];
 
 async function checked(url, validate) {
@@ -69,6 +73,56 @@ for (const [origin, paths] of sites) {
 await checkedReadOnlyQuery('chinook', 'from: {name: Artist}\nlimit: 1\n');
 await checkedReadOnlyQuery('northwind', "from: {name: 'Order Details'}\norderBy: [{field: OrderID}, {field: ProductID}]\n", 2);
 await checkedReadOnlyQuery('pubs', 'from: {name: authors}\nlimit: 1\n');
+await checkedAdventureWorksSchema();
+await checkedDecodedSqlite('adventureworks');
+const unavailableAdventureWorksQuery = await fetch('https://demodb.dev/ovdb/v1/databases/adventureworks/dtql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'from: {name: HumanResources.Employee}' }), cache: 'no-store' });
+if (unavailableAdventureWorksQuery.status !== 404) throw new Error(`AdventureWorks unexpectedly advertises an unverified query API (HTTP ${unavailableAdventureWorksQuery.status})`);
+
+async function checkedAdventureWorksSchema() {
+  const response = await fetch('https://adventureworks.demodb.dev/schema.json', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`AdventureWorks source schema returned HTTP ${response.status}`);
+  const schema = await response.json();
+  const tables = schema.tables?.filter((table) => table.kind === 'table') ?? [];
+  const executableViews = schema.tables?.filter((table) => table.kind === 'view') ?? [];
+  const sourceViews = schema.sourceViews ?? [];
+  if (tables.length !== 71 || executableViews.length !== 11 || sourceViews.length !== 20) {
+    throw new Error(`AdventureWorks schema counts differ from the pinned source (tables=${tables.length}, sqliteViews=${executableViews.length}, sourceViews=${sourceViews.length})`);
+  }
+  const available = sourceViews.filter((view) => view.availableAsSqliteView).length;
+  const sourceOnly = sourceViews.filter((view) => !view.availableAsSqliteView).length;
+  if (available !== 11 || sourceOnly !== 9) throw new Error(`AdventureWorks view availability is incorrect (SQLite=${available}, source-only=${sourceOnly})`);
+  if (sourceViews.some((view) => !view.availableAsSqliteView && schema.tables.some((table) => table.name === view.recordset))) {
+    throw new Error('A source-only SQL Server view is incorrectly published as an executable SQLite recordset');
+  }
+}
+
+async function checkedDecodedSqlite(localId) {
+  const corpusResponse = await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' });
+  if (!corpusResponse.ok) throw new Error(`Cannot read the public corpus manifest: HTTP ${corpusResponse.status}`);
+  const corpus = await corpusResponse.json();
+  const database = corpus.databases?.find((item) => item.localId === localId);
+  const expected = database?.exports?.find((item) => item.format === 'sqlite');
+  if (!expected || expected.decodedBytes !== 125276160 || !/^[a-f0-9]{64}$/.test(expected.decodedSha256 ?? '')) {
+    throw new Error(`${localId}: corpus metadata does not describe the complete decoded SQLite export`);
+  }
+  const response = await fetch(`https://${localId}.demodb.dev/data/${localId}.sqlite`, { redirect: 'manual', cache: 'no-store' });
+  if (response.status !== 200) throw new Error(`${localId}: SQLite download returned HTTP ${response.status}`);
+  if (response.headers.get('Content-Encoding') !== 'gzip') throw new Error(`${localId}: chunked SQLite route did not retain its gzip transfer encoding`);
+  if (response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error(`${localId}: SQLite download has the wrong content type`);
+  if (!/accept-encoding/i.test(response.headers.get('Vary') ?? '')) throw new Error(`${localId}: gzip transfer does not vary on Accept-Encoding`);
+  if (!response.body) throw new Error(`${localId}: SQLite download has no response body`);
+  const hash = createHash('sha256');
+  let bytes = 0;
+  for await (const chunk of response.body) {
+    const part = Buffer.from(chunk);
+    bytes += part.length;
+    hash.update(part);
+  }
+  const actualSha256 = hash.digest('hex');
+  if (bytes !== expected.decodedBytes || actualSha256 !== expected.decodedSha256) {
+    throw new Error(`${localId}: full decoded SQLite download failed verification (bytes=${bytes}, sha256=${actualSha256})`);
+  }
+}
 
 async function checkedLegacyRedirect(url, init, expectedLocation) {
   let last = 'request was not attempted';
@@ -91,4 +145,4 @@ await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtq
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
 }, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
-console.log(`Live DemoDB pages, typed manifests, discovery, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);
+console.log(`Live DemoDB pages, typed manifests, discovery, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);

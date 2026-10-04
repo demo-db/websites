@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { databases, databaseById, downloadFiles } from '../src/data/db';
 
 assert.equal(new Set(databases.map((database) => database.id)).size, databases.length, 'provider IDs are unique');
-for (const id of ['chinook', 'northwind', 'pubs', 'sakila']) assert.ok(databaseById.has(id), `${id} remains registered`);
+for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']) assert.ok(databaseById.has(id), `${id} remains registered`);
 for (const database of databases) {
   assert.equal(database.siteHost, `${database.id}.demodb.dev`);
   assert.ok(database.exports.some((file) => file.format === 'sqlite' && file.table === null), `${database.id} publishes SQLite`);
@@ -46,4 +46,25 @@ assert.ok(sakila.exports.some((file) => file.publicPath === 'sakila.sqlite'));
 assert.ok(sakila.exports.some((file) => file.table === 'film_actor' && file.format === 'json'));
 assert.equal(sakila.ovdb.query, false, 'Sakila does not advertise an unmounted query API');
 
-console.log('Provider registry includes validated Chinook, Northwind, Pubs, and Sakila contracts and preserves their native schema.');
+const adventureworks = databaseById.get('adventureworks')!;
+assert.equal(adventureworks.tables.filter((table) => table.kind === 'table').length, 71);
+assert.equal(adventureworks.tables.filter((table) => table.kind === 'view').length, 11, 'only the SQLite-executable native views are physical view recordsets');
+assert.equal(adventureworks.schema.sourceViews?.length, 20, 'all original SQL Server views are retained as source metadata');
+assert.equal(adventureworks.schema.sourceViews?.filter((view) => view.availableAsSqliteView).length, 11);
+assert.equal(adventureworks.schema.sourceViews?.filter((view) => !view.availableAsSqliteView).length, 9, 'SQL Server-only definitions remain descriptive, not queryable');
+assert.ok(adventureworks.schema.sourceViews?.some((view) => view.recordset === 'Person.vAdditionalContactInfo' && !view.availableAsSqliteView));
+assert.ok(adventureworks.tables.some((table) => table.name === 'HumanResources.EmployeeDepartmentHistory' && table.columns.filter((column) => column.primaryKey).map((column) => column.name).join(',') === 'BusinessEntityID,DepartmentID,ShiftID,StartDate'));
+assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.decodedBytes, 125276160);
+assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.chunks?.length, 2);
+assert.equal(adventureworks.ovdb.query, false, 'AdventureWorks does not advertise an unmounted query API');
+
+const employees = databaseById.get('employees')!;
+assert.equal(employees.tables.filter((table) => table.kind === 'table').length, 6);
+assert.equal(employees.tables.filter((table) => table.kind === 'view').length, 2);
+assert.deepEqual(employees.tables.find((table) => table.name === 'titles')?.columns.filter((column) => column.primaryKey).map((column) => column.name), ['emp_no', 'title', 'from_date']);
+assert.deepEqual(employees.tables.find((table) => table.name === 'salaries')?.columns.filter((column) => column.primaryKey).map((column) => column.name), ['emp_no', 'from_date']);
+assert.equal(employees.tables.find((table) => table.name === 'employees')?.rowCount, 1024);
+assert.ok(employees.exports.some((file) => file.publicPath === 'employees.sqlite'));
+assert.equal(employees.ovdb.query, false, 'Employees does not advertise an unmounted query API');
+
+console.log('Provider registry includes validated Chinook, Northwind, Pubs, Sakila, AdventureWorks, and Employees contracts and preserves their native schema.');

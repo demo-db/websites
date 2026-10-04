@@ -279,7 +279,10 @@ function normalizeExport(id, item, tables, checksums) {
   let format = item.format ?? null;
   if (tableName && (tableName.includes('/') || tableName.includes('\\') || tableName === '.' || tableName === '..')) throw new Error(`${id}: recordset cannot be represented as a single URL path segment: ${tableName}`);
   if (format && !/^[a-z][a-z0-9-]*$/.test(format)) throw new Error(`${id}: invalid export format ${format}`);
-  const match = tables.find((table) => tableName ? table.name === tableName : (
+  const databaseWideFilename = [
+    `${id}.sqlite`, `${id}.db`, `${id}.sql`, `${id}.json`, `${id}.yaml`, `${id}.yml`,
+  ].includes(logicalBase);
+  const match = tables.find((table) => tableName ? table.name === tableName : !databaseWideFilename && (
     logicalBase === `${id}.${table.name}.${ext}` || logicalBase === `${table.name}.${ext}`
   ));
   if (!format && match) format = ext === 'sql' && /\/(postgresql|mysql|sqlserver)\//i.test(path) ? 'sql' : ext;

@@ -25,6 +25,18 @@
       "repository": "https://github.com/demo-db/sakila",
       "commit": "0cb13fd76b2ce590f68efa99a6fbf7effcf6e4ce",
       "contractSha256": "89c9c181ed41746c5a26ec14b489f9b295040a450c13667c134db483bc65cbce"
+    },
+    {
+      "id": "adventureworks",
+      "repository": "https://github.com/demo-db/adventureworks",
+      "commit": "cd8dcdf2079fe31480ad6d6c024b8c17cb91beea",
+      "contractSha256": "462d32735cb3fb85868af977741a83cdb3add508809503934ef7a08daa36d682"
+    },
+    {
+      "id": "employees",
+      "repository": "https://github.com/demo-db/employees",
+      "commit": "4759bc2b7936626c9ac1ad1e92fd6128365e11ac",
+      "contractSha256": "83f4be360cda03981f54bb35b6f3e27f6c947e3f49c48117d57c867974a22f99"
     }
   ]
 }

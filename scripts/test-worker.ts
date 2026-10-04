@@ -151,6 +151,8 @@ async function fetch(host: string, path: string, method = 'GET', env = local, in
 assert.equal(resolveHost('chinook.demodb.dev').databaseId, 'chinook');
 assert.equal(resolveHost('northwind.localhost', local).databaseId, 'northwind');
 assert.equal(resolveHost('pubs.localhost', local).databaseId, 'pubs');
+assert.equal(resolveHost('adventureworks.localhost', local).databaseId, 'adventureworks');
+assert.equal(resolveHost('employees.localhost', local).databaseId, 'employees');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
 assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
@@ -159,12 +161,12 @@ assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.
 for (const [host, expected] of [['demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
   const response = await fetch(host, '/');
   assert.equal(response.status, 200, host);
-  assert.match(await response.text(), new RegExp(expected));
+  assert.ok((await response.text()).includes(expected), `${host} page contains its expected heading`);
 }
-for (const database of providerIndex.databases as { id: string; siteHost: string }[]) {
+for (const database of providerIndex.databases as { id: string; name: string; siteHost: string }[]) {
   const response = await fetch(database.siteHost, '/');
   assert.equal(response.status, 200, database.siteHost);
-  assert.match(await response.text(), new RegExp(database.id === 'chinook' ? 'Chinook' : database.id === 'northwind' ? 'Northwind' : database.id === 'pubs' ? 'Pubs' : database.id));
+  assert.ok((await response.text()).includes(database.name), `${database.id} landing page uses its provider title`);
 }
 for (const host of ['demodb.dev', ...((providerIndex.databases as { siteHost: string }[]).map((database) => database.siteHost))]) {
   const theme = await fetch(host, '/theme.js');
@@ -225,6 +227,30 @@ const sakilaView = await fetch('sakila.demodb.dev', '/tables/actor_info/');
 assert.equal(sakilaView.status, 200, 'Sakila native view remains browsable as schema metadata');
 assert.match(await sakilaView.text(), /actor_info/);
 assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/sakila/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'Sakila does not advertise an unmounted query API');
+
+const adventureworksSchema = await fetch('adventureworks.demodb.dev', '/schema.json');
+assert.equal(adventureworksSchema.status, 200, 'AdventureWorks publishes its complete SQLite and source-view schema');
+const adventureworksSchemaData = await adventureworksSchema.json() as { tables: { kind: string; name: string }[]; sourceViews: { recordset: string; availableAsSqliteView: boolean }[] };
+assert.equal(adventureworksSchemaData.tables.filter((table) => table.kind === 'table').length, 71);
+assert.equal(adventureworksSchemaData.tables.filter((table) => table.kind === 'view').length, 11);
+assert.equal(adventureworksSchemaData.sourceViews.length, 20);
+assert.equal(adventureworksSchemaData.sourceViews.filter((view) => view.availableAsSqliteView).length, 11);
+assert.equal(adventureworksSchemaData.sourceViews.filter((view) => !view.availableAsSqliteView).length, 9);
+assert.ok(adventureworksSchemaData.sourceViews.some((view) => view.recordset === 'Person.vAdditionalContactInfo' && !view.availableAsSqliteView));
+assert.ok(!adventureworksSchemaData.tables.some((table) => table.name === 'Person.vAdditionalContactInfo'), 'unsupported SQL Server views are not advertised as executable SQLite recordsets');
+const adventureworksSchemaPage = await fetch('adventureworks.demodb.dev', '/schema/');
+assert.equal(adventureworksSchemaPage.status, 200);
+const adventureworksSchemaHtml = await adventureworksSchemaPage.text();
+assert.match(adventureworksSchemaHtml, /20 definitions retained/);
+assert.match(adventureworksSchemaHtml, /11 available as SQLite views · 9 source-only/);
+assert.match(adventureworksSchemaHtml, /Person\.vAdditionalContactInfo/);
+assert.match(adventureworksSchemaHtml, /source definition only/);
+assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/adventureworks/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'AdventureWorks does not advertise an unmounted query API');
+assert.equal((await fetch('adventureworks.demodb.dev', '/data/adventureworks.sqlite', 'HEAD')).status, 200, 'AdventureWorks keeps its complete SQLite download route');
+assert.equal((await fetch('employees.demodb.dev', '/tables/titles/')).status, 200, 'Employees composite-key table is browsable');
+assert.equal((await fetch('employees.demodb.dev', '/tables/current_dept_emp/')).status, 200, 'Employees native view is browsable');
+assert.equal((await fetch('employees.demodb.dev', '/data/employees.sqlite', 'HEAD')).status, 200, 'Employees publishes the full SQLite download');
+assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/employees/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'Employees does not advertise an unmounted query API');
 
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
 assert.equal(json.status, 200);
@@ -331,7 +357,7 @@ assert.match(downloadsHtml, /Order Details/);
 for (const { id, name } of providerIndex.databases as { id: string; name: string }[]) {
   const publicDatabasePage = await fetch('demodb.dev', `/${id}/`);
   assert.equal(publicDatabasePage.status, 200, `canonical ${id} database page exists`);
-  assert.match(await publicDatabasePage.text(), new RegExp(name));
+  assert.ok((await publicDatabasePage.text()).includes(name), `${id} canonical page contains its provider title`);
   const nestedHuman = await fetch('demodb.dev', `/ovdb/db/${id}/`);
   assert.equal(nestedHuman.status, 200, 'server database resource has a human-readable page');
   const nestedHtml = await nestedHuman.text();

@@ -196,7 +196,8 @@ const platformConsoleError = console.error;
 const gatewayLogs: string[] = [];
 let nextFetchError: Error | undefined;
 console.error = (...args: Parameters<typeof console.error>) => { gatewayLogs.push(args.join(' ')); };
-const forwarded: { url: string; method: string; headers: Headers; body?: string }[] = [];
+const forwarded: { url: string; method: string; headers: Headers; body?: string; redirect?: RequestRedirect }[] = [];
+let nextRedirectLocation: string | undefined;
 globalThis.fetch = async (input, init) => {
   if (nextFetchError) {
     const error = nextFetchError;
@@ -205,7 +206,12 @@ globalThis.fetch = async (input, init) => {
   }
   const request = input instanceof Request ? input : new Request(input, init);
   assert.equal(new URL(request.url).hostname, 'cloud.openvaultdb.com', 'only the fixed public backend receives proxied requests');
-  forwarded.push({ url: request.url, method: request.method, headers: request.headers, body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.clone().text() });
+  forwarded.push({ url: request.url, method: request.method, headers: request.headers, body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.clone().text(), redirect: init?.redirect });
+  if (nextRedirectLocation) {
+    const location = nextRedirectLocation;
+    nextRedirectLocation = undefined;
+    return new Response(null, { status: 302, headers: { Location: location } });
+  }
   const requestedMetadata = /^\/v1\/databases\/(chinook|northwind)$/.exec(new URL(request.url).pathname);
   const payload = requestedMetadata ? {
     id: requestedMetadata[1], engine: 'sqlite', schemaMode: 'relational', collections: ['Orders', 'Order Details'],
@@ -228,6 +234,7 @@ try {
   assert.equal(apiMetadata.capabilities.write, false);
   assert.equal(apiMetadata.endpoints.dtql, 'https://demodb.dev/ovdb/v1/databases/northwind/dtql');
   assert.equal(apiMetadata.queryFormat, 'dtql-yaml+json');
+  assert.equal(forwarded.at(-1)?.redirect, 'manual', 'metadata fetch rejects redirects without following them');
   assert.equal(databaseApiIndex.headers.get('Cache-Control'), 'no-store');
   assert.equal(databaseApiIndex.headers.get('ETag'), null, 'rewritten metadata does not retain the backend representation ETag');
   const record = await fetch('demodb.dev', '/ovdb/v1/databases/northwind/records/Order%20Details/OrderID%3D10248%3BProductID%3D11');
@@ -260,6 +267,21 @@ try {
   assert.equal(yamlQuery.status, 200);
   assert.equal(forwarded.at(-1)?.headers.get('Content-Type'), 'text/yaml');
   assert.equal(forwarded.at(-1)?.body, rawYaml, 'raw DTQL YAML remains supported by the legacy query endpoint');
+  assert.equal(forwarded.at(-1)?.redirect, 'manual', 'query fetch rejects redirects without following them');
+  nextRedirectLocation = 'https://attacker.example/redirect';
+  const beforeMetadataRedirect = forwarded.length;
+  const rejectedMetadataRedirect = await fetch('demodb.dev', '/ovdb/v1/databases/northwind');
+  assert.equal(rejectedMetadataRedirect.status, 502, 'manual upstream redirects remain a safe gateway failure');
+  assert.equal(rejectedMetadataRedirect.headers.get('Location'), null, 'redirect destinations are never exposed to clients');
+  assert.equal(forwarded.length, beforeMetadataRedirect + 1, 'metadata redirect target is not fetched');
+  assert.equal(forwarded.at(-1)?.redirect, 'manual');
+  nextRedirectLocation = 'https://attacker.example/redirect';
+  const beforeQueryRedirect = forwarded.length;
+  const rejectedQueryRedirect = await fetch('demodb.dev', '/ovdb/v1/databases/chinook/dtql?q=from%3AArtist');
+  assert.equal(rejectedQueryRedirect.status, 502, 'query redirects remain a safe gateway failure');
+  assert.equal(rejectedQueryRedirect.headers.get('Location'), null, 'query redirect destinations are never exposed to clients');
+  assert.equal(forwarded.length, beforeQueryRedirect + 1, 'query redirect target is not fetched');
+  assert.equal(forwarded.at(-1)?.redirect, 'manual');
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/records/Orders/10248', 'PUT')).status, 403);
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/read', 'POST')).status, 403);
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'DELETE')).status, 403);

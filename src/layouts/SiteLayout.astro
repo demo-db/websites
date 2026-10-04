@@ -2,6 +2,8 @@
 import '../styles/global.css';
 import '../styles/demodb.css';
 import '../styles/ovdb.css';
+import '../styles/theme.css';
+import ThemeToggle from '../components/ThemeToggle.astro';
 import { catalogueHost } from '../data/db';
 import type { Database } from '../data/types';
 
@@ -22,15 +24,16 @@ const canonicalUrl = `${origin}${canonical.startsWith('/') ? canonical : `/${can
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalUrl} />
-    <meta name="theme-color" content="#08111f" />
+    <meta name="theme-color" content="#f7f9fc" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script is:inline src="/theme.js"></script>
     <title>{title}</title>
   </head>
   <body>
     <header class="site-header">
       <div class="shell header-inner">
         <a class="brand" href={catalogueUrl} aria-label="DemoDB home"><span class="brand-mark">D</span><span>Demo<span class="brand-muted">DB</span></span></a>
-        {db ? <><span class="header-db">{db.name}</span><nav aria-label="Primary navigation"><a href="/tables/">Tables</a><a href="/schema/">Schema</a><a href="/downloads/">Downloads</a><a href="/queries/">Queries</a><a href="/about/">About</a><a href="https://demodb.dev/ovdb/">OpenVaultDB</a></nav></> : <nav aria-label="Primary navigation"><a href="#databases">Databases</a><a href="/ovdb/">OpenVaultDB</a><a href="https://github.com/demo-db/websites">GitHub</a></nav>}
+        {db ? <><span class="header-db">{db.name}</span><nav aria-label="Primary navigation"><a href="/tables/">Tables</a><a href="/schema/">Schema</a><a href="/downloads/">Downloads</a><a href="/queries/">Queries</a><a href="/about/">About</a><a href="https://demodb.dev/ovdb/">OpenVaultDB</a><ThemeToggle /></nav></> : <nav aria-label="Primary navigation"><a href="#databases">Databases</a><a href="/ovdb/">OpenVaultDB</a><a href="https://github.com/demo-db/websites">GitHub</a><ThemeToggle /></nav>}
       </div>
     </header>
     <main><slot /></main>

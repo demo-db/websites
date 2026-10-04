@@ -15,7 +15,7 @@ type Database = {
   name: string;
   siteHost: string;
   tables: { name: string }[];
-  exports?: { publicPath: string; compression?: string | null }[];
+  exports?: { publicPath: string; assetPath: string; compression?: string | null }[];
   ovdb: { url: string; deploymentUrl: string; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 type Env = {
@@ -117,9 +117,11 @@ export default {
     if (isPublicData && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
 
-    const target = internalAssetPath(db.id, url.pathname);
-    const exportPath = url.pathname.startsWith('/data/') ? url.pathname.slice('/data/'.length) : '';
-    const exportFile = db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
+    const exportPath = decodedDataExportPath(url.pathname);
+    const exportFile = exportPath == null ? undefined : db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
+    const target = exportFile
+      ? internalAssetPath(db.id, `/data/${exportFile.assetPath.split('/').map(encodeURIComponent).join('/')}`)
+      : internalAssetPath(db.id, url.pathname);
     const response = await serveAsset(request, env, url, target, exportFile?.compression === 'gzip');
     if (isPublicData) {
       return withDataHeaders(response, request.method, exportFile?.compression === 'gzip');
@@ -149,6 +151,13 @@ export function internalAssetPath(databaseId: string, pathname: string): string 
   if (pathname === '/embed/datatug.js' || pathname === '/theme.js' || pathname.startsWith('/_astro/') || pathname === '/favicon.svg') return pathname;
   const suffix = pathname.endsWith('/') ? 'index.html' : `${pathname.split('/').at(-1)?.includes('.') ? '' : '/index.html'}`;
   return `/_db/${databaseId}${pathname}${suffix}`;
+}
+
+function decodedDataExportPath(pathname: string): string | null {
+  if (!pathname.startsWith('/data/')) return null;
+  try {
+    return pathname.slice('/data/'.length).split('/').map((segment) => decodeURIComponent(segment)).join('/');
+  } catch { return null; }
 }
 
 function localDatabase(host: string, value?: string): string | undefined {

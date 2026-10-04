@@ -30,8 +30,10 @@ test('public corpus index keeps native metadata but omits preview rows', async (
   for (const database of corpus.databases) {
     assert.match(database.id, /^https:\/\//);
     assert.ok(database.sourceVersion);
+    assert.match(database.sourceRevision, /^[a-f0-9]{40}$/);
     assert.ok(database.licences?.data && database.licences?.model && database.licences?.meaning);
     assert.match(database.browserManifestUrl, /\/ovdb-database\.json$/);
+    assert.match(database.schemaSha256, /^[a-f0-9]{64}$/);
     assert.match(database.serverManifestUrl, /\/ovdb-database\.json$/);
     for (const recordset of database.recordsets) {
       assert.equal(Object.hasOwn(recordset, 'rows'), false, `${database.localId}.${recordset.name} does not publish preview row data`);

@@ -28,6 +28,7 @@ export type Recordset = {
 export type ExportFile = {
   path: string;
   publicPath: string;
+  assetPath: string;
   format: string;
   table: string | null;
   bytes: number | null;
@@ -53,6 +54,7 @@ export type Database = {
   semantics: { tableConcepts?: Record<string, string[]> };
   queries: { title: string; description?: string; sql: string }[];
   schema: { contractVersion: number; database: { id: string; name: string }; source: Record<string, unknown>; tables: Recordset[] };
+  schemaSha256: string;
   tables: Recordset[];
   exports: ExportFile[];
   exportByPublicPath: Record<string, ExportFile>;

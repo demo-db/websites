@@ -180,7 +180,7 @@ function normalizeProvider(entry, source) {
     domain: manifest.domain ?? 'Sample database', siteHost, aliases,
     canonicalUrl: `https://${siteHost}/`, source: manifest.source,
     capabilities: manifest.capabilities, semantics: manifest.semantics ?? {}, queries: manifest.queries ?? [],
-    schema, tables: schema.tables, exports, exportByPublicPath: Object.fromEntries(exports.map((item) => [item.publicPath, item])),
+    schema, schemaSha256: sha256(Buffer.from(`${JSON.stringify(schema, null, 2)}\n`)), tables: schema.tables, exports, exportByPublicPath: Object.fromEntries(exports.map((item) => [item.publicPath, item])),
     model: manifest.model ?? source.ovdb.model ?? {}, meaning: manifest.meaning ?? source.ovdb.meaning ?? {}, ovdb: {
       url: canonicalUrl, deploymentUrl, discovery,
       recordsetPage: source.ovdb.deployment?.recordset_page ?? null,
@@ -216,7 +216,7 @@ async function materializeExports(db, source) {
       if (item.decodedBytes != null && item.decodedBytes !== decoded.length) throw new Error(`${db.id}: ${item.path} decoded size mismatch`);
       if (item.decodedSha256 && item.decodedSha256 !== sha256(decoded)) throw new Error(`${db.id}: ${item.path} decoded checksum mismatch`);
     }
-    const target = join(internalAssets, db.id, 'data', item.publicPath);
+    const target = join(internalAssets, db.id, 'data', item.assetPath);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, bytes);
   }
@@ -259,7 +259,8 @@ function normalizeExport(id, item, tables, checksums) {
     throw new Error(`${id}: gzip export ${path} needs decodedBytes and decodedSha256 checksums`);
   }
   if (path.split('/').includes('metadata')) {
-    return { path, publicPath: `metadata/${base}`, format: 'metadata', table: null, ...common, dbWide: true };
+    const publicPath = `metadata/${compression === 'gzip' && base.endsWith('.gz') ? base.slice(0, -3) : base}`;
+    return { path, publicPath, assetPath: compression === 'gzip' ? `${publicPath}.gz` : publicPath, format: 'metadata', table: null, ...common, dbWide: true };
   }
   let tableName = typeof item.table === 'string' ? item.table : null;
   let format = item.format ?? null;
@@ -280,14 +281,15 @@ function normalizeExport(id, item, tables, checksums) {
     if (!format) throw new Error(`${id}: cannot classify export ${path}`);
   }
   const dbWide = !match && !tableName;
-  const extension = `${ext === 'yml' ? 'yaml' : ext}${compression === 'gzip' ? '.gz' : ''}`;
+  const extension = ext === 'yml' ? 'yaml' : ext;
   let publicPath;
   if (match || tableName) publicPath = `${format}/${id}.${tableName ?? match.name}.${extension}`;
-  else if (format === 'sqlite') publicPath = `${id}.sqlite${compression === 'gzip' ? '.gz' : ''}`;
-  else if (format === 'sql' || ['postgresql', 'mysql', 'sqlserver'].includes(format)) publicPath = format === 'sql' ? `${id}.sql${compression === 'gzip' ? '.gz' : ''}` : `${id}.${format}.sql${compression === 'gzip' ? '.gz' : ''}`;
+  else if (format === 'sqlite') publicPath = `${id}.sqlite`;
+  else if (format === 'sql' || ['postgresql', 'mysql', 'sqlserver'].includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);
-  return { path, publicPath, format, table: tableName ?? match?.name ?? null, ...common, dbWide };
+  const assetPath = compression === 'gzip' ? `${publicPath}.gz` : publicPath;
+  return { path, publicPath, assetPath, format, table: tableName ?? match?.name ?? null, ...common, dbWide };
 }
 
 function buildCorpus(databases) {
@@ -299,7 +301,8 @@ function buildCorpus(databases) {
       localId: db.id,
       title: db.name,
       description: db.description,
-      sourceVersion: db.source.revision ?? db.source.version ?? db.sourceCommit,
+      sourceVersion: db.source.version ?? db.source.revision ?? db.sourceCommit,
+      sourceRevision: db.source.revision ?? db.sourceCommit,
       homepage: db.canonicalUrl,
       browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
       serverManifestUrl: db.publicManifestUrl,
@@ -322,6 +325,7 @@ function buildCorpus(databases) {
       model: db.publicModel,
       meaning: db.publicMeaning,
       schemaUrl: `https://${db.siteHost}/schema.json`,
+      schemaSha256: db.schemaSha256,
       recordsets: db.tables.map((table) => ({
         name: table.name,
         kind: table.kind,

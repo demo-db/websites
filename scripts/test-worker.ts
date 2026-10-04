@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost } from '../src/worker';
-import { activeSnapshot, clearActiveSnapshot, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
+import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -14,8 +14,8 @@ const dist = join(root, 'dist');
 const local = { LOCAL_DB_HOSTS: '{"chinook.localhost":"chinook","northwind.localhost":"northwind"}', LOCAL_CATALOGUE_HOSTS: '["localhost"]' };
 const gzipPayload = Buffer.from('[{"fixture":"gzip"}]');
 const gzipPayloadBytes = gzipSync(gzipPayload);
-const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; compression?: string }[] };
-chinookGenerated.exports.push({ publicPath: 'test/gzip-fixture.json.gz', compression: 'gzip' });
+const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; assetPath: string; compression?: string }[] };
+chinookGenerated.exports.push({ publicPath: 'json/chinook.Order Details.json', assetPath: 'json/chinook.Order Details.json.gz', compression: 'gzip' });
 
 for (const value of ['', 'abc', 'unicode ✓ and a longer value'.repeat(80)]) {
   const bytes = new TextEncoder().encode(value);
@@ -32,11 +32,18 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
   const configuration = {
     id: 'retry-fixture',
     sourceCommit: 'fixture',
-    tables: [{ name: 'Items', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'value' }], foreignKeys: [] }],
-    exports: [{ table: 'Items', url: 'https://fixture.example/items.json', bytes: Buffer.byteLength('[{"id":1,"value":"right"}]'), sha256: createHash('sha256').update('[{"id":1,"value":"right"}]').digest('hex') }],
+    tables: [
+      { name: 'Parent', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'code' }], foreignKeys: [] },
+      { name: 'Child', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'parent_code' }], foreignKeys: [{ column: 'parent_code', table: 'Parent', referencedColumn: 'code', constraint: 1, position: 0 }] },
+    ],
+    exports: [
+      { table: 'Parent', url: 'https://fixture.example/parents.json', bytes: Buffer.byteLength('[{"id":1,"code":"A","label":"right"}]'), sha256: createHash('sha256').update('[{"id":1,"code":"A","label":"right"}]').digest('hex') },
+      { table: 'Child', url: 'https://fixture.example/children.json', bytes: Buffer.byteLength('[{"id":7,"parent_code":"A"}]'), sha256: createHash('sha256').update('[{"id":7,"parent_code":"A"}]').digest('hex') },
+    ],
   };
-  const bad = new TextEncoder().encode('[{"id":1,"value":"wrong"}]');
-  const good = new TextEncoder().encode('[{"id":1,"value":"right"}]');
+  const bad = new TextEncoder().encode('[{"id":1,"code":"A","label":"wrong"}]');
+  const good = new TextEncoder().encode('[{"id":1,"code":"A","label":"right"}]');
+  const child = new TextEncoder().encode('[{"id":7,"parent_code":"A"}]');
   assert.equal(bad.byteLength, good.byteLength, 'bad first download reaches checksum verification');
   const originalFetch = globalThis.fetch;
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
@@ -48,21 +55,27 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
   Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: fakeIndexedDB });
   Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: { getItem: (key: string) => sessionValues.get(key) ?? null, setItem: (key: string, value: string) => sessionValues.set(key, value), removeItem: (key: string) => sessionValues.delete(key) } });
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => localValues.get(key) ?? null, setItem: (key: string, value: string) => localValues.set(key, value), removeItem: (key: string) => localValues.delete(key) } });
-  globalThis.fetch = async () => new Response(attempts++ === 0 ? bad : good);
+  globalThis.fetch = async () => new Response([bad, good, child][attempts++]);
   try {
     await assert.rejects(importSnapshot(configuration, () => {}, new AbortController().signal), /checksum mismatch/);
     await importSnapshot(configuration, () => {}, new AbortController().signal);
     const db = await activeSnapshot(configuration);
     assert.ok(db, 'valid retry promotes a complete snapshot');
-    const row = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+    const parent = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
       const request = db!.transaction('recordset-0').objectStore('recordset-0').get(1);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    assert.deepEqual(row, { id: 1, value: 'right' }, 'valid retry replaces rows written from the failed checksum response');
+    const childRow = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+      const request = db!.transaction('recordset-1').objectStore('recordset-1').get(7);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(parent, { id: 1, code: 'A', label: 'right' }, 'valid retry replaces rows written from the failed checksum response');
+    assert.deepEqual(await followNativeForeignKey(db!, configuration.tables, 'Child', childRow!, configuration.tables[1].foreignKeys[0]), parent, 'foreign keys to a unique non-primary target column resolve through a native index');
     db!.close();
     await clearActiveSnapshot(configuration);
-    assert.equal(attempts, 2, 'the failed table is fetched again and replayed');
+    assert.equal(attempts, 3, 'the failed table is fetched again and later tables import after it verifies');
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, descriptor] of [['indexedDB', originalIndexedDB], ['sessionStorage', originalSessionStorage], ['localStorage', originalLocalStorage]] as const) {
@@ -99,7 +112,7 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
 const assets = {
   async fetch(request: Request) {
     const url = new URL(request.url);
-    if (url.pathname.endsWith('/_db/chinook/data/test/gzip-fixture.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
+    if (url.pathname.endsWith('/_db/chinook/data/json/chinook.Order%20Details.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
     if (url.pathname.endsWith('/redirect-test/index.html')) return new Response(null, { status: 302, headers: { Location: '/_db/northwind/index.html' } });
     const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
     try {
@@ -184,17 +197,17 @@ assert.equal(json.status, 200);
 assert.equal(json.headers.get('Access-Control-Allow-Origin'), '*');
 assert.equal(json.headers.get('Content-Type'), 'application/json; charset=utf-8');
 assert.equal((await json.json() as unknown[]).length, 2155);
-const encodedJson = await fetch('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz');
+const encodedJson = await fetch('chinook.demodb.dev', '/data/json/chinook.Order%20Details.json');
 assert.equal(encodedJson.status, 200);
 assert.equal(encodedJson.headers.get('Content-Type'), 'application/json; charset=utf-8');
 assert.equal(encodedJson.headers.get('Content-Encoding'), 'gzip');
 assert.match(encodedJson.headers.get('Vary') ?? '', /Accept-Encoding/i);
 assert.equal(gunzipSync(Buffer.from(await encodedJson.arrayBuffer())).toString('utf8'), gzipPayload.toString('utf8'), 'precompressed export bytes are not double-encoded by the Worker');
-const encodedHead = await fetch('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz', 'HEAD');
+const encodedHead = await fetch('chinook.demodb.dev', '/data/json/chinook.Order%20Details.json', 'HEAD');
 assert.equal(encodedHead.status, 200);
 assert.equal(encodedHead.headers.get('Content-Encoding'), 'gzip');
 assert.equal(await encodedHead.text(), '');
-const encodedRange = await worker.fetch(makeRequest('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz', 'GET', { headers: { Range: 'bytes=0-3' } }), { ...local, ASSETS: assets } as Env, {} as ExecutionContext);
+const encodedRange = await worker.fetch(makeRequest('chinook.demodb.dev', '/data/json/chinook.Order%20Details.json', 'GET', { headers: { Range: 'bytes=0-3' } }), { ...local, ASSETS: assets } as Env, {} as ExecutionContext);
 assert.equal(encodedRange.status, 200, 'compressed exports ignore byte ranges and serve one complete representation');
 assert.equal(encodedRange.headers.get('Content-Range'), null);
 assert.equal(encodedRange.headers.get('Accept-Ranges'), null);

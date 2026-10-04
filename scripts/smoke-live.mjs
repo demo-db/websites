@@ -66,4 +66,26 @@ for (const [origin, paths] of sites) {
 }
 await checkedReadOnlyQuery('chinook', 'from: {name: Artist}\nlimit: 1\n');
 await checkedReadOnlyQuery('northwind', "from: {name: 'Order Details'}\norderBy: [{field: OrderID}, {field: ProductID}]\n", 2);
-console.log(`Live DemoDB pages, typed manifests, discovery, and read-only OVDB queries serve ${commit}.`);
+
+async function checkedLegacyRedirect(url, init, expectedLocation) {
+  let last = 'request was not attempted';
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
+      if (response.status === 308 && response.headers.get('Location') === expectedLocation) return;
+      last = `HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}`;
+    } catch (error) { last = error instanceof Error ? error.message : String(error); }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
+  }
+  throw new Error(`legacy redirect from ${url} did not match after retries: ${last}`);
+}
+
+await checkedLegacyRedirect('https://chinookdb.com/tables/Artist/?smoke=legacy', { method: 'GET' }, 'https://chinook.demodb.dev/tables/Artist/?smoke=legacy');
+await checkedLegacyRedirect('https://chinookdb.com/data/chinook.sqlite?download=1', { method: 'HEAD' }, 'https://chinook.demodb.dev/data/chinook.sqlite?download=1');
+await checkedLegacyRedirect('https://chinookdb.com/ovdb/dbs/chinook?smoke=profile', { method: 'GET' }, 'https://demodb.dev/chinook/?smoke=profile');
+await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtql?smoke=query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
+}, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
+console.log(`Live DemoDB pages, typed manifests, discovery, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);

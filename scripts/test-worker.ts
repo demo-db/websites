@@ -11,7 +11,8 @@ import providerIndex from '../src/data/generated/index.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const dist = join(root, 'dist');
-const local = { LOCAL_DB_HOSTS: '{"chinook.localhost":"chinook","northwind.localhost":"northwind"}', LOCAL_CATALOGUE_HOSTS: '["localhost"]' };
+const localDatabaseHosts = Object.fromEntries((providerIndex.databases as { id: string }[]).map(({ id }) => [`${id}.localhost`, id]));
+const local = { LOCAL_DB_HOSTS: JSON.stringify(localDatabaseHosts), LOCAL_CATALOGUE_HOSTS: '["localhost"]' };
 const gzipPayload = Buffer.from('[{"fixture":"gzip"}]');
 const gzipPayloadBytes = gzipSync(gzipPayload);
 const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; assetPath: string; compression?: string }[] };
@@ -133,17 +134,23 @@ async function fetch(host: string, path: string, method = 'GET', env = local, in
 
 assert.equal(resolveHost('chinook.demodb.dev').databaseId, 'chinook');
 assert.equal(resolveHost('northwind.localhost', local).databaseId, 'northwind');
+assert.equal(resolveHost('pubs.localhost', local).databaseId, 'pubs');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
 assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
 assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.html');
 
-for (const [host, expected] of [['demodb.dev', 'Northwind'], ['chinook.demodb.dev', 'Chinook'], ['northwind.demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
+for (const [host, expected] of [['demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
   const response = await fetch(host, '/');
   assert.equal(response.status, 200, host);
   assert.match(await response.text(), new RegExp(expected));
 }
-for (const host of ['demodb.dev', 'chinook.demodb.dev', 'northwind.demodb.dev']) {
+for (const database of providerIndex.databases as { id: string; siteHost: string }[]) {
+  const response = await fetch(database.siteHost, '/');
+  assert.equal(response.status, 200, database.siteHost);
+  assert.match(await response.text(), new RegExp(database.id === 'chinook' ? 'Chinook' : database.id === 'northwind' ? 'Northwind' : database.id === 'pubs' ? 'Pubs' : database.id));
+}
+for (const host of ['demodb.dev', ...((providerIndex.databases as { siteHost: string }[]).map((database) => database.siteHost))]) {
   const theme = await fetch(host, '/theme.js');
   assert.equal(theme.status, 200, `${host} serves the shared theme controller`);
   assert.match(await theme.text(), /demodb-theme/, `${host} serves the preference logic`);
@@ -155,7 +162,7 @@ assert.equal((await fetch('demodb.dev', '/', 'POST')).status, 405, 'catalogue pa
 const siteMap = await fetch('demodb.dev', '/sitemap.xml');
 assert.equal(siteMap.status, 200);
 const siteMapXml = await siteMap.text();
-assert.match(siteMapXml, /https:\/\/northwind\.demodb\.dev\//);
+for (const database of providerIndex.databases as { siteHost: string }[]) assert.match(siteMapXml, new RegExp(`https:\/\/${database.siteHost.replaceAll('.', '\\.')}\/`));
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/ovdb\//);
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/northwind\//);
 const corpusResponse = await fetch('demodb.dev', '/corpus.json');
@@ -191,6 +198,11 @@ for (const [host, name] of [['chinook.demodb.dev', 'Chinook'], ['northwind.demod
   assert.match(html, /href="\/schema\/"/, `${name} schema navigation stays on the database host`);
   assert.match(html, new RegExp(`href="https://demodb\\.dev/${name.toLowerCase()}/">Explore in OpenVaultDB`), `${name} landing page links to its canonical OVDB identity`);
 }
+const pubsHomeHtml = await (await fetch('pubs.demodb.dev', '/')).text();
+assert.match(pubsHomeHtml, /Pubs/);
+assert.match(pubsHomeHtml, /href="https:\/\/demodb\.dev\/"[^>]*>All sample databases<\/a>/);
+assert.equal((await fetch('pubs.demodb.dev', '/tables/')).status, 200, 'Pubs has static table navigation while OVDB is unavailable');
+assert.equal((await fetch('pubs.demodb.dev', '/ovdb/v1/databases/pubs/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'unmounted Pubs query capability fails closed');
 
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
 assert.equal(json.status, 200);
@@ -244,14 +256,16 @@ const modelPage = await fetch('chinook.demodb.dev', '/model/');
 assert.equal(modelPage.status, 200);
 assert.equal(modelPage.headers.get('Access-Control-Allow-Origin'), null);
 
-for (const [host, id] of [['chinook.demodb.dev', 'chinook'], ['northwind.demodb.dev', 'northwind']] as const) {
-  const discovery = await fetch(host, '/.well-known/openvaultdb');
+for (const database of providerIndex.databases as { id: string; siteHost: string; ovdb: { query: boolean } }[]) {
+  const { id, siteHost } = database;
+  const discovery = await fetch(siteHost, '/.well-known/openvaultdb');
   assert.equal(discovery.status, 200);
   assert.equal(discovery.headers.get('Access-Control-Allow-Origin'), '*');
-  const body = await discovery.json() as { databases: { id: string; url: string; apiUrl: string }[] };
+  const body = await discovery.json() as { databases: { id: string; url: string; apiUrl: string; capabilities: { query: boolean } }[] };
   assert.equal(body.databases.length, 1);
   assert.equal(body.databases[0].id, id);
   assert.equal(body.databases[0].apiUrl, `https://demodb.dev/ovdb/v1/databases/${id}`);
+  assert.equal(body.databases[0].capabilities.query, database.ovdb.query, `${id} discovery matches its declared query capability`);
 }
 const downloads = await fetch('northwind.demodb.dev', '/downloads/');
 assert.equal(downloads.status, 200);
@@ -259,10 +273,10 @@ const downloadsHtml = await downloads.text();
 assert.match(downloadsHtml, /Check storage and import/);
 assert.match(downloadsHtml, /Remove local copy/);
 assert.match(downloadsHtml, /Order Details/);
-for (const id of ['chinook', 'northwind'] as const) {
+for (const { id, name } of providerIndex.databases as { id: string; name: string }[]) {
   const publicDatabasePage = await fetch('demodb.dev', `/${id}/`);
   assert.equal(publicDatabasePage.status, 200, `canonical ${id} database page exists`);
-  assert.match(await publicDatabasePage.text(), new RegExp(`${id === 'chinook' ? 'Chinook' : 'Northwind'}`));
+  assert.match(await publicDatabasePage.text(), new RegExp(name));
   const nestedHuman = await fetch('demodb.dev', `/ovdb/db/${id}/`);
   assert.equal(nestedHuman.status, 200, 'server database resource has a human-readable page');
   const nestedHtml = await nestedHuman.text();
@@ -296,7 +310,8 @@ assert.equal(serverManifestResponse.status, 200);
 const serverManifest = await serverManifestResponse.json() as { format: string; id: string; databases: { id: string; localId: string; serverDbBaseUrl: string; manifestUrl: string; apiUrl: string }[] };
 assert.equal(serverManifest.format, 'ovdb-server/draft-1');
 assert.equal(serverManifest.id, 'https://demodb.dev/ovdb');
-assert.deepEqual(serverManifest.databases.map((database) => database.localId).sort(), ['chinook', 'northwind']);
+assert.deepEqual(serverManifest.databases.map((database) => database.localId).sort(), (providerIndex.databases as { id: string }[]).map((database) => database.id).sort());
+assert.equal(serverManifest.databases.find((database) => database.localId === 'pubs')?.id, 'https://demodb.dev/pubs/');
 assert.ok(serverManifest.databases.every((database) => database.manifestUrl === `${database.serverDbBaseUrl}ovdb-database.json`));
 assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
 assert.equal((await fetch('demodb.dev', '/ovdb/v1')).status, 200, 'declared API root returns the server descriptor');
@@ -305,7 +320,7 @@ const centralDiscovery = await fetch('demodb.dev', '/.well-known/openvaultdb');
 assert.equal(centralDiscovery.status, 200);
 assert.equal(centralDiscovery.headers.get('Access-Control-Allow-Origin'), '*');
 const discoveredDatabases = (await centralDiscovery.json() as { databases: { id: string; url: string; manifestUrl: string; apiUrl: string }[] }).databases;
-assert.deepEqual(discoveredDatabases.map((database) => database.id).sort(), ['chinook', 'northwind'], 'legacy discovery keeps local database IDs');
+assert.deepEqual(discoveredDatabases.map((database) => database.id).sort(), (providerIndex.databases as { id: string }[]).map((database) => database.id).sort(), 'legacy discovery keeps local database IDs');
 assert.ok(discoveredDatabases.every((database) => database.url === `https://demodb.dev/${database.id}/` && database.manifestUrl === `https://demodb.dev/ovdb/db/${database.id}/ovdb-database.json`));
 const redirect = await fetch('northwind.demodb.dev', '/ovdb/dbs/northwind/collections/Order%20Details?limit=2');
 assert.equal(redirect.status, 308);

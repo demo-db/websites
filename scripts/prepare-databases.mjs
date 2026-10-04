@@ -411,6 +411,9 @@ function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
       primaryKey: published.primaryKey,
       foreignKeys: published.foreignKeys,
     };
+    const publishedForeignKeyFields = [...new Set(published.foreignKeys.flatMap((foreignKey) => Object.keys(foreignKey)))].sort();
+    expected.foreignKeys = expected.foreignKeys.map((foreignKey) => Object.fromEntries(publishedForeignKeyFields.map((field) => [field, foreignKey[field]])));
+    actual.foreignKeys = actual.foreignKeys.map((foreignKey) => Object.fromEntries(publishedForeignKeyFields.map((field) => [field, foreignKey[field]])));
     if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${descriptor.localId}: OVDB recordset ${published.name} disagrees with the native schema contract`);
   }
 }

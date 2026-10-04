@@ -13,6 +13,12 @@
       "repository": "https://github.com/demo-db/northwind",
       "commit": "e74726515c3833620b54b7a50d1d273276dd23c1",
       "contractSha256": "88a7e21b1ed16b27c3195c8ee10dc60ebef60fba6c70df6f9325d8e4adaaea22"
+    },
+    {
+      "id": "pubs",
+      "repository": "https://github.com/demo-db/pubs",
+      "commit": "34501946b0478b7e2ae13c15b4c57019109b5edc",
+      "contractSha256": "0b427916f82c14d1a702e072316e497f8c20918f2377fb76fad97b9e98b62474"
     }
   ]
 }

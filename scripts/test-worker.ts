@@ -32,12 +32,18 @@ assert.equal(resolveHost('chinook.demodb.dev').databaseId, 'chinook');
 assert.equal(resolveHost('northwind.localhost', local).databaseId, 'northwind');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
+assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
 assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.html');
 
 for (const [host, expected] of [['demodb.dev', 'Northwind'], ['chinook.demodb.dev', 'Chinook'], ['northwind.demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
   const response = await fetch(host, '/');
   assert.equal(response.status, 200, host);
   assert.match(await response.text(), new RegExp(expected));
+}
+for (const host of ['demodb.dev', 'chinook.demodb.dev', 'northwind.demodb.dev']) {
+  const theme = await fetch(host, '/theme.js');
+  assert.equal(theme.status, 200, `${host} serves the shared theme controller`);
+  assert.match(await theme.text(), /demodb-theme/, `${host} serves the preference logic`);
 }
 
 const rootDocs = await fetch('demodb.dev', '/_db/northwind/index.html');
@@ -251,7 +257,7 @@ try {
   assert.equal(getQuery.status, 200);
   const pagedQuery = await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'POST', local, {
     headers: { 'Content-Type': 'application/json', 'OVDB-Page-Size': '2', 'OVDB-Page-Token': 'page-token', 'OVDB-Page-Close': 'true', Authorization: 'Bearer never-forward', Cookie: 'session=never-forward' },
-    body: JSON.stringify({ query: "from: {name: 'Order Details'}\nlimit: 2\n" }),
+    body: JSON.stringify({ query: "from: {name: 'Order Details'}\n" }),
   });
   assert.equal(pagedQuery.status, 200);
   assert.match(pagedQuery.headers.get('Vary') ?? '', /OVDB-Page-Size/);

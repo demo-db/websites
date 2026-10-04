@@ -272,12 +272,42 @@ assert.equal(encodedRange.status, 200, 'compressed exports ignore byte ranges an
 assert.equal(encodedRange.headers.get('Content-Range'), null);
 assert.equal(encodedRange.headers.get('Accept-Ranges'), null);
 const chunkedResponse = await fetch('chinook.demodb.dev', '/data/chinook.sqlite');
+const chunkedExport = chinookGenerated.exports.find((file) => file.publicPath === 'chinook.sqlite' && file.chunks?.length)!;
 assert.equal(chunkedResponse.status, 200);
 assert.equal(chunkedResponse.headers.get('Content-Type'), 'application/vnd.sqlite3');
 assert.equal(chunkedResponse.headers.get('Content-Encoding'), 'gzip');
 assert.equal(chunkedResponse.headers.get('Content-Length'), String(chunkedEncoded.length));
 assert.match(chunkedResponse.headers.get('Vary') ?? '', /Accept-Encoding/i);
 assert.equal(gunzipSync(Buffer.from(await chunkedResponse.arrayBuffer())).compare(chunkedPayload), 0, 'the canonical database URL joins ordered verified chunks into the complete gzip stream');
+let streamedAssetRequests = 0;
+const streamingAssets = {
+  async fetch(request: Request) {
+    const path = decodeURIComponent(new URL(request.url).pathname);
+    const bytes = chunkAssets.get(path);
+    if (!bytes) return assets.fetch(request);
+    streamedAssetRequests++;
+    const split = Math.max(1, Math.floor(bytes.length / 2));
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.subarray(0, split));
+        controller.enqueue(bytes.subarray(split));
+        controller.close();
+      },
+    }), { headers: { 'Content-Length': String(bytes.length) } });
+  },
+};
+const streamingResponse = await serveChunkedGzip(
+  makeRequest('chinook.demodb.dev', '/data/chinook.sqlite'),
+  { ...local, ASSETS: streamingAssets } as Env,
+  new URL('https://chinook.demodb.dev/data/chinook.sqlite'),
+  'chinook',
+  chunkedExport,
+);
+const streamingReader = streamingResponse.body!.getReader();
+const firstStreamPart = await streamingReader.read();
+assert.ok(firstStreamPart.value?.byteLength, 'the first verified immutable chunk streams before buffering the joined export');
+assert.equal(streamedAssetRequests, 1, 'backpressure prevents fetching the next asset chunk before the current stream is consumed');
+await streamingReader.cancel();
 const chunkedHead = await fetch('chinook.demodb.dev', '/data/chinook.sqlite', 'HEAD');
 assert.equal(chunkedHead.status, 200);
 assert.equal(chunkedHead.headers.get('Content-Encoding'), 'gzip');
@@ -288,13 +318,14 @@ assert.equal(chunkedRange.status, 200, 'chunked compressed exports ignore ranges
 assert.equal(chunkedRange.headers.get('Content-Range'), null);
 assert.equal(chunkedRange.headers.get('Accept-Ranges'), null);
 const secondChunk = chunkMetadata[1];
-chunkMetadata[1] = { ...secondChunk, sha256: '0'.repeat(64) };
-const invalidChunkResponse = await fetch('chinook.demodb.dev', '/data/chinook.sqlite');
-await assert.rejects(invalidChunkResponse.arrayBuffer(), /checksum check/, 'a modified chunk fails the response stream instead of returning a truncated or corrupt database');
-chunkMetadata[1] = secondChunk;
-const chunkedExport = chinookGenerated.exports.find((file) => file.publicPath === 'chinook.sqlite' && file.chunks?.length)!;
-const joinedDigest = chunkedExport.sha256;
-chunkedExport.sha256 = '0'.repeat(64);
+const secondChunkPath = `/_db/chinook/data/${secondChunk.assetPath}`;
+const secondChunkBytes = chunkAssets.get(secondChunkPath)!;
+chunkAssets.set(secondChunkPath, secondChunkBytes.subarray(0, secondChunkBytes.length - 1));
+const truncatedChunkResponse = await fetch('chinook.demodb.dev', '/data/chinook.sqlite');
+await assert.rejects(truncatedChunkResponse.arrayBuffer(), /unexpected size/, 'a short immutable asset cannot be reported as a complete export');
+chunkAssets.set(secondChunkPath, secondChunkBytes);
+const joinedBytes = chunkedExport.bytes!;
+chunkedExport.bytes = joinedBytes + 1;
 const invalidJoinedResponse = await serveChunkedGzip(
   makeRequest('chinook.demodb.dev', '/data/chinook.sqlite'),
   { ...local, ASSETS: assets } as Env,
@@ -302,8 +333,8 @@ const invalidJoinedResponse = await serveChunkedGzip(
   'chinook',
   chunkedExport,
 );
-await assert.rejects(invalidJoinedResponse.arrayBuffer(), /joined compressed export/, 'the joined stream checksum is checked after all individual parts match');
-chunkedExport.sha256 = joinedDigest;
+await assert.rejects(invalidJoinedResponse.arrayBuffer(), /unexpected size/, 'the joined stream length is checked after every chunk is streamed');
+chunkedExport.bytes = joinedBytes;
 const csv = await fetch('chinook.demodb.dev', '/data/csv/chinook.Artist.csv');
 assert.equal(csv.status, 200);
 assert.equal(csv.headers.get('Access-Control-Allow-Origin'), '*');

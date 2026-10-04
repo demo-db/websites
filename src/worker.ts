@@ -1,7 +1,6 @@
 import runtime from './data/generated/runtime.json';
 import providerIndex from './data/generated/index.json';
 import ovdbIndex from './data/generated/ovdb.json';
-import { IncrementalSha256 } from './scripts/indexeddb-snapshot';
 
 type Runtime = {
   catalogueHost: string;
@@ -173,37 +172,71 @@ export async function serveChunkedGzip(
   exportFile: { publicPath: string; bytes?: number | null; sha256?: string | null; chunks?: { assetPath: string; bytes: number; sha256: string }[] },
 ): Promise<Response> {
   const chunks = exportFile.chunks ?? [];
-  const hash = new IncrementalSha256();
+  if (typeof exportFile.bytes !== 'number' || !Number.isSafeInteger(exportFile.bytes) || exportFile.bytes <= 0) {
+    throw new Error('The joined compressed export has an invalid declared size.');
+  }
+  const expectedTotalBytes = exportFile.bytes;
+  // The immutable build verifies each chunk, the joined gzip digest, and the
+  // decoded export digest before publishing assets. Do not hash large chunks
+  // in the request CPU budget; stream those verified assets with bounded reads
+  // and enforce their declared lengths here.
   let nextChunk = 0;
   let encodedBytes = 0;
+  let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let currentChunkBytes = 0;
+  let currentExpectedBytes = 0;
   const body = request.method === 'HEAD' ? null : new ReadableStream<Uint8Array>({
     async pull(controller) {
-      if (nextChunk === chunks.length) {
-        controller.close();
-        return;
-      }
-
-      const chunk = chunks[nextChunk++];
       try {
-        const assetPath = internalAssetPath(databaseId, `/data/${chunk.assetPath.split('/').map(encodeURIComponent).join('/')}`);
-        const target = new URL(assetPath, url);
-        const asset = await env.ASSETS.fetch(new Request(target, { method: 'GET' }));
-        if (!asset.ok) throw new Error(`Compressed export chunk request failed (${asset.status}).`);
-        const bytes = new Uint8Array(await asset.arrayBuffer());
-        if (bytes.byteLength !== chunk.bytes || await sha256Hex(bytes) !== chunk.sha256) throw new Error('Compressed export chunk failed its size or checksum check.');
-        encodedBytes += bytes.byteLength;
-        hash.update(bytes);
-        // Validate the complete representation before yielding its last part.
-        // Otherwise a consumer can receive every byte and miss an error raised
-        // on the stream's next pull.
-        if (nextChunk === chunks.length && (encodedBytes !== exportFile.bytes || hash.hexDigest() !== exportFile.sha256)) {
-          throw new Error('The joined compressed export failed its size or checksum check.');
+        while (true) {
+          if (!currentReader) {
+            if (nextChunk === chunks.length) {
+              if (encodedBytes !== expectedTotalBytes) throw new Error('The joined compressed export has an unexpected size.');
+              controller.close();
+              return;
+            }
+            const chunk = chunks[nextChunk++];
+            const assetPath = internalAssetPath(databaseId, `/data/${chunk.assetPath.split('/').map(encodeURIComponent).join('/')}`);
+            const target = new URL(assetPath, url);
+            const asset = await env.ASSETS.fetch(new Request(target, { method: 'GET' }));
+            if (!asset.ok || !asset.body) throw new Error(`Compressed export chunk request failed (${asset.status}).`);
+            const contentLength = asset.headers.get('Content-Length');
+            if (contentLength && Number(contentLength) !== chunk.bytes) throw new Error('Compressed export chunk has an unexpected size.');
+            currentReader = asset.body.getReader();
+            currentExpectedBytes = chunk.bytes;
+            currentChunkBytes = 0;
+          }
+
+          const { done, value } = await currentReader.read();
+          if (done) {
+            currentReader.releaseLock();
+            currentReader = null;
+            if (currentChunkBytes !== currentExpectedBytes) throw new Error('Compressed export chunk has an unexpected size.');
+            encodedBytes += currentChunkBytes;
+            currentChunkBytes = 0;
+            if (encodedBytes > expectedTotalBytes) throw new Error('The joined compressed export has an unexpected size.');
+            continue;
+          }
+          if (value) {
+            currentChunkBytes += value.byteLength;
+            if (currentChunkBytes > currentExpectedBytes || encodedBytes + currentChunkBytes > expectedTotalBytes) {
+              throw new Error('Compressed export chunk has an unexpected size.');
+            }
+            controller.enqueue(value);
+            return;
+          }
         }
-        controller.enqueue(bytes);
-        if (nextChunk === chunks.length) controller.close();
       } catch (error) {
+        await currentReader?.cancel(error).catch(() => {});
+        currentReader?.releaseLock();
+        currentReader = null;
         controller.error(error);
       }
+    },
+    async cancel(reason) {
+      await currentReader?.cancel(reason);
+      currentReader?.releaseLock();
+      currentReader = null;
     },
   });
   const headers = new Headers({
@@ -213,11 +246,6 @@ export async function serveChunkedGzip(
     ...securityHeaders(),
   });
   return new Response(body, { status: 200, headers });
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function localDatabase(host: string, value?: string): string | undefined {

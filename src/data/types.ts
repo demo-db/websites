@@ -13,6 +13,25 @@ export type ForeignKey = {
   referencedColumn: string;
 };
 
+export type UniqueKey = { name: string; origin: string; columns: string[] };
+export type UniqueIndex = {
+  name: string;
+  origin: string;
+  partial: boolean;
+  columns: { position: number; column: string | null; expression: boolean; descending: boolean; collation: string | null }[];
+  sql: string | null;
+};
+export type SourceView = {
+  name: string;
+  recordset: string | null;
+  schema?: string;
+  sourceDefinition: string;
+  sqliteCompatibility: string;
+  limitation?: string;
+  availableAsSqliteView: boolean;
+  sqliteDefinition?: string | null;
+};
+
 export type Recordset = {
   name: string;
   modelEntity?: string;
@@ -20,6 +39,8 @@ export type Recordset = {
   description: string;
   columns: Column[];
   foreignKeys: ForeignKey[];
+  uniqueKeys?: UniqueKey[];
+  uniqueIndexes?: UniqueIndex[];
   rowCount: number | null;
   rows: Record<string, unknown>[];
   viewSql?: string | null;
@@ -29,6 +50,7 @@ export type ExportFile = {
   path: string;
   publicPath: string;
   assetPath: string;
+  chunks?: { assetPath: string; bytes: number; sha256: string }[];
   format: string;
   table: string | null;
   bytes: number | null;
@@ -53,7 +75,7 @@ export type Database = {
   capabilities: Record<string, unknown>;
   semantics: { tableConcepts?: Record<string, string[]> };
   queries: { title: string; description?: string; sql: string }[];
-  schema: { contractVersion: number; database: { id: string; name: string }; source: Record<string, unknown>; tables: Recordset[] };
+  schema: { contractVersion: number; database: { id: string; name: string }; source: Record<string, unknown>; tables: Recordset[]; sourceViews?: SourceView[] };
   schemaSha256: string;
   tables: Recordset[];
   exports: ExportFile[];

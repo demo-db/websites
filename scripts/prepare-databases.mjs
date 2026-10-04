@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gunzipSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
+import { materializeProviderExports } from './provider-exports.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
@@ -168,12 +168,20 @@ function normalizeProvider(entry, source) {
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
   const exports = source.contract.exports.map((item) => normalizeExport(entry.id, item, schema.tables, source.checksums));
   const paths = new Set();
+  const physicalPaths = new Set();
   const publicPaths = new Set();
   for (const item of exports) {
     if (paths.has(item.path)) throw new Error(`${entry.id}: duplicate provider export path ${item.path}`);
     if (publicPaths.has(item.publicPath)) throw new Error(`${entry.id}: duplicate public export path ${item.publicPath}`);
     paths.add(item.path);
     publicPaths.add(item.publicPath);
+    const materializedPaths = item.compression === 'gzip'
+      ? item.chunks?.length ? item.chunks.map((chunk) => chunk.path) : [item.encodedPath]
+      : [item.path];
+    for (const path of materializedPaths) {
+      if (physicalPaths.has(path)) throw new Error(`${entry.id}: provider file is shared by multiple exports: ${path}`);
+      physicalPaths.add(path);
+    }
   }
   return {
     id: entry.id, name: manifest.name, description: manifest.description,
@@ -202,24 +210,7 @@ function normalizeProvider(entry, source) {
 }
 
 async function materializeExports(db, source) {
-  for (const item of db.exports) {
-    const bytes = await source.read(item.path);
-    const checksum = source.checksums.files?.[item.path];
-    if (checksum) verifyChecksum(source.checksums, item.path, bytes);
-    else if (!item.sha256 || sha256(bytes) !== item.sha256) throw new Error(`${db.id}: export ${item.path} is not covered by a provider checksum or contract hash`);
-    if (item.bytes != null && item.bytes !== bytes.length) throw new Error(`${db.id}: ${item.path} size mismatch`);
-    if (item.sha256 && item.sha256 !== sha256(bytes)) throw new Error(`${db.id}: ${item.path} export hash mismatch`);
-    if (item.compression === 'gzip') {
-      let decoded;
-      try { decoded = gunzipSync(bytes); }
-      catch (error) { throw new Error(`${db.id}: ${item.path} is not valid gzip data`, { cause: error }); }
-      if (item.decodedBytes != null && item.decodedBytes !== decoded.length) throw new Error(`${db.id}: ${item.path} decoded size mismatch`);
-      if (item.decodedSha256 && item.decodedSha256 !== sha256(decoded)) throw new Error(`${db.id}: ${item.path} decoded checksum mismatch`);
-    }
-    const target = join(internalAssets, db.id, 'data', item.assetPath);
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, bytes);
-  }
+  await materializeProviderExports(db.id, db.exports, source, join(internalAssets, db.id, 'data'));
 }
 
 async function materializeModels(db, source) {
@@ -246,7 +237,14 @@ function normalizeExport(id, item, tables, checksums) {
   const checksum = checksums.files?.[path];
   const compression = item.compression ?? checksum?.compression ?? null;
   if (compression != null && compression !== 'gzip') throw new Error(`${id}: unsupported export compression ${compression}`);
-  const logicalBase = compression === 'gzip' && base.toLowerCase().endsWith('.gz') ? base.slice(0, -3) : base;
+  const chunks = compression === 'gzip' && Array.isArray(item.chunks) ? item.chunks : [];
+  const encodedPath = compression === 'gzip' ? item.encodedPath : null;
+  if (compression === 'gzip') {
+    if (encodedPath !== `${path}.gz`) throw new Error(`${id}: gzip export ${path} must name its joined stream as ${path}.gz`);
+    safeRelative(encodedPath);
+    if (chunks.length === 0 && !checksums.files?.[encodedPath]) throw new Error(`${id}: gzip export ${path} has no checksum for its encoded file`);
+  }
+  const logicalBase = base;
   const ext = logicalBase.toLowerCase().split('.').pop();
   const common = {
     bytes: item.bytes ?? checksum?.bytes ?? null,
@@ -258,9 +256,24 @@ function normalizeExport(id, item, tables, checksums) {
   if (compression === 'gzip' && (!Number.isSafeInteger(common.decodedBytes) || !isHash(common.decodedSha256))) {
     throw new Error(`${id}: gzip export ${path} needs decodedBytes and decodedSha256 checksums`);
   }
+  if (compression === 'gzip' && (!Number.isSafeInteger(common.bytes) || common.bytes <= 0 || !isHash(common.sha256))) throw new Error(`${id}: gzip export ${path} needs encoded bytes and sha256`);
+  const seenChunkPaths = new Set();
+  const normalizedChunks = chunks.map((chunk, index) => {
+    safeRelative(chunk.path);
+    if (!chunk.path.startsWith('artifacts/') || !Number.isSafeInteger(chunk.bytes) || chunk.bytes <= 0 || chunk.bytes > 25 * 1024 * 1024 || !isHash(chunk.sha256)) {
+      throw new Error(`${id}: invalid gzip chunk ${chunk.path}`);
+    }
+    const expectedPath = `${encodedPath}.part-${String(index + 1).padStart(4, '0')}`;
+    if (chunk.path !== expectedPath) throw new Error(`${id}: gzip chunks for ${path} are not in their declared sequence`);
+    if (seenChunkPaths.has(chunk.path)) throw new Error(`${id}: gzip chunk paths are duplicated for ${path}`);
+    seenChunkPaths.add(chunk.path);
+    if (!checksums.files?.[chunk.path]) throw new Error(`${id}: gzip chunk ${chunk.path} has no provider checksum`);
+    return { path: chunk.path, bytes: chunk.bytes, sha256: chunk.sha256, assetPath: `${compression === 'gzip' ? `${path.slice('artifacts/'.length)}.gz` : path}.${String(index + 1).padStart(4, '0')}.part` };
+  });
+  if (normalizedChunks.length && normalizedChunks.reduce((sum, chunk) => sum + chunk.bytes, 0) !== common.bytes) throw new Error(`${id}: gzip chunks do not add up to the declared encoded size for ${path}`);
   if (path.split('/').includes('metadata')) {
-    const publicPath = `metadata/${compression === 'gzip' && base.endsWith('.gz') ? base.slice(0, -3) : base}`;
-    return { path, publicPath, assetPath: compression === 'gzip' ? `${publicPath}.gz` : publicPath, format: 'metadata', table: null, ...common, dbWide: true };
+    const publicPath = `metadata/${base}`;
+    return { path, encodedPath, publicPath, assetPath: compression === 'gzip' && !normalizedChunks.length ? `${publicPath}.gz` : publicPath, chunks: normalizedChunks, format: 'metadata', table: null, ...common, dbWide: true };
   }
   let tableName = typeof item.table === 'string' ? item.table : null;
   let format = item.format ?? null;
@@ -288,8 +301,8 @@ function normalizeExport(id, item, tables, checksums) {
   else if (format === 'sql' || ['postgresql', 'mysql', 'sqlserver'].includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);
-  const assetPath = compression === 'gzip' ? `${publicPath}.gz` : publicPath;
-  return { path, publicPath, assetPath, format, table: tableName ?? match?.name ?? null, ...common, dbWide };
+  const assetPath = compression === 'gzip' && !normalizedChunks.length ? `${publicPath}.gz` : publicPath;
+  return { path, encodedPath, publicPath, assetPath, chunks: normalizedChunks, format, table: tableName ?? match?.name ?? null, ...common, dbWide };
 }
 
 function buildCorpus(databases) {
@@ -303,6 +316,7 @@ function buildCorpus(databases) {
       description: db.description,
       sourceVersion: db.source.version ?? db.source.revision ?? db.sourceCommit,
       sourceRevision: db.source.revision ?? db.sourceCommit,
+      providerRevision: db.sourceCommit,
       homepage: db.canonicalUrl,
       browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
       serverManifestUrl: db.publicManifestUrl,
@@ -334,6 +348,7 @@ function buildCorpus(databases) {
         modelEntity: table.modelEntity ?? null,
         columns: table.columns,
         primaryKey: table.columns.filter((column) => column.primaryKey).sort((a, b) => (a.primaryKeyPosition ?? 0) - (b.primaryKeyPosition ?? 0)).map((column) => column.name),
+        ...(table.kind === 'table' ? { uniqueKeys: table.uniqueKeys ?? null, uniqueIndexes: table.uniqueIndexes ?? null } : {}),
         foreignKeys: table.foreignKeys,
         availableRepresentations: db.exports.filter((file) => file.table === table.name).map((file) => ({
           format: file.format,
@@ -347,6 +362,7 @@ function buildCorpus(databases) {
           ? `https://${db.siteHost}/data/${db.exports.find((file) => file.table === table.name && file.format === 'json').publicPath.split('/').map(encodeURIComponent).join('/')}`
           : null,
       })),
+      sourceViews: db.schema.sourceViews ?? [],
       exports: db.exports.filter((file) => !file.table && file.format !== 'metadata').map((file) => ({
         format: file.format,
         url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,

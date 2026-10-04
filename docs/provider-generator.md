@@ -16,6 +16,7 @@ inputs. Add a `generator` object to the manifest:
     "nativeObjectsFile": "metadata/native-objects.json",
     "publisher": {"name": "Example", "url": "https://example.org/", "repository": "https://github.com/example/db"},
     "licences": {"model": "CC-BY-4.0", "meaning": "CC-BY-4.0"},
+    "emitModelSpdxLicense": true,
     "model": {"address": "modelspec://github.com/example/db/0.1.0", "moduleId": "example-db", "name": "Example_DB", "version": "0.1.0"},
     "modelEntityAliases": {"HumanResources.Employee": "HumanResources_Employee"},
     "modelPropertyAliases": {"HumanResources.Employee": {"Employee ID": "Employee_ID"}},
@@ -32,6 +33,12 @@ inputs. Add a `generator` object to the manifest:
   }
 }
 ```
+
+`emitModelSpdxLicense` is an optional boolean, false when omitted. When true,
+the generated ModelSpec HCL includes an `SPDX-License-Identifier` declaration
+using the SPDX identifier in `generator.licences.model`. This declaration applies to
+that generated HCL model artifact only; it does not change ModelSpec JSON,
+source-data licensing, or the repository's root `LICENSE` file.
 
 The provider manifest also pins `dataFile` and `source.databaseSha256` (the
 SHA-256 of the decoded SQLite bytes), source `repository`, immutable `revision`,

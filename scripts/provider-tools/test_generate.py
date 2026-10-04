@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import gzip
 import sqlite3
 import tempfile
 import unittest
@@ -200,6 +201,9 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(restored.execute('SELECT COUNT(*) FROM "Empty Demo"').fetchone()[0], 0)
         restored.close()
         checksums = json.loads((self.root / "metadata/checksums.json").read_text())
+        for file_path in self.root.rglob("*"):
+            if file_path.is_file() and file_path.name not in ("source.sqlite", "source.sqlite.gz"):
+                self.assertLessEqual(file_path.stat().st_size, generator.MAX_STATIC_EXPORT_BYTES, file_path.relative_to(self.root).as_posix())
         self.assertEqual(checksums["files"]["ovdb-database.json"]["sha256"], hashlib.sha256((self.root / "ovdb-database.json").read_bytes()).hexdigest())
         schema = json.loads((Path(__file__).resolve().parents[2] / "schemas/ovdb-database-draft-1.schema.json").read_text())
         descriptor["recordsets"][0]["rows"] = [{"Receipt": "AP8Q"}]
@@ -217,6 +221,92 @@ class ProviderGeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(generator.GenerationError, "preserve the full source data"):
             generator.write_export(path, b"x" * (generator.MAX_STATIC_EXPORT_BYTES + 1))
         self.assertFalse(path.exists())
+
+    def test_deterministic_gzip_chunks_reassemble_and_verify(self) -> None:
+        original_limit = generator.MAX_STATIC_EXPORT_BYTES
+        generator.MAX_STATIC_EXPORT_BYTES = 1024
+        contents = b"".join(hashlib.sha256(str(index).encode()).digest() for index in range(100))
+        outputs = {"artifacts/large.bin": contents}
+        exports = [{"path": "artifacts/large.bin", "bytes": len(contents)}]
+        try:
+            generator.compress_large_exports(outputs, exports)
+            export = exports[0]
+            self.assertEqual(export["compression"], "gzip")
+            self.assertGreater(len(export["chunks"]), 1)
+            joined = bytearray()
+            for chunk in export["chunks"]:
+                piece = outputs[chunk["path"]]
+                self.assertLessEqual(len(piece), original_limit)
+                self.assertEqual(chunk["bytes"], len(piece))
+                self.assertEqual(chunk["sha256"], hashlib.sha256(piece).hexdigest())
+                joined.extend(piece)
+            self.assertEqual(len(joined), export["bytes"])
+            self.assertEqual(hashlib.sha256(joined).hexdigest(), export["sha256"])
+            self.assertEqual(gzip.decompress(joined), contents)
+            self.assertEqual(export["decodedBytes"], len(contents))
+            self.assertEqual(export["decodedSha256"], hashlib.sha256(contents).hexdigest())
+            again = generator.deterministic_gzip(contents)
+            self.assertEqual(bytes(joined), again)
+        finally:
+            generator.MAX_STATIC_EXPORT_BYTES = original_limit
+
+    def test_oversized_exports_and_gzipped_source_are_complete_and_deterministic(self) -> None:
+        source_path = self.root / "source.sqlite"
+        connection = sqlite3.connect(source_path)
+        connection.execute('CREATE TABLE "Large Export" (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
+        payload = "x" * 1100
+        connection.executemany('INSERT INTO "Large Export" (payload) VALUES (?)', ((payload,) for _ in range(30000)))
+        connection.commit()
+        connection.close()
+        source_bytes = source_path.read_bytes()
+        self.assertGreater(len(source_bytes), generator.MAX_STATIC_EXPORT_BYTES)
+        compressed_source = generator.deterministic_gzip(source_bytes)
+        (self.root / "source.sqlite.gz").write_bytes(compressed_source)
+        manifest = self.manifest
+        manifest["dataFile"] = "source.sqlite.gz"
+        manifest["source"]["inputCompression"] = "gzip"
+        manifest["source"]["inputSha256"] = hashlib.sha256(compressed_source).hexdigest()
+        manifest["source"]["databaseSha256"] = hashlib.sha256(source_bytes).hexdigest()
+        (self.root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+        generator.generate(self.root)
+        generated = {
+            path.relative_to(self.root).as_posix(): path.read_bytes()
+            for path in self.root.rglob("*")
+            if path.is_file() and path.name not in ("source.sqlite", "source.sqlite.gz")
+        }
+        contract = json.loads((self.root / "metadata/contract.json").read_text())
+        checksums = json.loads((self.root / "metadata/checksums.json").read_text())
+        large_exports = [item for item in contract["exports"] if item.get("table") == "Large Export"]
+        self.assertEqual({item["format"] for item in large_exports}, {"json", "csv"})
+        for export in large_exports:
+            self.assertEqual(export["compression"], "gzip")
+            decoded = gzip.decompress((self.root / export["encodedPath"]).read_bytes())
+            self.assertEqual(len(decoded), export["decodedBytes"])
+            self.assertEqual(hashlib.sha256(decoded).hexdigest(), export["decodedSha256"])
+            checksum = checksums["files"][export["encodedPath"]]
+            self.assertEqual(checksum["compression"], "gzip")
+            self.assertEqual(checksum["bytes"], export["bytes"])
+            self.assertEqual(checksum["sha256"], export["sha256"])
+            self.assertEqual(checksum["decodedBytes"], export["decodedBytes"])
+            self.assertEqual(checksum["decodedSha256"], export["decodedSha256"])
+            self.assertFalse((self.root / export["path"]).exists())
+        sqlite_export = next(item for item in contract["exports"] if item["format"] == "sqlite")
+        self.assertEqual(gzip.decompress((self.root / sqlite_export["encodedPath"]).read_bytes()), source_bytes)
+        self.assertEqual(sqlite_export["decodedSha256"], hashlib.sha256(source_bytes).hexdigest())
+        sql_export = next(item for item in contract["exports"] if item["format"] == "sql")
+        restored = sqlite3.connect(":memory:")
+        restored.executescript(gzip.decompress((self.root / sql_export["encodedPath"]).read_bytes()).decode("utf-8"))
+        self.assertEqual(restored.execute('SELECT COUNT(*) FROM "Large Export"').fetchone()[0], 30000)
+        restored.close()
+
+        generator.generate(self.root)
+        repeated = {
+            path.relative_to(self.root).as_posix(): path.read_bytes()
+            for path in self.root.rglob("*")
+            if path.is_file() and path.name not in ("source.sqlite", "source.sqlite.gz")
+        }
+        self.assertEqual(generated, repeated)
 
     def test_source_integrity_and_foreign_key_violations_are_checked(self) -> None:
         connection = sqlite3.connect(":memory:")

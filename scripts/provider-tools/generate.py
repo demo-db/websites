@@ -697,7 +697,11 @@ def ovdb_files(root: Path, manifest: dict[str, Any], config: dict[str, Any], sch
             "license": manifest["source"].get("license", "unknown"),
             "notes": " ".join(filter(None, [
                 manifest["source"].get("notes", ""),
-                "The sha256 identifies the decoded SQLite fixture; source.inputSha256, when present, identifies compressed dataFile bytes.",
+                "The sha256 identifies the decoded SQLite fixture; source.inputSha256 identifies the compressed dataFile bytes."
+                if manifest["source"].get("inputCompression") == "gzip" else (
+                    f"The sha256 identifies the generated SQLite fixture at {manifest['dataFile']}; recipe inputs are identified separately by the provider manifest."
+                    if manifest["source"].get("path") not in (None, manifest["dataFile"]) else ""
+                ),
             ])),
         },
         "licences": {"data": data_license, **licences},

@@ -294,6 +294,8 @@ class ProviderGeneratorTests(unittest.TestCase):
         sqlite_export = next(item for item in contract["exports"] if item["format"] == "sqlite")
         self.assertEqual(gzip.decompress((self.root / sqlite_export["encodedPath"]).read_bytes()), source_bytes)
         self.assertEqual(sqlite_export["decodedSha256"], hashlib.sha256(source_bytes).hexdigest())
+        descriptor = json.loads((self.root / "ovdb-database.json").read_text())
+        self.assertIn("source.inputSha256 identifies the compressed dataFile bytes", descriptor["provenance"]["notes"])
         sql_export = next(item for item in contract["exports"] if item["format"] == "sql")
         restored = sqlite3.connect(":memory:")
         restored.executescript(gzip.decompress((self.root / sql_export["encodedPath"]).read_bytes()).decode("utf-8"))

@@ -283,7 +283,7 @@ async function proxyOVDB(request: Request, url: URL): Promise<Response> {
     if (value) headers.set(name, value);
   }
   try {
-    const response = await fetch(target, { method: request.method, headers, body, redirect: 'error' });
+    const response = await fetch(target, { method: request.method, headers, body, redirect: 'manual' });
     if (response.status >= 300 && response.status < 400) return new Response('The OVDB backend returned a redirect', { status: 502, headers: securityHeaders() });
     const outputHeaders = new Headers();
     for (const name of ['Content-Type', 'Cache-Control', 'ETag', 'Last-Modified', 'Vary', 'Link', 'OVDB-Page-Size', 'OVDB-Page-Token']) {
@@ -309,7 +309,7 @@ async function databaseApiIndex(request: Request, database: OVDBManifest): Promi
 async function fetchDatabaseMetadata(request: Request, database: OVDBManifest): Promise<Response> {
   const target = new URL(`/v1/databases/${database.localId}`, ovdbApiOrigin);
   try {
-    const upstream = await fetch(target, { method: request.method, headers: { Accept: 'application/json' }, redirect: 'error' });
+    const upstream = await fetch(target, { method: request.method, headers: { Accept: 'application/json' }, redirect: 'manual' });
     if (upstream.status >= 300 && upstream.status < 400) return new Response('The OVDB backend returned a redirect', { status: 502, headers: securityHeaders() });
     const outputHeaders = new Headers();
     for (const name of ['Content-Type', 'Cache-Control', 'ETag', 'Last-Modified', 'Vary', 'Link']) {

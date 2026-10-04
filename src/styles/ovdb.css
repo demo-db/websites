@@ -1,6 +1,6 @@
 .page-hero{padding-top:72px;padding-bottom:42px}
 .recordset-list{display:grid;gap:12px}
-.recordset-card{padding:20px 22px;border:1px solid var(--line);border-radius:7px;background:rgba(15,29,47,.65)}
+.recordset-card{padding:20px 22px;border:1px solid var(--line);border-radius:7px;background:var(--content-background)}
 .recordset-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
 .recordset-heading h3{margin:4px 0 8px;font-size:21px}
 .recordset-card>p{color:var(--muted)}

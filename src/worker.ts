@@ -135,7 +135,7 @@ export function internalAssetPath(databaseId: string, pathname: string): string 
   if (pathname === '/model/') return `/_db/${databaseId}/model/index.html`;
   if (pathname.startsWith('/model/')) return `/_db/${databaseId}/model/${pathname.slice('/model/'.length)}`;
   if (pathname.startsWith('/_db/')) return '/404.html';
-  if (pathname === '/embed/datatug.js' || pathname.startsWith('/_astro/') || pathname === '/favicon.svg') return pathname;
+  if (pathname === '/embed/datatug.js' || pathname === '/theme.js' || pathname.startsWith('/_astro/') || pathname === '/favicon.svg') return pathname;
   const suffix = pathname.endsWith('/') ? 'index.html' : `${pathname.split('/').at(-1)?.includes('.') ? '' : '/index.html'}`;
   return `/_db/${databaseId}${pathname}${suffix}`;
 }

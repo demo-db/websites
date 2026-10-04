@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
 const wrangler = JSON.parse(await readFile(join(root, 'wrangler.jsonc'), 'utf8'));
+const liveSmoke = await readFile(join(root, 'scripts/smoke-live.mjs'), 'utf8');
 
 test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push']);
@@ -39,4 +40,14 @@ test('only the three verified new hostnames bind, with legacy redirect disabled'
   assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'false');
   assert.equal(wrangler.assets.html_handling, 'none');
   assert.equal(wrangler.assets.run_worker_first, true);
+});
+
+test('live smoke separates DTQL limits from OVDB server pagination', () => {
+  const northwindCall = liveSmoke.match(/await checkedReadOnlyQuery\('northwind', (".*?"), 2\);/)?.[1];
+  assert.ok(northwindCall, 'Northwind live smoke uses a two-record server page');
+  const pagedQuery = JSON.parse(northwindCall);
+  assert.match(pagedQuery, /orderBy:/);
+  assert.doesNotMatch(pagedQuery, /\b(?:limit|offset):/i, 'server-paginated DTQL cannot specify its own limit or offset');
+  assert.match(liveSmoke, /await checkedReadOnlyQuery\('chinook', 'from: \{name: Artist\}\\nlimit: 1\\n'\);/, 'an unpaged query retains its ordinary DTQL limit');
+  assert.match(liveSmoke, /if \(pageSize !== undefined\) headers\['OVDB-Page-Size'\] = String\(pageSize\)/);
 });

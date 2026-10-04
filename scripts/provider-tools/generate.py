@@ -432,6 +432,40 @@ def recordset_info(connection: sqlite3.Connection, name: str, kind: str, descrip
             key=lambda item: item["position"],
         )
         foreign_keys = []
+        unique_keys = []
+        unique_indexes = []
+        indexes = sorted(connection.execute(f"PRAGMA index_list({quoted})"), key=lambda row: row[1])
+        for index in indexes:
+            if not index[2]:
+                continue
+            index_name = index[1]
+            index_sql_row = connection.execute("SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (index_name,)).fetchone()
+            index_sql = index_sql_row[0] if index_sql_row else None
+            terms = []
+            for term in connection.execute(f"PRAGMA index_xinfo({quote_identifier(index_name)})"):
+                if not term[5]:
+                    continue
+                terms.append({
+                    "position": term[0],
+                    "column": term[2],
+                    "expression": term[2] is None,
+                    "descending": bool(term[3]),
+                    "collation": term[4],
+                })
+            unique_index = {
+                "name": index_name,
+                "origin": index[3],
+                "partial": bool(index[4]),
+                "columns": terms,
+                "sql": index_sql,
+            }
+            unique_indexes.append(unique_index)
+            if index[3] != "pk" and not index[4] and terms and all(term["column"] is not None for term in terms):
+                unique_keys.append({
+                    "name": index_name,
+                    "origin": index[3],
+                    "columns": [term["column"] for term in terms],
+                })
         fk_rows = sorted(connection.execute(f"PRAGMA foreign_key_list({quoted})"), key=lambda row: (row[0], row[1]))
         target_primary_keys: dict[str, list[str]] = {}
         for fk in fk_rows:
@@ -463,6 +497,8 @@ def recordset_info(connection: sqlite3.Connection, name: str, kind: str, descrip
         columns = [{"name": column[0], "type": column[1] or "", "nullable": True, "primaryKey": False, "primaryKeyOrder": 0, "primaryKeyPosition": None, "defaultValue": None} for column in cursor.description or []]
         primary_key = []
         foreign_keys = []
+        unique_keys = []
+        unique_indexes = []
         sample_cursor = connection.execute(f"SELECT * FROM {quoted} ORDER BY " + ", ".join(quote_identifier(item["name"]) for item in columns) + " LIMIT 12")
         row_count = connection.execute(f"SELECT COUNT(*) FROM {quoted}").fetchone()[0]
         row = connection.execute("SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (name,)).fetchone()
@@ -476,6 +512,7 @@ def recordset_info(connection: sqlite3.Connection, name: str, kind: str, descrip
         "description": description,
         "columns": columns,
         "primaryKey": primary_key,
+        **({"uniqueKeys": unique_keys, "uniqueIndexes": unique_indexes} if kind == "table" else {}),
         "foreignKeys": foreign_keys,
         "rowCount": row_count,
         "viewSql": view_sql,
@@ -494,6 +531,73 @@ def verify_sqlite_source(connection: sqlite3.Connection) -> None:
             f"{row[0]} rowid={row[1]} target={row[2]} constraint={row[3]}" for row in violations
         )
         raise GenerationError(f"source SQLite foreign_key_check found violations: {details}")
+
+
+def native_source_views(
+    root: Path,
+    config: dict[str, Any],
+    schema_tables: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], tuple[str, bytes] | None]:
+    """Load source-native view definitions without making them SQLite exports."""
+    configured_path = config.get("nativeObjectsFile")
+    if configured_path is None:
+        return [], None
+    path = safe_relative(root, configured_path, "generator.nativeObjectsFile")
+    if not path.is_file():
+        raise GenerationError(f"generator.nativeObjectsFile does not exist: {configured_path}")
+    content = path.read_bytes()
+    if len(content) > MAX_STATIC_EXPORT_BYTES:
+        raise GenerationError(f"generator.nativeObjectsFile exceeds the {MAX_STATIC_EXPORT_BYTES}-byte static file limit")
+    try:
+        document = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise GenerationError(f"generator.nativeObjectsFile is not valid UTF-8 JSON: {error}") from error
+    if not isinstance(document, dict) or document.get("format") != "demodb-native-sqlserver-metadata/draft-1":
+        raise GenerationError("generator.nativeObjectsFile must use demodb-native-sqlserver-metadata/draft-1")
+    views = document.get("views")
+    if not isinstance(views, list):
+        raise GenerationError("generator.nativeObjectsFile.views must be an array")
+
+    sqlite_views = {item["name"]: item["viewSql"] for item in schema_tables if item["kind"] == "view"}
+    seen_recordsets: set[str] = set()
+    preserved: list[dict[str, Any]] = []
+
+    def normalized_sql(value: str) -> str:
+        return value.strip().rstrip(";").rstrip()
+
+    for index, view in enumerate(views):
+        if not isinstance(view, dict):
+            raise GenerationError(f"native source view at index {index} must be an object")
+        for field in ("name", "recordset", "schema", "sourceDefinition", "sqliteCompatibility"):
+            if not isinstance(view.get(field), str) or not view[field]:
+                raise GenerationError(f"native source view at index {index} requires non-empty string {field}")
+        if "rows" in view:
+            raise GenerationError(f"native source view {view['name']!r} must not contain row samples")
+        name = view["name"]
+        recordset = view["recordset"]
+        schema_name = view["schema"]
+        if recordset != f"{schema_name}.{name}":
+            raise GenerationError(f"native source view {name!r} recordset must be schema-qualified as {schema_name}.{name}")
+        if recordset in seen_recordsets:
+            raise GenerationError(f"duplicate native source view recordset: {recordset!r}")
+        seen_recordsets.add(recordset)
+        compatibility = view["sqliteCompatibility"]
+        if compatibility not in ("compatible", "unsupported"):
+            raise GenerationError(f"native source view {name!r} has unsupported sqliteCompatibility {compatibility!r}")
+        if "limitation" in view and not isinstance(view["limitation"], str):
+            raise GenerationError(f"native source view {name!r} limitation must be a string")
+        if "sqliteDefinition" in view and not isinstance(view["sqliteDefinition"], str):
+            raise GenerationError(f"native source view {name!r} sqliteDefinition must be a string")
+        actual_sqlite_definition = sqlite_views.get(recordset)
+        available = actual_sqlite_definition is not None
+        if compatibility == "compatible":
+            expected_definition = view.get("sqliteDefinition")
+            if not available or not expected_definition or normalized_sql(actual_sqlite_definition) != normalized_sql(expected_definition):
+                raise GenerationError(f"native source view {name!r} is marked compatible but its SQLite definition does not match the executable SQLite view")
+        if compatibility == "unsupported" and available:
+            raise GenerationError(f"native source view {name!r} is marked unsupported but appears as an executable SQLite view")
+        preserved.append({**view, "availableAsSqliteView": available})
+    return preserved, (path.relative_to(root).as_posix(), content)
 
 
 def write_export(path: Path, contents: bytes) -> dict[str, Any]:
@@ -891,6 +995,7 @@ def generate(root: Path) -> None:
                     if not isinstance(description, str) or not description:
                         raise GenerationError(f"column description for {table['name']}.{column['name']} must be a non-empty string")
                     column["description"] = description
+        source_views, native_objects_input = native_source_views(root, config, schema_tables)
         model, model_json, model_hcl, meaning_json = model_files(dbid, config, schema_tables)
         aliases = config.get("modelEntityAliases", {})
         modeling_limitations = []
@@ -906,6 +1011,7 @@ def generate(root: Path) -> None:
             "blobEncoding": "base64",
             "modelingLimitations": modeling_limitations,
             "tables": schema_tables,
+            "sourceViews": source_views,
         }
         outputs[f"model/{dbid}.modelspec.json"] = model_json
         outputs[f"model/{dbid}.modelspec.hcl"] = model_hcl
@@ -945,6 +1051,11 @@ def generate(root: Path) -> None:
         outputs["ovdb.yaml"], outputs["ovdb-database.json"] = ovdb_files(root, manifest, config, schema, actual_digest, shared_schema, model)
         checksum_paths = dict(outputs)
         checksum_paths["manifest.json"] = manifest_path.read_bytes()
+        if native_objects_input is not None:
+            input_path, input_bytes = native_objects_input
+            if input_path in checksum_paths:
+                raise GenerationError(f"generator.nativeObjectsFile conflicts with generated output path {input_path!r}")
+            checksum_paths[input_path] = input_bytes
         checksums = {
             "contractVersion": 1,
             "files": {path: {"sha256": sha256(contents), "bytes": len(contents)} for path, contents in sorted(checksum_paths.items())},
@@ -963,10 +1074,20 @@ def generate(root: Path) -> None:
 
         old_checksums_path = root / "metadata" / "checksums.json"
         old_generated: set[str] = set()
+        old_input_paths = {native_objects_input[0]} if native_objects_input is not None else set()
+        old_contract_path = root / "metadata" / "contract.json"
+        if old_contract_path.is_file():
+            try:
+                old_contract = json.loads(old_contract_path.read_text(encoding="utf-8"))
+                old_native_path = old_contract.get("manifest", {}).get("generator", {}).get("nativeObjectsFile")
+                if isinstance(old_native_path, str):
+                    old_input_paths.add(old_native_path)
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                pass
         if old_checksums_path.is_file():
             try:
                 previous = json.loads(old_checksums_path.read_text(encoding="utf-8"))
-                old_generated = set(previous.get("files", {})) - {"manifest.json"}
+                old_generated = set(previous.get("files", {})) - {"manifest.json"} - old_input_paths
             except (json.JSONDecodeError, AttributeError, TypeError):
                 old_generated = set()
 

@@ -13,6 +13,7 @@ inputs. Add a `generator` object to the manifest:
 ```json
 {
   "generator": {
+    "nativeObjectsFile": "metadata/native-objects.json",
     "publisher": {"name": "Example", "url": "https://example.org/", "repository": "https://github.com/example/db"},
     "licences": {"model": "CC-BY-4.0", "meaning": "CC-BY-4.0"},
     "model": {"address": "modelspec://github.com/example/db/0.1.0", "moduleId": "example-db", "name": "Example_DB", "version": "0.1.0"},
@@ -63,7 +64,20 @@ ModelSpec entities with their native properties and no `key` field. Composite
 primary and foreign keys retain their declared position.
 Native table/view names, column defaults, generated-column markers, table/view
 SQL, empty tables, and BLOB bytes are preserved in metadata or the unchanged
-SQLite artifact. Source `integrity_check` and `foreign_key_check` must pass.
+SQLite artifact. The schema metadata distinguishes `primaryKey`, full-column
+`uniqueKeys`, and all inspected `uniqueIndexes`; partial or expression indexes
+stay in `uniqueIndexes` with their SQLite index SQL and are not promoted to
+simple unique keys. `uniqueKeys: []` means no representable full-column
+non-primary unique key was found. Source `integrity_check` and
+`foreign_key_check` must pass.
+If `generator.nativeObjectsFile` is set, it must point to a pinned
+`demodb-native-sqlserver-metadata/draft-1` JSON input. Its native `views` are
+preserved in `metadata/schema.json.sourceViews`, and the input file hash and
+byte count are added to `metadata/checksums.json`. Each source view keeps its
+original SQL definition and SQLite compatibility status. The derived
+`availableAsSqliteView` flag is true only when the named recordset exists as a
+SQLite view in the fixture. Source-only definitions are never added to SQLite
+recordsets, row previews, static exports, or OVDB query capabilities.
 JSON and CSV encode BLOB values as base64; that encoding is described in
 generated metadata. View rows are available as metadata previews,
 but the generated OVDB descriptor only advertises the physical tables selected

@@ -54,10 +54,16 @@ export default {
       const aliasDatabase = databases.get(aliasId);
       if (env.ENABLE_LEGACY_REDIRECTS !== 'true' || !aliasDatabase) return notFound();
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
-      const apiAlias = /^\/ovdb\/v1\/databases\/([a-z][a-z0-9-]{0,39})(?:\/.*)?$/.exec(url.pathname);
-      if (apiAlias && ovdbDatabases.has(apiAlias[1])) return redirectPreservingRequest(request, `https://demodb.dev${url.pathname}${url.search}`);
+      if (url.pathname.startsWith('/ovdb/v1/databases/')) {
+        const apiAlias = /^\/ovdb\/v1\/databases\/([a-z][a-z0-9-]{0,39})(?:\/.*)?$/.exec(url.pathname);
+        if (!apiAlias || !ovdbDatabases.has(apiAlias[1])) return notFound();
+        return redirectPreservingRequest(request, `https://demodb.dev${url.pathname}${url.search}`);
+      }
       const profileAlias = /^\/ovdb\/(?:dbs|db)\/([a-z][a-z0-9-]{0,39})\/?$/.exec(url.pathname);
-      if (profileAlias && ovdbDatabases.has(profileAlias[1])) return redirectPreservingRequest(request, `https://demodb.dev/${profileAlias[1]}/${url.search}`);
+      if (/^\/ovdb\/(?:dbs|db)\/[^/]+\/?$/.test(url.pathname)) {
+        if (!profileAlias || !ovdbDatabases.has(profileAlias[1])) return notFound();
+        return redirectPreservingRequest(request, `https://demodb.dev/${profileAlias[1]}/${url.search}`);
+      }
       return redirectPreservingRequest(request, `https://${aliasDatabase.siteHost}${url.pathname}${url.search}`);
     }
 
@@ -135,7 +141,7 @@ export function internalAssetPath(databaseId: string, pathname: string): string 
   if (pathname === '/model/') return `/_db/${databaseId}/model/index.html`;
   if (pathname.startsWith('/model/')) return `/_db/${databaseId}/model/${pathname.slice('/model/'.length)}`;
   if (pathname.startsWith('/_db/')) return '/404.html';
-  if (pathname === '/embed/datatug.js' || pathname.startsWith('/_astro/') || pathname === '/favicon.svg') return pathname;
+  if (pathname === '/embed/datatug.js' || pathname === '/theme.js' || pathname.startsWith('/_astro/') || pathname === '/favicon.svg') return pathname;
   const suffix = pathname.endsWith('/') ? 'index.html' : `${pathname.split('/').at(-1)?.includes('.') ? '' : '/index.html'}`;
   return `/_db/${databaseId}${pathname}${suffix}`;
 }

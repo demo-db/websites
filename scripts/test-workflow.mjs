@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
 const wrangler = JSON.parse(await readFile(join(root, 'wrangler.jsonc'), 'utf8'));
+const liveSmoke = await readFile(join(root, 'scripts/smoke-live.mjs'), 'utf8');
 
 test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push']);
@@ -30,13 +31,33 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.ok(job.steps.some((step) => step.name === 'Verify the deployed commit and public routes' && /github\.event_name == 'push'/.test(step.if)));
 });
 
-test('only the three verified new hostnames bind, with legacy redirect disabled', () => {
+test('binds the transferred Chinook hostname to the verified legacy redirects', () => {
   assert.deepEqual(wrangler.routes, [
     { pattern: 'demodb.dev', custom_domain: true },
     { pattern: 'chinook.demodb.dev', custom_domain: true },
     { pattern: 'northwind.demodb.dev', custom_domain: true },
+    { pattern: 'chinookdb.com', custom_domain: true },
   ]);
-  assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'false');
+  assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'true');
   assert.equal(wrangler.assets.html_handling, 'none');
   assert.equal(wrangler.assets.run_worker_first, true);
+});
+
+test('live smoke separates DTQL limits from OVDB server pagination', () => {
+  const northwindCall = liveSmoke.match(/await checkedReadOnlyQuery\('northwind', (".*?"), 2\);/)?.[1];
+  assert.ok(northwindCall, 'Northwind live smoke uses a two-record server page');
+  const pagedQuery = JSON.parse(northwindCall);
+  assert.match(pagedQuery, /orderBy:/);
+  assert.doesNotMatch(pagedQuery, /\b(?:limit|offset):/i, 'server-paginated DTQL cannot specify its own limit or offset');
+  assert.match(liveSmoke, /await checkedReadOnlyQuery\('chinook', 'from: \{name: Artist\}\\nlimit: 1\\n'\);/, 'an unpaged query retains its ordinary DTQL limit');
+  assert.match(liveSmoke, /if \(pageSize !== undefined\) headers\['OVDB-Page-Size'\] = String\(pageSize\)/);
+});
+
+test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {
+  assert.match(liveSmoke, /async function checkedLegacyRedirect\(url, init, expectedLocation\)/);
+  assert.match(liveSmoke, /redirect: 'manual'/);
+  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/tables\/Artist\//);
+  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/data\/chinook\.sqlite/);
+  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/dbs\/chinook/);
+  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/v1\/databases\/chinook\/dtql/);
 });

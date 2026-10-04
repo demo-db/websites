@@ -14,10 +14,11 @@
   "routes": [
     { "pattern": "demodb.dev", "custom_domain": true },
     { "pattern": "chinook.demodb.dev", "custom_domain": true },
-    { "pattern": "northwind.demodb.dev", "custom_domain": true }
+    { "pattern": "northwind.demodb.dev", "custom_domain": true },
+    { "pattern": "chinookdb.com", "custom_domain": true }
   ],
   "vars": {
-    "ENABLE_LEGACY_REDIRECTS": "false"
+    "ENABLE_LEGACY_REDIRECTS": "true"
   },
   "env": {
     "local": {

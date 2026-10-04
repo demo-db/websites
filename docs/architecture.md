@@ -28,8 +28,8 @@ The private output tree uses `/_db/<id>/...`, but Astro reserves leading-undersc
 
 ### Abstraction leak review
 
-The shared renderer and similarity code were searched for `chinook`, `northwind`, and sample table names. Database-specific facts remain in the registry or provider contracts. `chinookdb.com` appears only as a provider-declared alias; its redirect is governed by a generic off-by-default flag and target-host lookup. The hostname list in Wrangler is intentionally explicit because Cloudflare custom domains are deployment configuration. `Order Details` is an ordinary provider recordset name and uses encoded public paths.
+The shared renderer and similarity code were searched for `chinook`, `northwind`, and sample table names. Database-specific facts remain in the registry or provider contracts. `chinookdb.com` appears only as a provider-declared alias; its redirects use a generic flag and target-host lookup. The transferred hostname is now an explicit Wrangler custom domain. `Order Details` is an ordinary provider recordset name and uses encoded public paths.
 
 ### Deferred production work
 
-The legacy `chinookdb.com` DNS/custom-domain binding and permanent 308 cutover remain disabled until the new Chinook site, discovery route, and cloud OVDB behavior pass live checks. Production domain binding and cutover are owned by the deployment coordinator. Browser verification should follow the first deployment.
+The Chinook site, discovery route, cloud OVDB behavior, query journey, theme preference, and old-host 308 redirects have passed live checks. `chinookdb.com` is bound to the same Worker as the canonical DemoDB and sample database hosts.

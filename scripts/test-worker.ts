@@ -32,12 +32,18 @@ assert.equal(resolveHost('chinook.demodb.dev').databaseId, 'chinook');
 assert.equal(resolveHost('northwind.localhost', local).databaseId, 'northwind');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
+assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
 assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.html');
 
 for (const [host, expected] of [['demodb.dev', 'Northwind'], ['chinook.demodb.dev', 'Chinook'], ['northwind.demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
   const response = await fetch(host, '/');
   assert.equal(response.status, 200, host);
   assert.match(await response.text(), new RegExp(expected));
+}
+for (const host of ['demodb.dev', 'chinook.demodb.dev', 'northwind.demodb.dev']) {
+  const theme = await fetch(host, '/theme.js');
+  assert.equal(theme.status, 200, `${host} serves the shared theme controller`);
+  assert.match(await theme.text(), /demodb-theme/, `${host} serves the preference logic`);
 }
 
 const rootDocs = await fetch('demodb.dev', '/_db/northwind/index.html');
@@ -182,12 +188,23 @@ assert.equal(postRedirect.status, 308);
 assert.equal(postRedirect.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?format=json');
 const legacyDisabled = await fetch('chinookdb.com', '/tables/Artist/?x=1', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'false' });
 assert.equal(legacyDisabled.status, 404);
-const legacy = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql?q=a%20b', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
-assert.equal(legacy.status, 308);
-assert.equal(legacy.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b');
-const oldOVDBProfile = await fetch('chinookdb.com', '/ovdb/dbs/chinook?view=collections', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
-assert.equal(oldOVDBProfile.status, 308);
-assert.equal(oldOVDBProfile.headers.get('Location'), 'https://demodb.dev/chinook/?view=collections');
+const redirectCases = [
+  ['GET', '/tables/Artist/?filter=live%20tracks', 'https://chinook.demodb.dev/tables/Artist/?filter=live%20tracks'],
+  ['HEAD', '/data/chinook.sqlite?download=1', 'https://chinook.demodb.dev/data/chinook.sqlite?download=1'],
+  ['GET', '/model/chinook.modelspec.json?format=source', 'https://chinook.demodb.dev/model/chinook.modelspec.json?format=source'],
+  ['GET', '/ovdb/dbs/chinook?view=collections', 'https://demodb.dev/chinook/?view=collections'],
+  ['HEAD', '/ovdb/db/chinook/?view=collections', 'https://demodb.dev/chinook/?view=collections'],
+  ['POST', '/ovdb/v1/databases/chinook/dtql?q=a%20b', 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b'],
+  ['GET', '/ovdb/dbs/chinook/collections/Album?limit=5', 'https://chinook.demodb.dev/ovdb/dbs/chinook/collections/Album?limit=5'],
+] as const;
+for (const [method, path, expected] of redirectCases) {
+  const response = await fetch('chinookdb.com', path, method, { ...local, ENABLE_LEGACY_REDIRECTS: 'true' }, method === 'POST' ? { body: 'query: { name: Album }' } : undefined);
+  assert.equal(response.status, 308, `${method} ${path} uses a permanent method-preserving redirect`);
+  assert.equal(response.headers.get('Location'), expected, `${method} ${path} preserves its canonical route and query`);
+}
+for (const path of ['/ovdb/v1/databases/unknown/dtql', '/ovdb/dbs/unknown', '/ovdb/db/unknown/']) {
+  assert.equal((await fetch('chinookdb.com', path, 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' })).status, 404, `${path} fails closed for an unknown database`);
+}
 const oldOVDBPreflight = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql', 'OPTIONS', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
 assert.match(oldOVDBPreflight.headers.get('Access-Control-Allow-Headers') ?? '', /OVDB-Page-Token/);
 
@@ -251,7 +268,7 @@ try {
   assert.equal(getQuery.status, 200);
   const pagedQuery = await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'POST', local, {
     headers: { 'Content-Type': 'application/json', 'OVDB-Page-Size': '2', 'OVDB-Page-Token': 'page-token', 'OVDB-Page-Close': 'true', Authorization: 'Bearer never-forward', Cookie: 'session=never-forward' },
-    body: JSON.stringify({ query: "from: {name: 'Order Details'}\nlimit: 2\n" }),
+    body: JSON.stringify({ query: "from: {name: 'Order Details'}\n" }),
   });
   assert.equal(pagedQuery.status, 200);
   assert.match(pagedQuery.headers.get('Vary') ?? '', /OVDB-Page-Size/);

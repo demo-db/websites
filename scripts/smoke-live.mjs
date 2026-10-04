@@ -2,9 +2,9 @@ const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
 
 const sites = [
-  ['https://demodb.dev', ['/', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json']],
-  ['https://chinook.demodb.dev', ['/', '/tables/Artist/', '/data/chinook.sqlite', '/.well-known/openvaultdb']],
-  ['https://northwind.demodb.dev', ['/', '/tables/Order%20Details/', '/tables/Invoices/', '/data/northwind.sqlite', '/.well-known/openvaultdb']],
+  ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json']],
+  ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/data/chinook.sqlite', '/.well-known/openvaultdb']],
+  ['https://northwind.demodb.dev', ['/', '/theme.js', '/tables/Order%20Details/', '/tables/Invoices/', '/data/northwind.sqlite', '/.well-known/openvaultdb']],
 ];
 
 async function checked(url, validate) {
@@ -23,24 +23,27 @@ async function checked(url, validate) {
   throw new Error(`${url}: ${last}`);
 }
 
-async function checkedReadOnlyQuery(localId, query) {
+async function checkedReadOnlyQuery(localId, query, pageSize) {
   const url = `https://demodb.dev/ovdb/v1/databases/${localId}/dtql`;
   let last = 'request was not attempted';
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (pageSize !== undefined) headers['OVDB-Page-Size'] = String(pageSize);
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'OVDB-Page-Size': '1' },
+        headers,
         body: JSON.stringify({ query }),
         cache: 'no-store',
       });
       const body = await response.text();
       if (response.ok) {
         const result = JSON.parse(body);
-        if (Array.isArray(result.records) && result.records.length === 1) {
-          const record = result.records[0];
+        const expectedRecords = pageSize ?? 1;
+        if (Array.isArray(result.records) && result.records.length === expectedRecords) {
+          const records = result.records;
           const nativeKeyPrefix = 'Order Details/';
-          if (localId !== 'northwind' || (typeof record.key === 'string'
+          if (localId !== 'northwind' || records.every((record) => typeof record.key === 'string'
             && record.key.startsWith(nativeKeyPrefix)
             && typeof record.data?.id === 'string'
             && record.data.id !== '<nil>'
@@ -62,5 +65,27 @@ for (const [origin, paths] of sites) {
   for (const path of paths) await checked(`${origin}${path}`, (_body, response) => response.status === 200);
 }
 await checkedReadOnlyQuery('chinook', 'from: {name: Artist}\nlimit: 1\n');
-await checkedReadOnlyQuery('northwind', "from: {name: 'Order Details'}\norderBy: [{field: OrderID}, {field: ProductID}]\nlimit: 1\n");
-console.log(`Live DemoDB pages, typed manifests, discovery, and read-only OVDB queries serve ${commit}.`);
+await checkedReadOnlyQuery('northwind', "from: {name: 'Order Details'}\norderBy: [{field: OrderID}, {field: ProductID}]\n", 2);
+
+async function checkedLegacyRedirect(url, init, expectedLocation) {
+  let last = 'request was not attempted';
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
+      if (response.status === 308 && response.headers.get('Location') === expectedLocation) return;
+      last = `HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}`;
+    } catch (error) { last = error instanceof Error ? error.message : String(error); }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
+  }
+  throw new Error(`legacy redirect from ${url} did not match after retries: ${last}`);
+}
+
+await checkedLegacyRedirect('https://chinookdb.com/tables/Artist/?smoke=legacy', { method: 'GET' }, 'https://chinook.demodb.dev/tables/Artist/?smoke=legacy');
+await checkedLegacyRedirect('https://chinookdb.com/data/chinook.sqlite?download=1', { method: 'HEAD' }, 'https://chinook.demodb.dev/data/chinook.sqlite?download=1');
+await checkedLegacyRedirect('https://chinookdb.com/ovdb/dbs/chinook?smoke=profile', { method: 'GET' }, 'https://demodb.dev/chinook/?smoke=profile');
+await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtql?smoke=query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
+}, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
+console.log(`Live DemoDB pages, typed manifests, discovery, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);

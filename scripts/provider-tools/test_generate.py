@@ -35,7 +35,7 @@ class ProviderGeneratorTests(unittest.TestCase):
             INSERT INTO "Order Details" VALUES (7, 3, X'00FF10');
             CREATE TABLE "HumanResources.Employee" (
               EmployeeID INTEGER NOT NULL,
-              Department TEXT DEFAULT 'Research',
+              Department TEXT DEFAULT 'Research' UNIQUE,
               Salary MONEY,
               Score INTEGER GENERATED ALWAYS AS (EmployeeID * 2) STORED,
               PRIMARY KEY (EmployeeID)
@@ -48,16 +48,51 @@ class ProviderGeneratorTests(unittest.TestCase):
               FOREIGN KEY (child_b, child_a) REFERENCES "Order Details" ("Product ID", "Order ID") ON UPDATE CASCADE ON DELETE SET NULL
             );
             INSERT INTO Child VALUES (7, 3);
+            CREATE UNIQUE INDEX Child_Partial ON Child(child_a) WHERE child_b IS NOT NULL;
+            CREATE UNIQUE INDEX Child_Expression ON Child(lower(CAST(child_a AS TEXT)));
             CREATE TABLE "Empty Demo" (Value TEXT);
             CREATE TABLE "Self Link" (ID INTEGER PRIMARY KEY, ParentID INTEGER REFERENCES "Self Link");
             INSERT INTO "Self Link" VALUES (1, NULL);
             INSERT INTO "Self Link" VALUES (2, 1);
-            CREATE VIEW "Employee Summary" AS SELECT EmployeeID, Score FROM "HumanResources.Employee";
+            CREATE VIEW "dbo.Employee Summary" AS SELECT EmployeeID, Score FROM "HumanResources.Employee";
             '''
         )
         connection.commit()
         connection.close()
         source_hash = hashlib.sha256(database.read_bytes()).hexdigest()
+        self.native_objects = {
+            "format": "demodb-native-sqlserver-metadata/draft-1",
+            "views": [
+                {
+                    "name": "Employee Summary",
+                    "recordset": "dbo.Employee Summary",
+                    "schema": "dbo",
+                    "sourceDefinition": "CREATE VIEW [dbo].[Employee Summary] AS SELECT [EmployeeID], [Score] FROM [dbo].[Employee]",
+                    "sqliteCompatibility": "compatible",
+                    "limitation": "",
+                    "sqliteDefinition": 'CREATE VIEW "dbo.Employee Summary" AS SELECT EmployeeID, Score FROM "HumanResources.Employee"',
+                },
+                {
+                    "name": "Unsupported Summary",
+                    "recordset": "dbo.Unsupported Summary",
+                    "schema": "dbo",
+                    "sourceDefinition": "CREATE VIEW [dbo].[UnsupportedSummary] AS SELECT * FROM [dbo].[UnsupportedSource]",
+                    "sqliteCompatibility": "unsupported",
+                    "limitation": "SQL Server-only source syntax",
+                },
+                {
+                    "name": "Employee Summary",
+                    "recordset": "hr.Employee Summary",
+                    "schema": "hr",
+                    "sourceDefinition": "CREATE VIEW [hr].[Employee Summary] AS SELECT [EmployeeID] FROM [hr].[Employee]",
+                    "sqliteCompatibility": "unsupported",
+                    "limitation": "The HR database is not in the SQLite fixture",
+                },
+            ],
+        }
+        native_path = self.root / "metadata/native-objects.json"
+        native_path.parent.mkdir(parents=True)
+        native_path.write_text(json.dumps(self.native_objects, indent=2) + "\n", encoding="utf-8")
         self.manifest = {
             "contractVersion": 1,
             "id": "fixture",
@@ -84,6 +119,7 @@ class ProviderGeneratorTests(unittest.TestCase):
             },
             "generator": {
                 "publisher": {"name": "Example", "url": "https://example.org/", "repository": "https://github.com/example/fixture"},
+                "nativeObjectsFile": "metadata/native-objects.json",
                 "licences": {"model": "CC-BY-4.0", "meaning": "CC-BY-4.0"},
                 "model": {"address": "modelspec://github.com/example/fixture/0.1.0", "moduleId": "fixture", "name": "Fixture_DB", "version": "0.1.0"},
                 "modelEntityAliases": {"Order Details": "Order_Details", "HumanResources.Employee": "HumanResources_Employee"},
@@ -142,6 +178,7 @@ class ProviderGeneratorTests(unittest.TestCase):
         generator.generate(self.root)
         second = {path.relative_to(self.root).as_posix(): path.read_bytes() for path in self.root.rglob("*") if path.is_file() and path.name != "source.sqlite"}
         self.assertEqual(first, second)
+        self.assertTrue((self.root / "metadata/native-objects.json").is_file(), "native source metadata is an input, never stale generated output")
 
         schema = json.loads((self.root / "metadata/schema.json").read_text())
         tables = {table["name"]: table for table in schema["tables"]}
@@ -155,11 +192,13 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(order_details["rows"][0]["Receipt"], "AP8Q")
         self.assertEqual(tables["Empty Demo"]["rowCount"], 0)
         self.assertEqual(tables["Empty Demo"]["rows"], [])
-        self.assertIn("CREATE VIEW", tables["Employee Summary"]["viewSql"])
+        self.assertIn("CREATE VIEW", tables["dbo.Employee Summary"]["viewSql"])
+        self.assertNotIn("uniqueKeys", tables["dbo.Employee Summary"])
         employee = tables["HumanResources.Employee"]
         self.assertEqual(employee["columns"][3]["generated"], "stored")
         self.assertIn("GENERATED ALWAYS", employee["tableSql"])
         self.assertEqual(tables["dbo.DatabaseLog"]["primaryKey"], [])
+        self.assertEqual(tables["dbo.DatabaseLog"]["uniqueKeys"], [])
         model = json.loads((self.root / "model/fixture.modelspec.json").read_text())
         self.assertNotIn("key", model["entities"]["dbo_DatabaseLog"])
         self.assertEqual(model["entities"]["dbo_DatabaseLog"]["properties"]["DatabaseLogID"]["type"], "int")
@@ -174,6 +213,24 @@ class ProviderGeneratorTests(unittest.TestCase):
         ])
         self.assertEqual((foreign_keys[0]["onUpdate"], foreign_keys[0]["onDelete"]), ("CASCADE", "SET NULL"))
         self.assertEqual(tables["Self Link"]["foreignKeys"][0]["referencedColumn"], "ID")
+        employee_uniques = tables["HumanResources.Employee"]["uniqueKeys"]
+        self.assertEqual(len(employee_uniques), 1)
+        self.assertEqual(employee_uniques[0]["columns"], ["Department"])
+        self.assertEqual(employee_uniques[0]["origin"], "u")
+        child_indexes = {index["name"]: index for index in tables["Child"]["uniqueIndexes"]}
+        self.assertTrue(child_indexes["Child_Partial"]["partial"])
+        self.assertIn("WHERE child_b IS NOT NULL", child_indexes["Child_Partial"]["sql"])
+        self.assertFalse(child_indexes["Child_Expression"]["partial"])
+        self.assertTrue(any(term["expression"] for term in child_indexes["Child_Expression"]["columns"]))
+        self.assertEqual(tables["Child"]["uniqueKeys"], [])
+        source_views = schema["sourceViews"]
+        self.assertEqual([view["recordset"] for view in source_views], ["dbo.Employee Summary", "dbo.Unsupported Summary", "hr.Employee Summary"])
+        self.assertEqual(source_views[0]["sourceDefinition"], self.native_objects["views"][0]["sourceDefinition"])
+        self.assertEqual(source_views[0]["sqliteDefinition"], self.native_objects["views"][0]["sqliteDefinition"])
+        self.assertTrue(source_views[0]["availableAsSqliteView"])
+        self.assertFalse(source_views[1]["availableAsSqliteView"])
+        self.assertNotIn("rows", source_views[1])
+        self.assertNotIn("dbo.Unsupported Summary", {item["name"] for item in schema["tables"]})
         model = json.loads((self.root / "model/fixture.modelspec.json").read_text())
         self.assertEqual(model["entities"]["Order_Details"]["key"], ["Product_ID", "Order_ID"])
         self.assertIn("Order_ID", model["entities"]["Order_Details"]["properties"])
@@ -201,6 +258,11 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(restored.execute('SELECT COUNT(*) FROM "Empty Demo"').fetchone()[0], 0)
         restored.close()
         checksums = json.loads((self.root / "metadata/checksums.json").read_text())
+        native_bytes = (self.root / "metadata/native-objects.json").read_bytes()
+        self.assertEqual(checksums["files"]["metadata/native-objects.json"], {
+            "bytes": len(native_bytes),
+            "sha256": hashlib.sha256(native_bytes).hexdigest(),
+        })
         for file_path in self.root.rglob("*"):
             if file_path.is_file() and file_path.name not in ("source.sqlite", "source.sqlite.gz"):
                 self.assertLessEqual(file_path.stat().st_size, generator.MAX_STATIC_EXPORT_BYTES, file_path.relative_to(self.root).as_posix())
@@ -215,6 +277,48 @@ class ProviderGeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(generator.GenerationError, "SHA-256 differs"):
             generator.generate(self.root)
         self.assertFalse((self.root / "artifacts/data").exists())
+
+    def test_rejects_native_view_compatibility_claim_without_an_executable_view(self) -> None:
+        document_path = self.root / "metadata/native-objects.json"
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+        document["views"][0]["sqliteDefinition"] = "CREATE VIEW \"dbo.Employee Summary\" AS SELECT 1"
+        document_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "SQLite definition does not match"):
+            generator.generate(self.root)
+        self.assertFalse((self.root / "artifacts/data").exists())
+
+    def test_native_view_identity_must_match_its_schema_and_name(self) -> None:
+        document_path = self.root / "metadata/native-objects.json"
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+        document["views"][0]["recordset"] = "hr.Employee Summary"
+        document_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "recordset must be schema-qualified"):
+            generator.generate(self.root)
+        self.assertFalse((self.root / "artifacts/data").exists())
+
+    def test_native_views_reject_duplicate_qualified_names_and_row_samples(self) -> None:
+        document_path = self.root / "metadata/native-objects.json"
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+        document["views"].append(dict(document["views"][0]))
+        document_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "duplicate native source view recordset"):
+            generator.generate(self.root)
+        document["views"].pop()
+        document["views"][1]["rows"] = []
+        document_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "must not contain row samples"):
+            generator.generate(self.root)
+        self.assertFalse((self.root / "artifacts/data").exists())
+
+    def test_existing_providers_without_native_objects_keep_an_empty_source_views_list(self) -> None:
+        del self.manifest["generator"]["nativeObjectsFile"]
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest, indent=2) + "\n", encoding="utf-8")
+        generator.generate(self.root)
+        schema = json.loads((self.root / "metadata/schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(schema["sourceViews"], [])
+        self.assertTrue((self.root / "metadata/native-objects.json").is_file(), "removing generator configuration must not delete its former source input")
+        checksums = json.loads((self.root / "metadata/checksums.json").read_text(encoding="utf-8"))
+        self.assertNotIn("metadata/native-objects.json", checksums["files"])
 
     def test_export_cap_is_actionable_and_never_truncates(self) -> None:
         path = self.root / "too-large.json"

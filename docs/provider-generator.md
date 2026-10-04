@@ -33,8 +33,11 @@ inputs. Add a `generator` object to the manifest:
 ```
 
 The provider manifest also pins `dataFile` and `source.databaseSha256` (the
-SHA-256 of those exact SQLite bytes), source `repository`, immutable `revision`,
-and `license`. Table descriptions belong in `tableDescriptions`, keyed by the
+SHA-256 of the decoded SQLite bytes), source `repository`, immutable `revision`,
+and `license`. A large source may be stored as a gzip file in Git: set
+`source.inputCompression` to `gzip` and `source.inputSha256` to the hash of the
+compressed `dataFile`; `databaseSha256` still identifies the exact decoded
+SQLite fixture. Table descriptions belong in `tableDescriptions`, keyed by the
 native SQLite name. Optional `columnDescriptions` maps native table names to
 native column names and plain-language descriptions; they stay in schema
 metadata alongside the original DDL.
@@ -66,17 +69,24 @@ generated metadata. View rows are available as metadata previews,
 but the generated OVDB descriptor only advertises the physical tables selected
 by `generator.ovdb.recordsets`.
 
-The output includes table JSON/CSV, an exact byte copy of the source SQLite
-database, SQL dump, schema and provider contracts, ModelSpec JSON/HCL,
+The output includes table JSON/CSV, the exact decoded SQLite database bytes,
+SQL dump, schema and provider contracts, ModelSpec JSON/HCL,
 MeaningGraph YAML-compatible JSON, the publisher OVDB YAML-compatible JSON,
 the public `ovdb-database.json`, and checksums. Provider CI should call this
 tool from a pinned immutable website-repository commit, verify its published
 script hash, run it, and fail on generated drift.
 
-The per-file 25 MiB static-export limit is intentional. Large sources must
-retain the full SQLite data. A future additive compression mode can publish a
-deterministic gzip export next to its canonical path, with compressed and
-decoded hashes in metadata and HTTP `Content-Encoding: gzip`; the website must
-verify the browser-visible decoded bytes. If the compressed artifact still
-exceeds the limit, use paged OVDB delivery or a separately reviewed chunked
-download. Providers must not silently omit rows or tables to fit static hosting.
+The 25 MiB limit applies to every checked-in generated file. An export above
+the limit is deterministic-gzipped at level 9 with a zero timestamp. If the
+compressed bytes fit, the contract keeps the canonical logical `path` and adds
+`encodedPath`, `compression: "gzip"`, encoded `bytes`/`sha256`, and decoded
+`decodedBytes`/`decodedSha256`. The checksum entry is keyed by `encodedPath`
+and carries the same compression and decoded-hash fields. If the gzip stream
+also exceeds 25 MiB, it is split into ordered `.part-0001`, `.part-0002`, …
+files. In that case `exports[].chunks` lists each part's path, bytes, and
+SHA-256; the export's byte count and hash cover the concatenated gzip stream.
+Consumers must verify every part, concatenate in order, verify the combined
+gzip hash, decompress, and verify the decoded size and hash before using or
+offering the canonical asset. Providers never drop rows or tables to fit
+static hosting; if a consumer cannot assemble chunks, it must use the live
+read-only OVDB API rather than present a partial download.

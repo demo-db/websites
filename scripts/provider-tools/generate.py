@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import gzip
 import hashlib
 import io
 import json
@@ -19,6 +20,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -505,6 +507,44 @@ def write_export(path: Path, contents: bytes) -> dict[str, Any]:
     return {"bytes": len(contents), "sha256": sha256(contents)}
 
 
+def deterministic_gzip(contents: bytes) -> bytes:
+    output = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", compresslevel=9, fileobj=output, mtime=0) as stream:
+        stream.write(contents)
+    return output.getvalue()
+
+
+def compress_large_exports(outputs: dict[str, bytes], exports: list[dict[str, Any]]) -> None:
+    """Store oversized logical exports as deterministic gzip, split at the asset limit."""
+    for export in exports:
+        logical_path = export["path"]
+        contents = outputs[logical_path]
+        if len(contents) <= MAX_STATIC_EXPORT_BYTES:
+            continue
+        encoded_path = f"{logical_path}.gz"
+        encoded = deterministic_gzip(contents)
+        del outputs[logical_path]
+        compressed_metadata = {
+            "encodedPath": encoded_path,
+            "compression": "gzip",
+            "bytes": len(encoded),
+            "sha256": sha256(encoded),
+            "decodedBytes": len(contents),
+            "decodedSha256": sha256(contents),
+        }
+        if len(encoded) <= MAX_STATIC_EXPORT_BYTES:
+            outputs[encoded_path] = encoded
+        else:
+            chunks = []
+            for index, start in enumerate(range(0, len(encoded), MAX_STATIC_EXPORT_BYTES), 1):
+                chunk_path = f"{encoded_path}.part-{index:04d}"
+                chunk = encoded[start : start + MAX_STATIC_EXPORT_BYTES]
+                outputs[chunk_path] = chunk
+                chunks.append({"path": chunk_path, "bytes": len(chunk), "sha256": sha256(chunk)})
+            compressed_metadata["chunks"] = chunks
+        export.update(compressed_metadata)
+
+
 def dump_csv(connection: sqlite3.Connection, name: str, path: Path) -> bytes:
     output = io.StringIO(newline="")
     cursor = get_ordered_rows(connection, name)
@@ -513,8 +553,6 @@ def dump_csv(connection: sqlite3.Connection, name: str, path: Path) -> bytes:
     writer.writerow(columns)
     for row in cursor:
         writer.writerow([base64.b64encode(value).decode("ascii") if isinstance(value, bytes) else value for value in row])
-        if output.tell() > MAX_STATIC_EXPORT_BYTES:
-            raise GenerationError(f"{path.name!r} exceeds the {MAX_STATIC_EXPORT_BYTES}-byte static export limit; preserve source data and use paged delivery")
     return output.getvalue().encode("utf-8")
 
 
@@ -528,8 +566,6 @@ def dump_json(connection: sqlite3.Connection, name: str, path: Path) -> bytes:
             output.write(",\n")
         output.write("  " + json.dumps(json_row(row), ensure_ascii=False, allow_nan=False, separators=(",", ": ")))
         first = False
-        if output.tell() > MAX_STATIC_EXPORT_BYTES:
-            raise GenerationError(f"{path.name!r} exceeds the {MAX_STATIC_EXPORT_BYTES}-byte static export limit; preserve source data and use paged delivery")
     output.write("\n]\n")
     return output.getvalue().encode("utf-8")
 
@@ -538,8 +574,6 @@ def dump_sql(connection: sqlite3.Connection, path: Path) -> bytes:
     output = bytearray()
     for statement in connection.iterdump():
         line = (statement + "\n").encode("utf-8")
-        if len(output) + len(line) > MAX_STATIC_EXPORT_BYTES:
-            raise GenerationError(f"{path.name!r} exceeds the {MAX_STATIC_EXPORT_BYTES}-byte static export limit; preserve source data and use paged delivery")
         output.extend(line)
     return bytes(output)
 
@@ -663,8 +697,11 @@ def ovdb_files(root: Path, manifest: dict[str, Any], config: dict[str, Any], sch
             "license": manifest["source"].get("license", "unknown"),
             "notes": " ".join(filter(None, [
                 manifest["source"].get("notes", ""),
-                f"The sha256 identifies the generated SQLite fixture at {manifest['dataFile']}; recipe inputs are identified separately by the provider manifest."
-                if manifest["source"].get("path") not in (None, manifest["dataFile"]) else "",
+                "The sha256 identifies the decoded SQLite fixture; source.inputSha256 identifies the compressed dataFile bytes."
+                if manifest["source"].get("inputCompression") == "gzip" else (
+                    f"The sha256 identifies the generated SQLite fixture at {manifest['dataFile']}; recipe inputs are identified separately by the provider manifest."
+                    if manifest["source"].get("path") not in (None, manifest["dataFile"]) else ""
+                ),
             ])),
         },
         "licences": {"data": data_license, **licences},
@@ -754,9 +791,36 @@ def generate(root: Path) -> None:
     source_path = safe_relative(root, manifest.get("dataFile"), "manifest.dataFile")
     if not source_path.is_file():
         raise GenerationError(f"source SQLite file does not exist: {source_path}")
-    source_bytes = source_path.read_bytes()
+    source_input_bytes = source_path.read_bytes()
+    source_metadata = manifest.get("source")
+    if not isinstance(source_metadata, dict):
+        raise GenerationError("manifest.source must be an object that pins the SQLite fixture")
+    input_compression = source_metadata.get("inputCompression")
+    if input_compression is None:
+        source_bytes = source_input_bytes
+        input_digest = sha256(source_input_bytes)
+        declared_input_digest = source_metadata.get("inputSha256")
+        if declared_input_digest is not None and declared_input_digest != input_digest:
+            raise GenerationError("manifest.source.inputSha256 differs from the pinned source file")
+        database_path = source_path
+        source_temp_directory = None
+    elif input_compression == "gzip":
+        declared_input_digest = source_metadata.get("inputSha256")
+        if not isinstance(declared_input_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", declared_input_digest):
+            raise GenerationError("manifest.source.inputSha256 must pin a gzip-compressed dataFile")
+        input_digest = sha256(source_input_bytes)
+        if input_digest != declared_input_digest:
+            raise GenerationError(f"compressed source SHA-256 differs from manifest pin: expected {declared_input_digest}, got {input_digest}")
+        try:
+            source_bytes = gzip.decompress(source_input_bytes)
+        except (OSError, EOFError, zlib.error) as error:
+            raise GenerationError(f"manifest.dataFile is not a valid gzip source: {error}") from error
+        source_temp_directory = None
+        database_path = None
+    else:
+        raise GenerationError("manifest.source.inputCompression must be omitted or set to gzip")
     actual_digest = sha256(source_bytes)
-    expected_digest = manifest.get("source", {}).get("databaseSha256") or manifest.get("source", {}).get("sha256")
+    expected_digest = source_metadata.get("databaseSha256") or source_metadata.get("sha256")
     if not isinstance(expected_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
         raise GenerationError("manifest.source must pin the SQLite fixture using databaseSha256 or sha256")
     if actual_digest != expected_digest:
@@ -774,7 +838,16 @@ def generate(root: Path) -> None:
     if schema_copy_path.exists() and schema_copy_path.read_bytes() != shared_schema:
         raise GenerationError(f"{schema_copy_path.relative_to(root)} differs from the shared schema pin")
 
-    connection = sqlite3.connect(f"file:{quote(source_path.as_posix(), safe='/')}?mode=ro", uri=True)
+    if input_compression == "gzip":
+        source_temp_directory = tempfile.TemporaryDirectory(prefix="demodb-source-")
+        database_path = Path(source_temp_directory.name) / "source.sqlite"
+        database_path.write_bytes(source_bytes)
+    try:
+        connection = sqlite3.connect(f"file:{quote(database_path.as_posix(), safe='/')}?mode=ro", uri=True)
+    except Exception:
+        if source_temp_directory is not None:
+            source_temp_directory.cleanup()
+        raise
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA query_only=ON")
     outputs: dict[str, bytes] = {}
@@ -858,12 +931,7 @@ def generate(root: Path) -> None:
         outputs[sql_relative] = sql_bytes
         exports.insert(0, {"table": None, "format": "sql", "path": sql_relative, "bytes": len(sql_bytes)})
         exports.insert(0, {"table": None, "format": "sqlite", "path": sqlite_relative, "bytes": len(source_bytes)})
-        for relative, contents in outputs.items():
-            if len(contents) > MAX_STATIC_EXPORT_BYTES:
-                raise GenerationError(
-                    f"generated file {relative!r} is {len(contents)} bytes (limit {MAX_STATIC_EXPORT_BYTES}); "
-                    "use compressed static delivery or paged OVDB delivery, and preserve the full source data"
-                )
+        compress_large_exports(outputs, exports)
 
         contract = {
             "contractVersion": manifest.get("contractVersion", 1),
@@ -881,6 +949,12 @@ def generate(root: Path) -> None:
             "contractVersion": 1,
             "files": {path: {"sha256": sha256(contents), "bytes": len(contents)} for path, contents in sorted(checksum_paths.items())},
         }
+        for export in exports:
+            if export.get("compression") != "gzip" or export.get("chunks"):
+                continue
+            checksums["files"][export["encodedPath"]].update({
+                key: export[key] for key in ("compression", "decodedBytes", "decodedSha256")
+            })
         checksums["files"][f"schemas/{DATABASE_SCHEMA_NAME}"] = schema_copy
         outputs["metadata/checksums.json"] = canonical_json(checksums)
         for relative, contents in outputs.items():
@@ -917,6 +991,8 @@ def generate(root: Path) -> None:
             shutil.rmtree(stage_root, ignore_errors=True)
     finally:
         connection.close()
+        if source_temp_directory is not None:
+            source_temp_directory.cleanup()
     print(f"Generated {len(schema_tables)} native tables/views and {len(exports)} exports for {dbid}; source sha256 {actual_digest}")
 
 

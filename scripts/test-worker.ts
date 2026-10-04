@@ -65,6 +65,17 @@ assert.match(viewHtml, /SELECT/i);
 assert.match(viewHtml, /Data preview/);
 assert.doesNotMatch(viewHtml, /<datatug-grid/i, 'native views without provider JSON exports do not claim live OVDB collections');
 
+for (const [host, name] of [['chinook.demodb.dev', 'Chinook'], ['northwind.demodb.dev', 'Northwind']] as const) {
+  const home = await fetch(host, '/');
+  const html = await home.text();
+  assert.match(html, new RegExp(`<a[^>]+href="https://demodb\\.dev/"[^>]*aria-label="DemoDB home"`), `${name} brand returns to the catalogue`);
+  assert.match(html, /href="https:\/\/demodb\.dev\/"[^>]*>All sample databases<\/a>/, `${name} landing page links back to the catalogue`);
+  assert.match(html, /href="https:\/\/demodb\.dev\/"[^>]*>All databases<\/a>/, `${name} footer links back to the catalogue`);
+  assert.match(html, /href="\/tables\/"/, `${name} table navigation stays on the database host`);
+  assert.match(html, /href="\/schema\/"/, `${name} schema navigation stays on the database host`);
+  assert.match(html, /href="https:\/\/cloud\.openvaultdb\.com\/ovdb\/dbs\/(chinook|northwind)">Explore in OpenVaultDB/, `${name} landing page exposes its available OVDB deployment`);
+}
+
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
 assert.equal(json.status, 200);
 assert.equal(json.headers.get('Access-Control-Allow-Origin'), '*');

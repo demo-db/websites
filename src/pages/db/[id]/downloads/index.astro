@@ -24,7 +24,7 @@ const importConfig = {
       <p class="eyebrow">Optional browser copy</p>
       <h2>Explore locally in this browser.</h2>
       <p>Import every physical table into this browser’s IndexedDB. Nothing is downloaded until you start. Views and the source files stay unchanged; the import is read-only.</p>
-      <p class="muted">The importer verifies the decoded export checksum and declared row count before it activates the new local copy. It uses native primary keys when present and keeps keyless rows in source order.</p>
+      <p class="muted">The importer verifies the decoded export checksum and declared row count before it activates the new local copy. It uses native primary keys when present; keyless rows are kept in provider JSON export order for local traversal.</p>
       <div class="snapshot-controls">
         <button class="button button-primary" type="button" data-action="start" disabled={!canBrowserImport}>Check storage and import</button>
         <button class="button" type="button" data-action="cancel" disabled>Cancel import</button>

@@ -313,7 +313,7 @@ function buildCorpus(databases) {
       licences: db.licences,
       representationNotes: [
         'Only physical source tables are eligible for browser-local import; native views remain schema metadata.',
-        'Tables without a native primary key retain source order in the browser snapshot and are not assigned a synthetic source key.',
+        'Tables without a native primary key use ordinals in provider JSON export order for local traversal; the browser snapshot does not claim that this is native source insertion order.',
         'Use the full SQLite export for native storage fidelity, including BLOB bytes; JSON and CSV follow the provider export representation.',
       ],
       capabilities: {

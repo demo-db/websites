@@ -17,6 +17,8 @@
     { "pattern": "northwind.demodb.dev", "custom_domain": true },
     { "pattern": "pubs.demodb.dev", "custom_domain": true },
     { "pattern": "sakila.demodb.dev", "custom_domain": true },
+    { "pattern": "adventureworks.demodb.dev", "custom_domain": true },
+    { "pattern": "employees.demodb.dev", "custom_domain": true },
     { "pattern": "chinookdb.com", "custom_domain": true }
   ],
   "vars": {
@@ -27,7 +29,7 @@
       "name": "demodb-websites-local",
       "routes": [],
       "vars": {
-        "LOCAL_DB_HOSTS": "{\"chinook.localhost\":\"chinook\",\"northwind.localhost\":\"northwind\",\"pubs.localhost\":\"pubs\",\"sakila.localhost\":\"sakila\"}",
+        "LOCAL_DB_HOSTS": "{\"chinook.localhost\":\"chinook\",\"northwind.localhost\":\"northwind\",\"pubs.localhost\":\"pubs\",\"sakila.localhost\":\"sakila\",\"adventureworks.localhost\":\"adventureworks\",\"employees.localhost\":\"employees\"}",
         "LOCAL_CATALOGUE_HOSTS": "[\"localhost\",\"127.0.0.1\"]"
       }
     }

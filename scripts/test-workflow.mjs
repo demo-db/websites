@@ -40,6 +40,8 @@ test('binds the transferred Chinook hostname to the verified legacy redirects', 
     { pattern: 'northwind.demodb.dev', custom_domain: true },
     { pattern: 'pubs.demodb.dev', custom_domain: true },
     { pattern: 'sakila.demodb.dev', custom_domain: true },
+    { pattern: 'adventureworks.demodb.dev', custom_domain: true },
+    { pattern: 'employees.demodb.dev', custom_domain: true },
     { pattern: 'chinookdb.com', custom_domain: true },
   ]) assert.ok(wrangler.routes.some((candidate) => candidate.pattern === route.pattern && candidate.custom_domain === route.custom_domain), `${route.pattern} remains bound`);
   assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'true');
@@ -71,6 +73,24 @@ test('live smoke checks Sakila native tables, views, and SQLite without claiming
   assert.match(liveSmoke, /\/data\/sakila\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
   assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('sakila'/);
+});
+
+test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL Server views', () => {
+  assert.match(liveSmoke, /https:\/\/adventureworks\.demodb\.dev/);
+  assert.match(liveSmoke, /\/tables\/HumanResources\.EmployeeDepartmentHistory\//);
+  assert.match(liveSmoke, /\/tables\/Production\.Product\//);
+  assert.match(liveSmoke, /\/schema\.json/);
+  assert.match(liveSmoke, /checkedDecodedSqlite\('adventureworks'\)/);
+  assert.match(liveSmoke, /125276160/);
+  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('adventureworks'/);
+});
+
+test('live smoke verifies Employees native tables without claiming query availability', () => {
+  assert.match(liveSmoke, /https:\/\/employees\.demodb\.dev/);
+  assert.match(liveSmoke, /\/tables\/titles\//);
+  assert.match(liveSmoke, /\/tables\/current_dept_emp\//);
+  assert.match(liveSmoke, /\/data\/employees\.sqlite/);
+  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('employees'/);
 });
 
 test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {

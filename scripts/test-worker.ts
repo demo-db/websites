@@ -76,7 +76,7 @@ for (const [host, name] of [['chinook.demodb.dev', 'Chinook'], ['northwind.demod
   assert.match(html, /href="https:\/\/demodb\.dev\/"[^>]*>All databases<\/a>/, `${name} footer links back to the catalogue`);
   assert.match(html, /href="\/tables\/"/, `${name} table navigation stays on the database host`);
   assert.match(html, /href="\/schema\/"/, `${name} schema navigation stays on the database host`);
-  assert.match(html, /href="https:\/\/cloud\.openvaultdb\.com\/ovdb\/dbs\/(chinook|northwind)">Explore in OpenVaultDB/, `${name} landing page exposes its available OVDB deployment`);
+  assert.match(html, new RegExp(`href="https://demodb\\.dev/${name.toLowerCase()}/">Explore in OpenVaultDB`), `${name} landing page links to its canonical OVDB identity`);
 }
 
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
@@ -192,8 +192,17 @@ const oldOVDBPreflight = await fetch('chinookdb.com', '/ovdb/v1/databases/chinoo
 assert.match(oldOVDBPreflight.headers.get('Access-Control-Allow-Headers') ?? '', /OVDB-Page-Token/);
 
 const platformFetch = globalThis.fetch;
+const platformConsoleError = console.error;
+const gatewayLogs: string[] = [];
+let nextFetchError: Error | undefined;
+console.error = (...args: Parameters<typeof console.error>) => { gatewayLogs.push(args.join(' ')); };
 const forwarded: { url: string; method: string; headers: Headers; body?: string }[] = [];
 globalThis.fetch = async (input, init) => {
+  if (nextFetchError) {
+    const error = nextFetchError;
+    nextFetchError = undefined;
+    throw error;
+  }
   const request = input instanceof Request ? input : new Request(input, init);
   assert.equal(new URL(request.url).hostname, 'cloud.openvaultdb.com', 'only the fixed public backend receives proxied requests');
   forwarded.push({ url: request.url, method: request.method, headers: request.headers, body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.clone().text() });
@@ -258,8 +267,30 @@ try {
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/unknown/dtql', 'POST')).status, 404);
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/write', 'POST')).status, 404);
   assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/northwind/dtql', 'OPTIONS')).headers.get('Access-Control-Allow-Origin'), '*');
+  const diagnosticMessage = 'fetch failed for https://backend.example/path?token=url-secret&view=private Authorization: Bearer bearer-secret OVDB-Page-Token: page-secret';
+  nextFetchError = new TypeError(diagnosticMessage);
+  const failedMetadata = await fetch('demodb.dev', '/ovdb/v1/databases/northwind');
+  assert.equal(failedMetadata.status, 502, 'runtime failures retain the generic public gateway response');
+  nextFetchError = new TypeError(diagnosticMessage);
+  const failedQuery = await fetch('demodb.dev', '/ovdb/v1/databases/chinook/dtql', 'POST', local, {
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'private customer query' }),
+  });
+  assert.equal(failedQuery.status, 502, 'query runtime failures retain the generic public gateway response');
+  assert.equal(gatewayLogs.length, 2, 'both metadata and query failures emit a diagnostic');
+  const diagnosticEntries = gatewayLogs.map((entry) => JSON.parse(entry) as Record<string, unknown>);
+  assert.deepEqual(diagnosticEntries.map((entry) => [entry.event, entry.operation, entry.database, entry.errorName]), [
+    ['ovdb_gateway_fetch_failed', 'metadata', 'northwind', 'TypeError'],
+    ['ovdb_gateway_fetch_failed', 'query', 'chinook', 'TypeError'],
+  ]);
+  for (const entry of diagnosticEntries) {
+    const serialized = JSON.stringify(entry);
+    for (const secret of ['url-secret', 'private', 'bearer-secret', 'page-secret', 'customer query']) assert.doesNotMatch(serialized, new RegExp(secret));
+    assert.match(String(entry.errorMessage), /fetch failed/);
+    assert.match(String(entry.errorMessage), /\[url\]/);
+  }
 } finally {
   globalThis.fetch = platformFetch;
+  console.error = platformConsoleError;
 }
 
 console.log('Worker host resolution, static pages, exports, CORS, discovery, OVDB redirects, and legacy redirect pass.');

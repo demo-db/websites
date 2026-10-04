@@ -172,6 +172,35 @@ class ProviderGeneratorTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def test_model_spdx_header_is_explicit_opt_in_and_does_not_change_model_json(self) -> None:
+        generator.generate(self.root)
+        hcl_path = self.root / "model/fixture.modelspec.hcl"
+        model_json_path = self.root / "model/fixture.modelspec.json"
+        original_hcl = hcl_path.read_bytes()
+        original_json = model_json_path.read_bytes()
+        self.assertNotIn(b"SPDX-License-Identifier:", original_hcl)
+
+        self.manifest["generator"]["emitModelSpdxLicense"] = True
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest, indent=2) + "\n", encoding="utf-8")
+        generator.generate(self.root)
+        licensed_hcl = hcl_path.read_bytes()
+        self.assertIn(b"# SPDX-License-Identifier: CC-BY-4.0", licensed_hcl)
+        self.assertEqual(model_json_path.read_bytes(), original_json, "the HCL license declaration must not reshape ModelSpec JSON")
+
+        generator.generate(self.root)
+        self.assertEqual(hcl_path.read_bytes(), licensed_hcl, "SPDX-enabled HCL output remains deterministic")
+
+        self.manifest["generator"]["licences"]["model"] = "CC BY 4.0"
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "to be an SPDX identifier"):
+            generator.generate(self.root)
+
+        self.manifest["generator"]["licences"]["model"] = "CC-BY-4.0"
+        self.manifest["generator"]["emitModelSpdxLicense"] = "yes"
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "must be a boolean"):
+            generator.generate(self.root)
+
     def test_preserves_native_metadata_and_emits_deterministic_contract(self) -> None:
         generator.generate(self.root)
         first = {path.relative_to(self.root).as_posix(): path.read_bytes() for path in self.root.rglob("*") if path.is_file() and path.name != "source.sqlite"}

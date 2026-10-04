@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 
@@ -70,6 +71,7 @@ if (hosts.has(registry.catalogueHost)) throw new Error('The catalogue host canno
 for (const host of hosts.keys()) if (aliasHosts.has(host)) throw new Error(`Provider alias collides with a database host: ${host}`);
 
 await writeFile(join(generatedDir, 'index.json'), `${JSON.stringify({ catalogueHost: registry.catalogueHost, databases }, null, 2)}\n`);
+await writeFile(join(root, 'public/corpus.json'), `${JSON.stringify(buildCorpus(databases), null, 2)}\n`);
 await writeFile(join(generatedDir, 'runtime.json'), `${JSON.stringify({
   catalogueHost: registry.catalogueHost,
   wwwCatalogueHost: `www.${registry.catalogueHost}`,
@@ -164,7 +166,7 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
-  const exports = source.contract.exports.map((item) => normalizeExport(entry.id, item, schema.tables));
+  const exports = source.contract.exports.map((item) => normalizeExport(entry.id, item, schema.tables, source.checksums));
   const paths = new Set();
   const publicPaths = new Set();
   for (const item of exports) {
@@ -178,7 +180,7 @@ function normalizeProvider(entry, source) {
     domain: manifest.domain ?? 'Sample database', siteHost, aliases,
     canonicalUrl: `https://${siteHost}/`, source: manifest.source,
     capabilities: manifest.capabilities, semantics: manifest.semantics ?? {}, queries: manifest.queries ?? [],
-    schema, tables: schema.tables, exports, exportByPublicPath: Object.fromEntries(exports.map((item) => [item.publicPath, item])),
+    schema, schemaSha256: sha256(Buffer.from(`${JSON.stringify(schema, null, 2)}\n`)), tables: schema.tables, exports, exportByPublicPath: Object.fromEntries(exports.map((item) => [item.publicPath, item])),
     model: manifest.model ?? source.ovdb.model ?? {}, meaning: manifest.meaning ?? source.ovdb.meaning ?? {}, ovdb: {
       url: canonicalUrl, deploymentUrl, discovery,
       recordsetPage: source.ovdb.deployment?.recordset_page ?? null,
@@ -188,6 +190,14 @@ function normalizeProvider(entry, source) {
       query: manifest.capabilities?.ovdb?.query === true,
     },
     sourceRepository: entry.repository, sourceCommit: entry.commit,
+    publicIdentity: source.ovdbDescriptor.id,
+    publicManifestUrl: `${source.ovdbDescriptor.serverDbBaseUrl}ovdb-database.json`,
+    publicApiUrl: source.ovdbDescriptor.apiUrl,
+    publicModel: source.ovdbDescriptor.model,
+    publicMeaning: source.ovdbDescriptor.meaning,
+    publisher: source.ovdbDescriptor.publisher,
+    provenance: source.ovdbDescriptor.provenance,
+    licences: source.ovdbDescriptor.licences,
   };
 }
 
@@ -199,7 +209,14 @@ async function materializeExports(db, source) {
     else if (!item.sha256 || sha256(bytes) !== item.sha256) throw new Error(`${db.id}: export ${item.path} is not covered by a provider checksum or contract hash`);
     if (item.bytes != null && item.bytes !== bytes.length) throw new Error(`${db.id}: ${item.path} size mismatch`);
     if (item.sha256 && item.sha256 !== sha256(bytes)) throw new Error(`${db.id}: ${item.path} export hash mismatch`);
-    const target = join(internalAssets, db.id, 'data', item.publicPath);
+    if (item.compression === 'gzip') {
+      let decoded;
+      try { decoded = gunzipSync(bytes); }
+      catch (error) { throw new Error(`${db.id}: ${item.path} is not valid gzip data`, { cause: error }); }
+      if (item.decodedBytes != null && item.decodedBytes !== decoded.length) throw new Error(`${db.id}: ${item.path} decoded size mismatch`);
+      if (item.decodedSha256 && item.decodedSha256 !== sha256(decoded)) throw new Error(`${db.id}: ${item.path} decoded checksum mismatch`);
+    }
+    const target = join(internalAssets, db.id, 'data', item.assetPath);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, bytes);
   }
@@ -221,21 +238,36 @@ async function materializeModels(db, source) {
   if (modelChecksumsBytes) await writeFile(join(internalAssets, db.id, 'model/checksums.json'), modelChecksumsBytes);
 }
 
-function normalizeExport(id, item, tables) {
+function normalizeExport(id, item, tables, checksums) {
   const path = item.path;
   safeRelative(path);
   if (!path.startsWith('artifacts/')) throw new Error(`${id}: public exports must be under artifacts/: ${path}`);
   const base = path.split('/').pop();
-  const ext = base.toLowerCase().split('.').pop();
+  const checksum = checksums.files?.[path];
+  const compression = item.compression ?? checksum?.compression ?? null;
+  if (compression != null && compression !== 'gzip') throw new Error(`${id}: unsupported export compression ${compression}`);
+  const logicalBase = compression === 'gzip' && base.toLowerCase().endsWith('.gz') ? base.slice(0, -3) : base;
+  const ext = logicalBase.toLowerCase().split('.').pop();
+  const common = {
+    bytes: item.bytes ?? checksum?.bytes ?? null,
+    sha256: item.sha256 ?? checksum?.sha256 ?? null,
+    compression,
+    decodedBytes: item.decodedBytes ?? checksum?.decodedBytes ?? null,
+    decodedSha256: item.decodedSha256 ?? checksum?.decodedSha256 ?? null,
+  };
+  if (compression === 'gzip' && (!Number.isSafeInteger(common.decodedBytes) || !isHash(common.decodedSha256))) {
+    throw new Error(`${id}: gzip export ${path} needs decodedBytes and decodedSha256 checksums`);
+  }
   if (path.split('/').includes('metadata')) {
-    return { path, publicPath: `metadata/${base}`, format: 'metadata', table: null, bytes: item.bytes ?? null, sha256: item.sha256 ?? null, dbWide: true };
+    const publicPath = `metadata/${compression === 'gzip' && base.endsWith('.gz') ? base.slice(0, -3) : base}`;
+    return { path, publicPath, assetPath: compression === 'gzip' ? `${publicPath}.gz` : publicPath, format: 'metadata', table: null, ...common, dbWide: true };
   }
   let tableName = typeof item.table === 'string' ? item.table : null;
   let format = item.format ?? null;
   if (tableName && (tableName.includes('/') || tableName.includes('\\') || tableName === '.' || tableName === '..')) throw new Error(`${id}: recordset cannot be represented as a single URL path segment: ${tableName}`);
   if (format && !/^[a-z][a-z0-9-]*$/.test(format)) throw new Error(`${id}: invalid export format ${format}`);
   const match = tables.find((table) => tableName ? table.name === tableName : (
-    base === `${id}.${table.name}.${ext}` || base === `${table.name}.${ext}`
+    logicalBase === `${id}.${table.name}.${ext}` || logicalBase === `${table.name}.${ext}`
   ));
   if (!format && match) format = ext === 'sql' && /\/(postgresql|mysql|sqlserver)\//i.test(path) ? 'sql' : ext;
   if (!match) {
@@ -256,7 +288,74 @@ function normalizeExport(id, item, tables) {
   else if (format === 'sql' || ['postgresql', 'mysql', 'sqlserver'].includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);
-  return { path, publicPath, format, table: tableName ?? match?.name ?? null, bytes: item.bytes ?? null, sha256: item.sha256 ?? null, dbWide };
+  const assetPath = compression === 'gzip' ? `${publicPath}.gz` : publicPath;
+  return { path, publicPath, assetPath, format, table: tableName ?? match?.name ?? null, ...common, dbWide };
+}
+
+function buildCorpus(databases) {
+  return {
+    format: 'demodb-corpus/draft-1',
+    generatedAtBuild: true,
+    databases: databases.map((db) => ({
+      id: db.publicIdentity,
+      localId: db.id,
+      title: db.name,
+      description: db.description,
+      sourceVersion: db.source.version ?? db.source.revision ?? db.sourceCommit,
+      sourceRevision: db.source.revision ?? db.sourceCommit,
+      homepage: db.canonicalUrl,
+      browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
+      serverManifestUrl: db.publicManifestUrl,
+      apiUrl: db.publicApiUrl,
+      source: db.source,
+      provenance: db.provenance,
+      publisher: db.publisher,
+      licences: db.licences,
+      representationNotes: [
+        'Only physical source tables are eligible for browser-local import; native views remain schema metadata.',
+        'Tables without a native primary key use ordinals in provider JSON export order for local traversal; the browser snapshot does not claim that this is native source insertion order.',
+        'Use the full SQLite export for native storage fidelity, including BLOB bytes; JSON and CSV follow the provider export representation.',
+      ],
+      capabilities: {
+        read: true,
+        query: db.ovdb.query === true,
+        write: false,
+        browserImport: db.tables.filter((table) => table.kind === 'table').every((table) => db.exports.some((file) => file.format === 'json' && file.table === table.name && Boolean(file.sha256))),
+      },
+      model: db.publicModel,
+      meaning: db.publicMeaning,
+      schemaUrl: `https://${db.siteHost}/schema.json`,
+      schemaSha256: db.schemaSha256,
+      recordsets: db.tables.map((table) => ({
+        name: table.name,
+        kind: table.kind,
+        description: table.description,
+        rowCount: table.rowCount,
+        modelEntity: table.modelEntity ?? null,
+        columns: table.columns,
+        primaryKey: table.columns.filter((column) => column.primaryKey).sort((a, b) => (a.primaryKeyPosition ?? 0) - (b.primaryKeyPosition ?? 0)).map((column) => column.name),
+        foreignKeys: table.foreignKeys,
+        availableRepresentations: db.exports.filter((file) => file.table === table.name).map((file) => ({
+          format: file.format,
+          url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,
+          bytes: file.bytes,
+          sha256: file.sha256,
+          ...(file.compression === 'gzip' ? { compression: file.compression, decodedBytes: file.decodedBytes, decodedSha256: file.decodedSha256 } : {}),
+          note: file.compression === 'gzip' ? 'The browser receives decoded content from this encoded gzip export.' : undefined,
+        })),
+        sampleExportUrl: db.exports.find((file) => file.table === table.name && file.format === 'json')
+          ? `https://${db.siteHost}/data/${db.exports.find((file) => file.table === table.name && file.format === 'json').publicPath.split('/').map(encodeURIComponent).join('/')}`
+          : null,
+      })),
+      exports: db.exports.filter((file) => !file.table && file.format !== 'metadata').map((file) => ({
+        format: file.format,
+        url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,
+        bytes: file.bytes,
+        sha256: file.sha256,
+        ...(file.compression === 'gzip' ? { compression: file.compression, decodedBytes: file.decodedBytes, decodedSha256: file.decodedSha256 } : {}),
+      })),
+    })),
+  };
 }
 
 function verifyChecksum(checksums, path, bytes, secondary) {

@@ -15,6 +15,7 @@ type Database = {
   name: string;
   siteHost: string;
   tables: { name: string }[];
+  exports?: { publicPath: string; compression?: string | null }[];
   ovdb: { url: string; deploymentUrl: string; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 type Env = {
@@ -117,8 +118,12 @@ export default {
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
 
     const target = internalAssetPath(db.id, url.pathname);
-    const response = await serveAsset(request, env, url, target);
-    if (isPublicData) return withDataHeaders(response, request.method);
+    const exportPath = url.pathname.startsWith('/data/') ? url.pathname.slice('/data/'.length) : '';
+    const exportFile = db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
+    const response = await serveAsset(request, env, url, target, exportFile?.compression === 'gzip');
+    if (isPublicData) {
+      return withDataHeaders(response, request.method, exportFile?.compression === 'gzip');
+    }
     return response;
   },
 };
@@ -189,27 +194,56 @@ function isDataPath(pathname: string): boolean {
   return pathname === '/data' || pathname.startsWith('/data/') || pathname === '/schema.json' || (pathname.startsWith('/model/') && pathname !== '/model/' && /\.[a-z0-9]+$/i.test(pathname));
 }
 
-async function serveAsset(request: Request, env: Env, originalUrl: URL, targetPath: string): Promise<Response> {
+async function serveAsset(request: Request, env: Env, originalUrl: URL, targetPath: string, encodedGzip = false): Promise<Response> {
   const target = new URL(originalUrl);
   target.pathname = targetPath;
-  const assetRequest = new Request(target, request);
+  let assetRequest: Request;
+  if (encodedGzip && request.headers.has('Range')) {
+    const headers = new Headers(request.headers);
+    headers.delete('Range');
+    headers.delete('If-Range');
+    assetRequest = new Request(target, { method: request.method, headers, redirect: request.redirect });
+  } else {
+    assetRequest = new Request(target, request);
+  }
   const asset = await env.ASSETS.fetch(assetRequest);
   if (asset.status === 404 || asset.status === 403) return notFound();
   const location = asset.headers.get('Location');
   if (location && leaksPrivatePath(location, originalUrl)) return notFound();
   const headers = new Headers(asset.headers);
   for (const [name, value] of Object.entries(securityHeaders())) headers.set(name, value);
-  const extension = originalUrl.pathname.slice(originalUrl.pathname.lastIndexOf('.')).toLowerCase();
+  const extension = dataExtension(originalUrl.pathname);
   if (contentTypes[extension] && isDataPath(originalUrl.pathname)) headers.set('Content-Type', contentTypes[extension]);
   return new Response(request.method === 'HEAD' ? null : asset.body, { status: asset.status, statusText: asset.statusText, headers });
 }
 
-function withDataHeaders(response: Response, method: string): Response {
+function dataExtension(pathname: string): string {
+  const basename = pathname.slice(pathname.lastIndexOf('/') + 1).toLowerCase();
+  const logicalName = basename.endsWith('.gz') ? basename.slice(0, -3) : basename;
+  return logicalName.slice(logicalName.lastIndexOf('.'));
+}
+
+function withDataHeaders(response: Response, method: string, gzip = false): Response {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(readonlyCorsHeaders())) headers.set(name, value);
   headers.set('Cache-Control', 'public, max-age=300, must-revalidate');
   headers.set('X-Content-Type-Options', 'nosniff');
-  return new Response(method === 'HEAD' ? null : response.body, { status: response.status, statusText: response.statusText, headers });
+  if (gzip && response.ok) {
+    headers.set('Content-Encoding', 'gzip');
+    headers.delete('Accept-Ranges');
+    headers.delete('Content-Range');
+    const vary = headers.get('Vary')?.split(',').map((value) => value.trim()).filter(Boolean) ?? [];
+    if (!vary.some((value) => value.toLowerCase() === 'accept-encoding')) vary.push('Accept-Encoding');
+    headers.set('Vary', vary.join(', '));
+  }
+  // Assets declared as gzip are already encoded. Workers otherwise may encode the
+  // body again while retaining Content-Encoding, so mark this response as manual.
+  return new Response(method === 'HEAD' ? null : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    ...(gzip && response.ok ? { encodeBody: 'manual' } : {}),
+  } as ResponseInit);
 }
 
 function discovery(request: Request, db: Database): Response {
@@ -244,7 +278,8 @@ function serverApiIndex(request: Request): Response {
 }
 
 function isOVDBPublicJson(pathname: string): boolean {
-  return pathname === '/.well-known/openvaultdb'
+  return pathname === '/corpus.json'
+    || pathname === '/.well-known/openvaultdb'
     || pathname === '/ovdb/ovdb-server.json'
     || /^\/ovdb\/schemas\/ovdb-(?:server|database)-draft-1\.schema\.json$/.test(pathname)
     || /^\/ovdb\/db\/[a-z][a-z0-9-]{0,39}\/ovdb-database\.json$/.test(pathname)
@@ -397,7 +432,7 @@ function hostMetadata(method: string, host: string, path: string, db?: Database)
 function sitemap(host: string, db?: Database): string {
   const urls = db
     ? ['/', '/tables/', '/schema/', '/downloads/', '/queries/', '/about/', '/model/', ...db.tables.map((table) => `/tables/${encodeURIComponent(table.name)}/`)].map((path) => `https://${host}${path}`)
-    : [`https://${host}/`, 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json', ...[...ovdbDatabases.keys()].flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]), ...databaseList.map((database) => `https://${database.siteHost}/`)];
+    : [`https://${host}/`, 'https://demodb.dev/corpus.json', 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json', ...[...ovdbDatabases.keys()].flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]), ...databaseList.map((database) => `https://${database.siteHost}/`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${xmlEscape(url)}</loc></url>`).join('')}</urlset>\n`;
 }
 

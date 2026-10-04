@@ -5,6 +5,7 @@ dist/
 .tools/
 src/data/generated/
 public/_db/
+public/corpus.json
 public/ovdb/ovdb-server.json
 public/ovdb/db/
 public/ovdb/schemas/

@@ -1,15 +1,105 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync, gunzipSync } from 'node:zlib';
+import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost } from '../src/worker';
+import { activeSnapshot, clearActiveSnapshot, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
+import providerIndex from '../src/data/generated/index.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const dist = join(root, 'dist');
 const local = { LOCAL_DB_HOSTS: '{"chinook.localhost":"chinook","northwind.localhost":"northwind"}', LOCAL_CATALOGUE_HOSTS: '["localhost"]' };
+const gzipPayload = Buffer.from('[{"fixture":"gzip"}]');
+const gzipPayloadBytes = gzipSync(gzipPayload);
+const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; compression?: string }[] };
+chinookGenerated.exports.push({ publicPath: 'test/gzip-fixture.json.gz', compression: 'gzip' });
+
+for (const value of ['', 'abc', 'unicode ✓ and a longer value'.repeat(80)]) {
+  const bytes = new TextEncoder().encode(value);
+  const hash = new IncrementalSha256();
+  for (let index = 0; index < bytes.length; index += 7) hash.update(bytes.slice(index, index + 7));
+  assert.equal(hash.hexDigest(), createHash('sha256').update(bytes).digest('hex'), 'incremental browser digest matches SHA-256');
+}
+assert.equal(isVerifiedTableCheckpoint({ complete: false, count: 10, sha256: 'bad' }, 'good', 10), false, 'an interrupted or checksum-failed table must be cleared and replayed');
+assert.equal(isVerifiedTableCheckpoint({ complete: true, count: 10, sha256: 'good' }, 'good', 10), true, 'only a complete table with the pinned digest can be reused');
+assert.equal(isVerifiedTableCheckpoint({ complete: true, count: 9, sha256: 'good' }, 'good', 10), false, 'row-count disagreement forces a table replay');
+assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'partial import state is isolated per database');
+
+{
+  const configuration = {
+    id: 'retry-fixture',
+    sourceCommit: 'fixture',
+    tables: [{ name: 'Items', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'value' }], foreignKeys: [] }],
+    exports: [{ table: 'Items', url: 'https://fixture.example/items.json', bytes: Buffer.byteLength('[{"id":1,"value":"right"}]'), sha256: createHash('sha256').update('[{"id":1,"value":"right"}]').digest('hex') }],
+  };
+  const bad = new TextEncoder().encode('[{"id":1,"value":"wrong"}]');
+  const good = new TextEncoder().encode('[{"id":1,"value":"right"}]');
+  assert.equal(bad.byteLength, good.byteLength, 'bad first download reaches checksum verification');
+  const originalFetch = globalThis.fetch;
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
+  const originalSessionStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const sessionValues = new Map<string, string>();
+  const localValues = new Map<string, string>();
+  let attempts = 0;
+  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: fakeIndexedDB });
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: { getItem: (key: string) => sessionValues.get(key) ?? null, setItem: (key: string, value: string) => sessionValues.set(key, value), removeItem: (key: string) => sessionValues.delete(key) } });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => localValues.get(key) ?? null, setItem: (key: string, value: string) => localValues.set(key, value), removeItem: (key: string) => localValues.delete(key) } });
+  globalThis.fetch = async () => new Response(attempts++ === 0 ? bad : good);
+  try {
+    await assert.rejects(importSnapshot(configuration, () => {}, new AbortController().signal), /checksum mismatch/);
+    await importSnapshot(configuration, () => {}, new AbortController().signal);
+    const db = await activeSnapshot(configuration);
+    assert.ok(db, 'valid retry promotes a complete snapshot');
+    const row = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+      const request = db!.transaction('recordset-0').objectStore('recordset-0').get(1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(row, { id: 1, value: 'right' }, 'valid retry replaces rows written from the failed checksum response');
+    db!.close();
+    await clearActiveSnapshot(configuration);
+    assert.equal(attempts, 2, 'the failed table is fetched again and replayed');
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, descriptor] of [['indexedDB', originalIndexedDB], ['sessionStorage', originalSessionStorage], ['localStorage', originalLocalStorage]] as const) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+  }
+}
+
+{
+  const source = '[{"id":1,"text":"brace } and quote \\\" ok","nested":[1,2]},{"id":2}]';
+  const bytes = new TextEncoder().encode(source);
+  const rows: unknown[] = [];
+  const digest = new IncrementalSha256();
+  let byteCount = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    },
+  });
+  await parseJsonArray(stream, async (row) => { rows.push(row); }, (chunk) => digest.update(chunk), (count) => { byteCount += count; });
+  assert.deepEqual(rows, [{ id: 1, text: 'brace } and quote " ok', nested: [1, 2] }, { id: 2 }]);
+  assert.equal(byteCount, bytes.length);
+  assert.equal(digest.hexDigest(), createHash('sha256').update(bytes).digest('hex'));
+  const emptyRows: unknown[] = [];
+  await parseJsonArray(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode(' [ ] ')); controller.close(); } }), async (row) => { emptyRows.push(row); }, () => {}, () => {});
+  assert.deepEqual(emptyRows, [], 'empty native tables remain valid JSON exports');
+  await assert.rejects(parseJsonArray(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('[{"a":1}')); controller.close(); } }), async () => {}, () => {}, () => {}), /ended before/);
+  for (const invalid of ['[{"a":1},]', '[{"a":1}{"a":2}]', '[,{"a":1}]', '[{"a":1},,{"a":2}]']) {
+    await assert.rejects(parseJsonArray(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(invalid)); controller.close(); } }), async () => {}, () => {}, () => {}), /comma|separated|objects/i, invalid);
+  }
+}
 const assets = {
   async fetch(request: Request) {
     const url = new URL(request.url);
+    if (url.pathname.endsWith('/_db/chinook/data/test/gzip-fixture.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
     if (url.pathname.endsWith('/redirect-test/index.html')) return new Response(null, { status: 302, headers: { Location: '/_db/northwind/index.html' } });
     const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
     try {
@@ -55,6 +145,10 @@ const siteMapXml = await siteMap.text();
 assert.match(siteMapXml, /https:\/\/northwind\.demodb\.dev\//);
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/ovdb\//);
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/northwind\//);
+const corpusResponse = await fetch('demodb.dev', '/corpus.json');
+assert.equal(corpusResponse.status, 200);
+assert.equal(corpusResponse.headers.get('Access-Control-Allow-Origin'), '*');
+assert.match(await corpusResponse.text(), /demodb-corpus\/draft-1/);
 assert.match(await (await fetch('chinook.demodb.dev', '/sitemap.xml')).text(), /\/tables\/Artist\//);
 assert.match(await (await fetch('northwind.demodb.dev', '/robots.txt')).text(), /https:\/\/northwind\.demodb\.dev\/sitemap\.xml/);
 assert.equal((await fetch('evil.example', '/')).status, 404, 'unknown hosts fail closed');
@@ -90,6 +184,20 @@ assert.equal(json.status, 200);
 assert.equal(json.headers.get('Access-Control-Allow-Origin'), '*');
 assert.equal(json.headers.get('Content-Type'), 'application/json; charset=utf-8');
 assert.equal((await json.json() as unknown[]).length, 2155);
+const encodedJson = await fetch('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz');
+assert.equal(encodedJson.status, 200);
+assert.equal(encodedJson.headers.get('Content-Type'), 'application/json; charset=utf-8');
+assert.equal(encodedJson.headers.get('Content-Encoding'), 'gzip');
+assert.match(encodedJson.headers.get('Vary') ?? '', /Accept-Encoding/i);
+assert.equal(gunzipSync(Buffer.from(await encodedJson.arrayBuffer())).toString('utf8'), gzipPayload.toString('utf8'), 'precompressed export bytes are not double-encoded by the Worker');
+const encodedHead = await fetch('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz', 'HEAD');
+assert.equal(encodedHead.status, 200);
+assert.equal(encodedHead.headers.get('Content-Encoding'), 'gzip');
+assert.equal(await encodedHead.text(), '');
+const encodedRange = await worker.fetch(makeRequest('chinook.demodb.dev', '/data/test/gzip-fixture.json.gz', 'GET', { headers: { Range: 'bytes=0-3' } }), { ...local, ASSETS: assets } as Env, {} as ExecutionContext);
+assert.equal(encodedRange.status, 200, 'compressed exports ignore byte ranges and serve one complete representation');
+assert.equal(encodedRange.headers.get('Content-Range'), null);
+assert.equal(encodedRange.headers.get('Accept-Ranges'), null);
 const csv = await fetch('chinook.demodb.dev', '/data/csv/chinook.Artist.csv');
 assert.equal(csv.status, 200);
 assert.equal(csv.headers.get('Access-Control-Allow-Origin'), '*');
@@ -132,6 +240,12 @@ for (const [host, id] of [['chinook.demodb.dev', 'chinook'], ['northwind.demodb.
   assert.equal(body.databases[0].id, id);
   assert.equal(body.databases[0].apiUrl, `https://demodb.dev/ovdb/v1/databases/${id}`);
 }
+const downloads = await fetch('northwind.demodb.dev', '/downloads/');
+assert.equal(downloads.status, 200);
+const downloadsHtml = await downloads.text();
+assert.match(downloadsHtml, /Check storage and import/);
+assert.match(downloadsHtml, /Remove local copy/);
+assert.match(downloadsHtml, /Order Details/);
 for (const id of ['chinook', 'northwind'] as const) {
   const publicDatabasePage = await fetch('demodb.dev', `/${id}/`);
   assert.equal(publicDatabasePage.status, 200, `canonical ${id} database page exists`);

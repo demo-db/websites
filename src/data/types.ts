@@ -33,6 +33,9 @@ export type ExportFile = {
   bytes: number | null;
   sha256: string | null;
   dbWide: boolean;
+  compression?: 'gzip' | null;
+  decodedBytes?: number | null;
+  decodedSha256?: string | null;
 };
 
 export type Database = {

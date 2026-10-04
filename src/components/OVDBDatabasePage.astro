@@ -1,0 +1,49 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import type { OVDBDatabase } from '../data/types';
+
+const { database } = Astro.props as { database: OVDBDatabase };
+const keyCount = database.recordsets.reduce((sum, recordset) => sum + recordset.foreignKeys.length, 0);
+---
+
+<SiteLayout title={`${database.title} · OpenVaultDB`} description={database.description} canonical={`/${database.localId}/`}>
+  <section class="shell page-hero">
+    <p class="eyebrow">OpenVaultDB database</p>
+    <h1>{database.title}</h1>
+    <p class="hero-lede">{database.description}</p>
+    <div class="hero-actions">
+      <a class="button button-primary" href={database.homepage}>Explore the database site <span aria-hidden="true">→</span></a>
+      <a class="button button-quiet" href={database.apiUrl}>Read-only API</a>
+      <a class="button button-quiet" href="/ovdb/">Server directory</a>
+    </div>
+  </section>
+
+  <section class="shell section intro-grid">
+    <div><p class="eyebrow">Published collections</p><h2>{database.recordsets.length} read-only collections</h2></div>
+    <div class="intro-copy"><p>{keyCount} declared foreign-key relationships. Names and keys preserve the source database schema. The database site includes the complete native schema, including views.</p><p><a class="text-link" href={database.homepage}>Explore complete schema and exports ↗</a></p><p><a class="text-link" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Machine-readable database descriptor ↗</a></p></div>
+  </section>
+
+  <section class="shell section">
+    <div class="section-heading"><div><p class="eyebrow">Published recordsets</p><h2>Read-only collections</h2></div><span class="muted">{database.recordsets.length} collections</span></div>
+    <div class="recordset-list">
+      {database.recordsets.map((recordset) => (
+        <article class="recordset-card">
+          <div class="recordset-heading"><div><p class="eyebrow">{recordset.kind}</p><h3>{recordset.name}</h3></div><span class="muted">{recordset.columns.length} columns{recordset.rowCount == null ? '' : ` · ${recordset.rowCount.toLocaleString()} rows`}</span></div>
+          {recordset.description && <p>{recordset.description}</p>}
+          <div class="schema-columns">{recordset.columns.map((column) => <span><code>{column.name}</code><small>{column.type || 'unspecified'}{column.primaryKey ? ' · PK' : ''}{column.nullable ? ' · nullable' : ''}</small></span>)}</div>
+          {recordset.foreignKeys.length > 0 && <p class="muted">References {recordset.foreignKeys.map((key) => `${key.table}.${key.referencedColumn}`).join(', ')}</p>}
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="shell section intro-grid">
+    <div><p class="eyebrow">Provenance</p><h2>Published data</h2></div>
+    <div class="intro-copy"><p>Source: <a href={database.provenance.repository}>{database.provenance.repository}</a> at <code>{database.provenance.revision}</code>.</p><p>Source licence: {database.licences.data}. Model licence: {database.licences.model}. Meaning licence: {database.licences.meaning}.</p><p>Published by <a href={database.publisher.url}>{database.publisher.name}</a>; <a href={database.publisher.repository}>provider repository ↗</a>.</p><p>{database.provenance.notes}</p></div>
+  </section>
+
+  <section class="shell section intro-grid">
+    <div><p class="eyebrow">Semantic references</p><h2>Published models</h2></div>
+    <div class="intro-copy"><p>ModelSpec: <a href={database.model.url}>{database.model.id} ↗</a>{database.model.hclUrl && <> · <a href={database.model.hclUrl}>HCL source ↗</a></>}</p><p>MeaningGraph: <a href={database.meaning.url}>{database.meaning.id} ↗</a></p><p><a class="text-link" href={database.homepage + 'model/'}>Browse model and meaning files ↗</a></p></div>
+  </section>
+</SiteLayout>

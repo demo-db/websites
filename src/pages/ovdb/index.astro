@@ -1,0 +1,27 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { ovdbDatabases, ovdbServer } from '../../data/ovdb';
+---
+
+<SiteLayout title="OpenVaultDB server · DemoDB" description={ovdbServer.description} canonical="/ovdb/">
+  <section class="shell page-hero">
+    <p class="eyebrow">Shared read-only data service</p>
+    <h1>{ovdbServer.title}</h1>
+    <p class="hero-lede">{ovdbServer.description}</p>
+    <div class="hero-actions"><a class="button button-primary" href="/ovdb/ovdb-server.json">Server descriptor <span aria-hidden="true">↗</span></a><a class="button button-quiet" href={ovdbServer.apiUrl}>API root</a></div>
+  </section>
+  <section class="shell section">
+    <div class="section-heading"><div><p class="eyebrow">Available databases</p><h2>One server, curated fixtures.</h2></div><span class="muted">{ovdbDatabases.length} read-only databases</span></div>
+    <div class="database-grid">
+      {ovdbDatabases.map((database) => (
+        <a class="database-card" href={`/ovdb/db/${database.localId}/`}>
+          <span class="database-kicker">{database.deployment.engine} · read only</span>
+          <h2>{database.title}</h2><p>{database.description}</p>
+          <span class="database-stats"><span>{database.recordsets.length} published collections</span><span>{database.capabilities.query ? 'query enabled' : 'query unavailable'}</span></span>
+          <span class="database-link">View server recordsets <span aria-hidden="true">→</span></span>
+        </a>
+      ))}
+    </div>
+  </section>
+  <section class="shell section catalogue-note"><p class="eyebrow">Public interface</p><h2>Read and query. Never write.</h2><p>The API uses the shared backend and provider-declared capabilities. Each database manifest exposes native table names, columns, keys, provenance, and public semantic references.</p><p><a class="text-link" href="/ovdb/schemas/ovdb-server-draft-1.schema.json">Server JSON Schema</a> · <a class="text-link" href="/ovdb/schemas/ovdb-database-draft-1.schema.json">Database JSON Schema</a></p></section>
+</SiteLayout>

@@ -1,0 +1,11 @@
+.page-hero{padding-top:72px;padding-bottom:42px}
+.recordset-list{display:grid;gap:12px}
+.recordset-card{padding:20px 22px;border:1px solid var(--line);border-radius:7px;background:rgba(15,29,47,.65)}
+.recordset-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.recordset-heading h3{margin:4px 0 8px;font-size:21px}
+.recordset-card>p{color:var(--muted)}
+.schema-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:8px;margin:14px 0}
+.schema-columns>span{display:grid;gap:4px;padding:9px 10px;border:1px solid var(--line);border-radius:4px}
+.schema-columns code{font:12px 'DM Mono',monospace;color:var(--cyan);overflow-wrap:anywhere}
+.schema-columns small{font:10px 'DM Mono',monospace;color:var(--faint)}
+@media(max-width:800px){.page-hero{padding-top:52px}.recordset-heading{display:block}}

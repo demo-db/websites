@@ -1,0 +1,11 @@
+---
+import type { Recordset } from '../data/types';
+import { displayCount, recordsetPath } from '../data/db';
+const { recordset, relatedCount = 0 } = Astro.props as { recordset: Recordset; relatedCount?: number };
+---
+<a class="table-card" href={recordsetPath(recordset.name)}>
+  <span class="table-card-top"><span class="table-icon">{recordset.name.slice(0, 1)}</span><span class="kind-badge">{recordset.kind}</span></span>
+  <strong>{recordset.name}</strong>
+  {recordset.description && <span class="table-card-description">{recordset.description}</span>}
+  <span class="table-card-columns">{recordset.columns.length} columns · {recordset.foreignKeys.length} links · {displayCount(recordset.rowCount)} rows{relatedCount > 0 ? ` · ${relatedCount} matches in other samples` : ''}<span aria-hidden="true"> →</span></span>
+</a>

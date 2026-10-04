@@ -1,0 +1,16 @@
+---
+import type { Database } from '../data/types';
+const { db } = Astro.props as { db: Database };
+const tables = db.tables.filter((table) => table.kind === 'table');
+const views = db.tables.filter((table) => table.kind === 'view');
+const size = db.exports.find((item) => item.format === 'sqlite' && !item.table)?.bytes;
+const formats = [...new Set(db.exports.filter((item) => !item.table && item.format !== 'metadata').map((item) => item.format.toUpperCase()))];
+---
+<a class="database-card" href={`https://${db.siteHost}/`}>
+  <span class="database-kicker">{db.domain}</span>
+  <h2>{db.name}</h2>
+  <p>{db.description}</p>
+  <span class="database-stats"><span>{tables.length} tables</span><span>{views.length} views</span>{size != null && <span>{(size / 1024 / 1024).toFixed(2)} MB</span>}</span>
+  <span class="database-formats">{formats.join(' · ')}</span>
+  <span class="database-link">Explore database <span aria-hidden="true">→</span></span>
+</a>

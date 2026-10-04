@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.astro/
+.cache/
+.tools/
+src/data/generated/
+public/_db/
+public/ovdb/ovdb-server.json
+public/ovdb/db/
+public/ovdb/schemas/
+public/*/ovdb-database.json

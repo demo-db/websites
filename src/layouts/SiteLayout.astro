@@ -1,0 +1,41 @@
+---
+import '../styles/global.css';
+import '../styles/demodb.css';
+import '../styles/ovdb.css';
+import { catalogueHost } from '../data/db';
+import type { Database } from '../data/types';
+
+interface Props { title: string; description: string; db?: Database; canonical?: string }
+const { title, description, db, canonical = Astro.url.pathname } = Astro.props;
+const catalogueUrl = `https://${catalogueHost}/`;
+const origin = db ? `https://${db.siteHost}` : `https://${catalogueHost}`;
+const canonicalUrl = `${origin}${canonical.startsWith('/') ? canonical : `/${canonical}`}`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta name="theme-color" content="#08111f" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href={catalogueUrl} aria-label="DemoDB home"><span class="brand-mark">D</span><span>Demo<span class="brand-muted">DB</span></span></a>
+        {db ? <><span class="header-db">{db.name}</span><nav aria-label="Primary navigation"><a href="/tables/">Tables</a><a href="/schema/">Schema</a><a href="/downloads/">Downloads</a><a href="/queries/">Queries</a><a href="/about/">About</a><a href="https://demodb.dev/ovdb/">OpenVaultDB</a></nav></> : <nav aria-label="Primary navigation"><a href="#databases">Databases</a><a href="/ovdb/">OpenVaultDB</a><a href="https://github.com/demo-db/websites">GitHub</a></nav>}
+      </div>
+    </header>
+    <main><slot /></main>
+    <footer class="site-footer">
+      <div class="shell footer-inner"><p><strong>DemoDB</strong> brings trusted sample databases together for learning and development.</p><div class="footer-links"><a href="https://github.com/demo-db/websites">Source on GitHub ↗</a><a href="https://demodb.dev/ovdb/">OpenVaultDB server</a>{db && <a href={catalogueUrl}>All databases</a>}</div></div>
+    </footer>
+  </body>
+</html>

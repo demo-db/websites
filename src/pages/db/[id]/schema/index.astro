@@ -1,0 +1,16 @@
+---
+import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import { databases, recordsetPath } from '../../../../data/db';
+import type { Database } from '../../../../data/types';
+export function getStaticPaths() { return databases.map((db) => ({ params: { id: db.id }, props: { db } })); }
+const { db } = Astro.props as { db: Database };
+const tables = db.tables.filter((table) => table.kind === 'table');
+const views = db.tables.filter((table) => table.kind === 'view');
+const relations = db.tables.flatMap((table) => table.foreignKeys.map((fk) => ({ from: table.name, ...fk })));
+---
+<SiteLayout db={db} title={`Schema — ${db.name} | DemoDB`} description={`Machine-readable schema, columns, keys and foreign-key relationships for ${db.name}.`} canonical="/schema/">
+  <section class="page-intro shell"><p class="eyebrow">Data structure</p><h1>Schema</h1><p>{tables.length} tables and {views.length} views from the pinned source fixture. Names and relationships retain the source database’s native shape.</p><div class="hero-actions"><a class="button button-primary" href="/schema.json">Download schema JSON <span aria-hidden="true">↓</span></a><a class="button button-quiet" href="/tables/">Browse recordsets <span aria-hidden="true">→</span></a></div></section>
+  <section class="shell section"><div class="section-heading"><div><p class="eyebrow">Tables</p><h2>{tables.length} native tables.</h2></div></div><div class="table-grid">{tables.map((table) => <a class="schema-card" href={recordsetPath(table.name)}><strong>{table.name}</strong><span>{table.columns.length} columns · {table.rowCount?.toLocaleString() ?? '—'} rows</span><small>{table.foreignKeys.length} foreign-key relationships</small></a>)}</div></section>
+  {views.length > 0 && <section class="shell section"><div class="section-heading"><div><p class="eyebrow">Views</p><h2>{views.length} database views.</h2></div></div><div class="table-grid">{views.map((view) => <a class="schema-card" href={recordsetPath(view.name)}><strong>{view.name}</strong><span>{view.columns.length} columns · {view.rowCount?.toLocaleString() ?? '—'} rows</span><small>Native view definition preserved</small></a>)}</div></section>}
+  <section class="shell section"><div class="section-heading compact"><div><p class="eyebrow">Foreign keys</p><h2>{relations.length} declared relationships.</h2></div><span class="muted">Including self-references and composite-key tables.</span></div><div class="relationship-list">{relations.map((relation) => <div class="relationship-row"><a class="relationship-table" href={recordsetPath(relation.from)}>{relation.from}</a><code>{relation.column}</code><span class="relationship-arrow">→</span><a class="relationship-table" href={recordsetPath(relation.table)}>{relation.table}</a><code>{relation.referencedColumn}</code></div>)}</div></section>
+</SiteLayout>

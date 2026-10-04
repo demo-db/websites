@@ -188,12 +188,23 @@ assert.equal(postRedirect.status, 308);
 assert.equal(postRedirect.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?format=json');
 const legacyDisabled = await fetch('chinookdb.com', '/tables/Artist/?x=1', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'false' });
 assert.equal(legacyDisabled.status, 404);
-const legacy = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql?q=a%20b', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
-assert.equal(legacy.status, 308);
-assert.equal(legacy.headers.get('Location'), 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b');
-const oldOVDBProfile = await fetch('chinookdb.com', '/ovdb/dbs/chinook?view=collections', 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
-assert.equal(oldOVDBProfile.status, 308);
-assert.equal(oldOVDBProfile.headers.get('Location'), 'https://demodb.dev/chinook/?view=collections');
+const redirectCases = [
+  ['GET', '/tables/Artist/?filter=live%20tracks', 'https://chinook.demodb.dev/tables/Artist/?filter=live%20tracks'],
+  ['HEAD', '/data/chinook.sqlite?download=1', 'https://chinook.demodb.dev/data/chinook.sqlite?download=1'],
+  ['GET', '/model/chinook.modelspec.json?format=source', 'https://chinook.demodb.dev/model/chinook.modelspec.json?format=source'],
+  ['GET', '/ovdb/dbs/chinook?view=collections', 'https://demodb.dev/chinook/?view=collections'],
+  ['HEAD', '/ovdb/db/chinook/?view=collections', 'https://demodb.dev/chinook/?view=collections'],
+  ['POST', '/ovdb/v1/databases/chinook/dtql?q=a%20b', 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?q=a%20b'],
+  ['GET', '/ovdb/dbs/chinook/collections/Album?limit=5', 'https://chinook.demodb.dev/ovdb/dbs/chinook/collections/Album?limit=5'],
+] as const;
+for (const [method, path, expected] of redirectCases) {
+  const response = await fetch('chinookdb.com', path, method, { ...local, ENABLE_LEGACY_REDIRECTS: 'true' }, method === 'POST' ? { body: 'query: { name: Album }' } : undefined);
+  assert.equal(response.status, 308, `${method} ${path} uses a permanent method-preserving redirect`);
+  assert.equal(response.headers.get('Location'), expected, `${method} ${path} preserves its canonical route and query`);
+}
+for (const path of ['/ovdb/v1/databases/unknown/dtql', '/ovdb/dbs/unknown', '/ovdb/db/unknown/']) {
+  assert.equal((await fetch('chinookdb.com', path, 'GET', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' })).status, 404, `${path} fails closed for an unknown database`);
+}
 const oldOVDBPreflight = await fetch('chinookdb.com', '/ovdb/v1/databases/chinook/dtql', 'OPTIONS', { ...local, ENABLE_LEGACY_REDIRECTS: 'true' });
 assert.match(oldOVDBPreflight.headers.get('Access-Control-Allow-Headers') ?? '', /OVDB-Page-Token/);
 

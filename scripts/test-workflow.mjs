@@ -31,13 +31,14 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.ok(job.steps.some((step) => step.name === 'Verify the deployed commit and public routes' && /github\.event_name == 'push'/.test(step.if)));
 });
 
-test('only the three verified new hostnames bind, with legacy redirect disabled', () => {
+test('enables verified legacy redirects while the old hostname binding remains staged', () => {
   assert.deepEqual(wrangler.routes, [
     { pattern: 'demodb.dev', custom_domain: true },
     { pattern: 'chinook.demodb.dev', custom_domain: true },
     { pattern: 'northwind.demodb.dev', custom_domain: true },
   ]);
-  assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'false');
+  assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'true');
+  assert.ok(!wrangler.routes.some((route) => route.pattern === 'chinookdb.com'), 'the deployment coordinator transfers the old custom-domain binding separately');
   assert.equal(wrangler.assets.html_handling, 'none');
   assert.equal(wrangler.assets.run_worker_first, true);
 });

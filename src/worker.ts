@@ -293,7 +293,8 @@ async function proxyOVDB(request: Request, url: URL): Promise<Response> {
     for (const [name, value] of Object.entries(apiCorsHeaders(methods))) outputHeaders.set(name, value);
     for (const [name, value] of Object.entries(securityHeaders())) outputHeaders.set(name, value);
     return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, statusText: response.statusText, headers: outputHeaders });
-  } catch {
+  } catch (error) {
+    logGatewayFailure(query ? 'query' : 'read', database, error);
     return new Response('OpenVaultDB is temporarily unavailable', { status: 502, headers: { ...apiCorsHeaders(methods), ...securityHeaders() } });
   }
 }
@@ -326,9 +327,26 @@ async function fetchDatabaseMetadata(request: Request, database: OVDBManifest): 
     outputHeaders.set('Content-Type', 'application/json; charset=utf-8');
     outputHeaders.delete('ETag');
     return new Response(JSON.stringify(metadata), { status: upstream.status, statusText: upstream.statusText, headers: outputHeaders });
-  } catch {
+  } catch (error) {
+    logGatewayFailure('metadata', database, error);
     return new Response('OpenVaultDB is temporarily unavailable', { status: 502, headers: { ...readonlyCorsHeaders(), ...securityHeaders() } });
   }
+}
+
+function logGatewayFailure(operation: 'metadata' | 'query' | 'read', database: OVDBManifest, error: unknown): void {
+  const errorName = error instanceof Error
+    ? error.name.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40) || 'Error'
+    : 'NonErrorRejection';
+  const errorMessage = error instanceof Error
+    ? error.message
+      .replace(/https?:\/\/[^\s"'<>]+/gi, '[url]')
+      .replace(/\b(authorization|cookie|set-cookie|ovdb[-_ ]?page[-_ ]?token|page[-_ ]?token|token|secret|password)\b\s*[:=]\s*(?:Bearer\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1=[redacted]')
+      .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+      .replace(/([?&][A-Za-z0-9_.-]+=)[^&#\s]*/g, '$1[redacted]')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .slice(0, 200)
+    : 'non-error rejection';
+  console.error(JSON.stringify({ event: 'ovdb_gateway_fetch_failed', operation, database: database.localId, errorName, errorMessage }));
 }
 
 async function readLimitedBody(request: Request, maximum: number): Promise<ArrayBuffer | null> {

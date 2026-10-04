@@ -12,6 +12,10 @@ const inbound = db.tables.filter((candidate) => candidate.foreignKeys.some((fk) 
 const similar = relatedRecordsets(db, table, databases);
 const previewColumns = table.columns.slice(0, 7);
 const previewRows = table.rows.slice(0, 8);
+const uniqueKeys = table.uniqueKeys ?? [];
+const uniqueIndexes = table.uniqueIndexes ?? [];
+const uniqueMetadataKnown = Array.isArray(table.uniqueKeys) && Array.isArray(table.uniqueIndexes);
+const hasPrimaryKey = table.columns.some((column) => column.primaryKey);
 const jsonUrl = publicDataPath(db, 'json', table.name);
 const csvUrl = publicDataPath(db, 'csv', table.name);
 const sqlUrl = publicDataPath(db, 'sql', table.name);
@@ -21,7 +25,9 @@ const yamlUrl = publicDataPath(db, 'yaml', table.name);
   <section class="table-hero shell"><div><a class="back-link" href="/tables/">← All tables and views</a><p class="eyebrow">{db.name} {table.kind}</p><h1>{table.name}</h1><p>{table.description || `Native ${table.kind} in the ${db.name} sample database.`}</p></div><div class="table-hero-stat"><strong>{table.rowCount == null ? '—' : table.rowCount.toLocaleString()}</strong><span>rows</span></div></section>
   <section class="shell table-layout"><div class="table-main">
     <div class="content-card"><div class="card-heading"><h2>{table.columns.length} columns</h2><span class="muted">Schema from the provider contract</span></div><div class="schema-scroll"><table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Key</th><th>References</th></tr></thead><tbody>{table.columns.map((column) => { const fks = table.foreignKeys.filter((fk) => fk.column === column.name); const keyColumns = table.columns.filter((candidate) => candidate.primaryKey); return <tr><th scope="row"><code>{column.name}</code></th><td><code>{column.type}</code></td><td>{column.nullable ? 'yes' : 'no'}</td><td>{column.primaryKey ? <span class="key-badge">PK{keyColumns.length > 1 ? ` ${column.primaryKeyPosition ?? keyColumns.indexOf(column) + 1}/${keyColumns.length}` : ''}</span> : '—'}</td><td>{fks.length ? fks.map((fk) => <a href={recordsetPath(fk.table)}><code>{fk.table}.{fk.referencedColumn}</code> </a>) : '—'}</td></tr>; })}</tbody></table></div></div>
+    {table.kind === 'table' && !hasPrimaryKey && <p class="muted key-status no-primary-key">No primary key is declared for this native table. The browser copy uses stable ordinal keys outside the source records.</p>}
     {table.kind === 'view' && table.viewSql && <div class="content-card"><div class="card-heading"><h2>View definition</h2></div><pre class="query-code"><code>{table.viewSql}</code></pre></div>}
+    {table.kind === 'table' && uniqueMetadataKnown && <div class="content-card"><div class="card-heading"><h2>Keys and unique indexes</h2><span class="muted">Physical SQLite metadata</span></div><p class="muted key-status">{hasPrimaryKey ? 'Primary key is declared above.' : 'No primary key is declared; rows use export-order ordinals in the browser snapshot.'}</p>{uniqueKeys.length > 0 ? <div class="unique-list"><p class="eyebrow">Additional unique keys</p>{uniqueKeys.map((key) => <div class="unique-row"><code>{key.name}</code><span>{key.columns.join(' + ')}</span></div>)}</div> : <p class="muted key-status">{hasPrimaryKey ? 'No additional full-column unique key was found.' : 'No primary or additional full-column unique key was found.'}</p>}{uniqueIndexes.length > 0 ? <details class="index-details"><summary>{uniqueIndexes.length} unique index{uniqueIndexes.length === 1 ? '' : 'es'} inspected</summary>{uniqueIndexes.map((index) => <div class="unique-row"><code>{index.name}</code><span>{index.columns.map((column) => column.column ?? 'expression').join(' + ')}{index.partial ? ' · partial' : ''}</span>{index.sql && <code class="index-sql">{index.sql}</code>}</div>)}</details> : <p class="muted key-status">No unique SQLite indexes were found.</p>}</div>}
     <div class="content-card"><div class="card-heading"><div><p class="eyebrow">Data preview</p><h2>Sample records</h2></div><span class="muted">{table.rowCount == null ? '' : `${table.rowCount.toLocaleString()} rows available`}</span></div>{previewRows.length ? <div class="preview-scroll"><table class="preview-table"><thead><tr>{previewColumns.map((column) => <th>{column.name}</th>)}</tr></thead><tbody>{previewRows.map((row) => <tr>{previewColumns.map((column) => <td>{row[column.name] == null ? <span class="null-value">NULL</span> : String(row[column.name])}</td>)}</tr>)}</tbody></table></div> : <p class="muted">This recordset has no sample rows.</p>}{jsonUrl && <div class="preview-actions"><a class="text-link" href={jsonUrl}>Open complete JSON data →</a>{csvUrl && <a class="text-link" href={csvUrl}>Download CSV ↓</a>}</div>}</div>
     {db.capabilities.datatug && jsonUrl && <div class="content-card"><div class="card-heading"><div><p class="eyebrow">Interactive explorer</p><h2>Explore {table.name}</h2></div><span class="muted">Powered by DataTug</span></div><datatug-grid data-url={jsonUrl}></datatug-grid><noscript><p>The interactive grid needs JavaScript. Download this table as JSON or CSV instead.</p></noscript></div>}
   </div><aside class="table-aside">
@@ -36,6 +42,12 @@ const yamlUrl = publicDataPath(db, 'yaml', table.name);
   .schema-scroll { margin-bottom:-25px; }
   .schema-table tbody tr:last-child > * { border-bottom:0; }
   .preview-actions { display:flex; flex-wrap:wrap; gap:22px; margin-top:18px; }
+  .unique-list,.index-details { margin-top:14px; }
+  .key-status { font-size:12px; margin:8px 0; }
+  .unique-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(0,2fr); gap:12px; border-top:1px solid var(--line); padding:10px 0; color:var(--muted); font-size:12px; }
+  .unique-row code { color:var(--ink); overflow-wrap:anywhere; }
+  .index-details > summary { color:var(--lime); cursor:pointer; font-size:12px; }
+  .unique-row .index-sql { grid-column:1/-1; white-space:normal; }
   .similar-list { display:grid; gap:10px; margin-top:16px; }
   .similar-list a { border-top:1px solid var(--line); padding-top:10px; display:grid; gap:2px; }
   .similar-list strong { color:var(--ink); }

@@ -1,6 +1,7 @@
 import runtime from './data/generated/runtime.json';
 import providerIndex from './data/generated/index.json';
 import ovdbIndex from './data/generated/ovdb.json';
+import { IncrementalSha256 } from './scripts/indexeddb-snapshot';
 
 type Runtime = {
   catalogueHost: string;
@@ -15,7 +16,7 @@ type Database = {
   name: string;
   siteHost: string;
   tables: { name: string }[];
-  exports?: { publicPath: string; assetPath: string; compression?: string | null }[];
+  exports?: { publicPath: string; assetPath: string; compression?: string | null; bytes?: number | null; sha256?: string | null; chunks?: { assetPath: string; bytes: number; sha256: string }[] }[];
   ovdb: { url: string; deploymentUrl: string; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 type Env = {
@@ -119,6 +120,10 @@ export default {
 
     const exportPath = decodedDataExportPath(url.pathname);
     const exportFile = exportPath == null ? undefined : db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
+    if (exportFile && exportFile.compression === 'gzip' && exportFile.chunks && exportFile.chunks.length > 0) {
+      const response = await serveChunkedGzip(request, env, url, db.id, exportFile);
+      return isPublicData ? withDataHeaders(response, request.method, true) : response;
+    }
     const target = exportFile
       ? internalAssetPath(db.id, `/data/${exportFile.assetPath.split('/').map(encodeURIComponent).join('/')}`)
       : internalAssetPath(db.id, url.pathname);
@@ -158,6 +163,61 @@ function decodedDataExportPath(pathname: string): string | null {
   try {
     return pathname.slice('/data/'.length).split('/').map((segment) => decodeURIComponent(segment)).join('/');
   } catch { return null; }
+}
+
+export async function serveChunkedGzip(
+  request: Request,
+  env: Env,
+  url: URL,
+  databaseId: string,
+  exportFile: { publicPath: string; bytes?: number | null; sha256?: string | null; chunks?: { assetPath: string; bytes: number; sha256: string }[] },
+): Promise<Response> {
+  const chunks = exportFile.chunks ?? [];
+  const hash = new IncrementalSha256();
+  let nextChunk = 0;
+  let encodedBytes = 0;
+  const body = request.method === 'HEAD' ? null : new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (nextChunk === chunks.length) {
+        controller.close();
+        return;
+      }
+
+      const chunk = chunks[nextChunk++];
+      try {
+        const assetPath = internalAssetPath(databaseId, `/data/${chunk.assetPath.split('/').map(encodeURIComponent).join('/')}`);
+        const target = new URL(assetPath, url);
+        const asset = await env.ASSETS.fetch(new Request(target, { method: 'GET' }));
+        if (!asset.ok) throw new Error(`Compressed export chunk request failed (${asset.status}).`);
+        const bytes = new Uint8Array(await asset.arrayBuffer());
+        if (bytes.byteLength !== chunk.bytes || await sha256Hex(bytes) !== chunk.sha256) throw new Error('Compressed export chunk failed its size or checksum check.');
+        encodedBytes += bytes.byteLength;
+        hash.update(bytes);
+        // Validate the complete representation before yielding its last part.
+        // Otherwise a consumer can receive every byte and miss an error raised
+        // on the stream's next pull.
+        if (nextChunk === chunks.length && (encodedBytes !== exportFile.bytes || hash.hexDigest() !== exportFile.sha256)) {
+          throw new Error('The joined compressed export failed its size or checksum check.');
+        }
+        controller.enqueue(bytes);
+        if (nextChunk === chunks.length) controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  const headers = new Headers({
+    'Content-Type': contentTypes[dataExtension(url.pathname)] ?? 'application/octet-stream',
+    ...(exportFile.bytes == null ? {} : { 'Content-Length': String(exportFile.bytes) }),
+    'Cache-Control': 'public, max-age=300, must-revalidate',
+    ...securityHeaders(),
+  });
+  return new Response(body, { status: 200, headers });
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function localDatabase(host: string, value?: string): string | undefined {

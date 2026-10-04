@@ -17,8 +17,14 @@
     {
       "id": "pubs",
       "repository": "https://github.com/demo-db/pubs",
-      "commit": "34501946b0478b7e2ae13c15b4c57019109b5edc",
-      "contractSha256": "0b427916f82c14d1a702e072316e497f8c20918f2377fb76fad97b9e98b62474"
+      "commit": "6c06c5c7395b03ff1a02c2b1a21485add3e1b65b",
+      "contractSha256": "32224efdbecd57962f32a0aad81653bbf5085788df69185be30b2c7c0910d659"
+    },
+    {
+      "id": "sakila",
+      "repository": "https://github.com/demo-db/sakila",
+      "commit": "0cb13fd76b2ce590f68efa99a6fbf7effcf6e4ce",
+      "contractSha256": "89c9c181ed41746c5a26ec14b489f9b295040a450c13667c134db483bc65cbce"
     }
   ]
 }

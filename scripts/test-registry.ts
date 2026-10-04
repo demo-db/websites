@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { databases, databaseById, downloadFiles } from '../src/data/db';
 
 assert.equal(new Set(databases.map((database) => database.id)).size, databases.length, 'provider IDs are unique');
-for (const id of ['chinook', 'northwind', 'pubs']) assert.ok(databaseById.has(id), `${id} remains registered`);
+for (const id of ['chinook', 'northwind', 'pubs', 'sakila']) assert.ok(databaseById.has(id), `${id} remains registered`);
 for (const database of databases) {
   assert.equal(database.siteHost, `${database.id}.demodb.dev`);
   assert.ok(database.exports.some((file) => file.format === 'sqlite' && file.table === null), `${database.id} publishes SQLite`);
@@ -29,11 +29,21 @@ assert.ok(northwind.exports.some((file) => file.publicPath === 'json/northwind.O
 const pubs = databaseById.get('pubs')!;
 assert.equal(pubs.tables.filter((table) => table.kind === 'table').length, 11);
 assert.equal(pubs.tables.filter((table) => table.kind === 'view').length, 1);
-assert.equal(pubs.ovdb.available, false, 'Pubs remains a published static corpus until its backend is mounted');
-assert.equal(pubs.ovdb.query, false, 'Pubs does not advertise an unavailable query API');
+assert.equal(pubs.ovdb.available, true, 'Pubs is published after its backend was mounted and verified');
+assert.equal(pubs.ovdb.query, true, 'Pubs advertises its verified read-only query API');
 assert.ok(pubs.tables.some((table) => table.name === 'pub_info' && table.columns.some((column) => column.name === 'logo' && column.type === 'BLOB')));
 assert.ok(pubs.tables.some((table) => table.name === 'discounts' && table.columns.filter((column) => column.primaryKey).length === 0));
 assert.ok(pubs.exports.some((file) => file.publicPath === 'pubs.sqlite'));
 assert.ok(pubs.exports.some((file) => file.table === 'pub_info' && file.format === 'json'));
 
-console.log('Provider registry includes validated Chinook, Northwind, and Pubs contracts and preserves their native schema.');
+const sakila = databaseById.get('sakila')!;
+assert.equal(sakila.tables.filter((table) => table.kind === 'table').length, 16);
+assert.equal(sakila.tables.filter((table) => table.kind === 'view').length, 7);
+assert.deepEqual(sakila.tables.find((table) => table.name === 'film_actor')?.columns.filter((column) => column.primaryKey).map((column) => column.name), ['actor_id', 'film_id']);
+assert.ok(sakila.tables.find((table) => table.name === 'address')?.columns.some((column) => column.name === 'location' && /BLOB/i.test(column.type)));
+assert.ok(sakila.tables.find((table) => table.name === 'staff')?.columns.some((column) => column.name === 'picture' && /BLOB/i.test(column.type)));
+assert.ok(sakila.exports.some((file) => file.publicPath === 'sakila.sqlite'));
+assert.ok(sakila.exports.some((file) => file.table === 'film_actor' && file.format === 'json'));
+assert.equal(sakila.ovdb.query, false, 'Sakila does not advertise an unmounted query API');
+
+console.log('Provider registry includes validated Chinook, Northwind, Pubs, and Sakila contracts and preserves their native schema.');

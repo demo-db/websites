@@ -30,15 +30,26 @@ test('public corpus index keeps native metadata but omits preview rows', async (
   for (const database of corpus.databases) {
     assert.match(database.id, /^https:\/\//);
     assert.ok(database.sourceVersion);
-    assert.match(database.sourceRevision, /^[a-f0-9]{40}$/);
+    assert.ok(database.sourceRevision, `${database.localId} preserves its upstream revision identity`);
+    assert.match(database.providerRevision, /^[a-f0-9]{40}$/, `${database.localId} pins its immutable provider commit`);
     assert.ok(database.licences?.data && database.licences?.model && database.licences?.meaning);
     assert.match(database.browserManifestUrl, /\/ovdb-database\.json$/);
     assert.match(database.schemaSha256, /^[a-f0-9]{64}$/);
     assert.match(database.serverManifestUrl, /\/ovdb-database\.json$/);
+    assert.ok(Array.isArray(database.sourceViews), `${database.localId} publishes source-view metadata separately from executable recordsets`);
+    for (const sourceView of database.sourceViews) {
+      assert.equal(typeof sourceView.availableAsSqliteView, 'boolean');
+      assert.equal(Object.hasOwn(sourceView, 'rows'), false, `${database.localId}.${sourceView.name} source view has no pretend sample rows`);
+    }
     for (const recordset of database.recordsets) {
       assert.equal(Object.hasOwn(recordset, 'rows'), false, `${database.localId}.${recordset.name} does not publish preview row data`);
       assert.ok(Array.isArray(recordset.columns));
       assert.ok(Array.isArray(recordset.primaryKey), 'composite primary key order is explicit');
+      if (recordset.kind === 'table') {
+        assert.ok(Object.hasOwn(recordset, 'uniqueKeys') && Object.hasOwn(recordset, 'uniqueIndexes'), 'physical key metadata is explicit, including when the provider reports none');
+      } else {
+        assert.equal(Object.hasOwn(recordset, 'uniqueKeys'), false, 'views do not claim physical unique constraints');
+      }
       for (const representation of recordset.availableRepresentations) {
         assert.match(representation.url, /^https:\/\//);
         assert.equal(typeof representation.sha256, 'string');

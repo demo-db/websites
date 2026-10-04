@@ -39,6 +39,7 @@ test('binds the transferred Chinook hostname to the verified legacy redirects', 
     { pattern: 'chinook.demodb.dev', custom_domain: true },
     { pattern: 'northwind.demodb.dev', custom_domain: true },
     { pattern: 'pubs.demodb.dev', custom_domain: true },
+    { pattern: 'sakila.demodb.dev', custom_domain: true },
     { pattern: 'chinookdb.com', custom_domain: true },
   ]) assert.ok(wrangler.routes.some((candidate) => candidate.pattern === route.pattern && candidate.custom_domain === route.custom_domain), `${route.pattern} remains bound`);
   assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'true');
@@ -56,11 +57,20 @@ test('live smoke separates DTQL limits from OVDB server pagination', () => {
   assert.match(liveSmoke, /if \(pageSize !== undefined\) headers\['OVDB-Page-Size'\] = String\(pageSize\)/);
 });
 
-test('live smoke checks Pubs static pages without claiming query availability', () => {
+test('live smoke checks Pubs static pages and its verified query endpoint', () => {
   assert.match(liveSmoke, /https:\/\/pubs\.demodb\.dev/);
   assert.match(liveSmoke, /\/data\/pubs\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/pubs\/ovdb-database\.json/);
-  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('pubs'/);
+  assert.match(liveSmoke, /await checkedReadOnlyQuery\('pubs'/);
+});
+
+test('live smoke checks Sakila native tables, views, and SQLite without claiming query availability', () => {
+  assert.match(liveSmoke, /https:\/\/sakila\.demodb\.dev/);
+  assert.match(liveSmoke, /\/tables\/film_actor\//);
+  assert.match(liveSmoke, /\/tables\/actor_info\//);
+  assert.match(liveSmoke, /\/data\/sakila\.sqlite/);
+  assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
+  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('sakila'/);
 });
 
 test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {

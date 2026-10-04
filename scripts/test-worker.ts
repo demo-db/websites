@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
-import worker, { internalAssetPath, resolveHost } from '../src/worker';
+import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
 
@@ -15,8 +15,22 @@ const localDatabaseHosts = Object.fromEntries((providerIndex.databases as { id: 
 const local = { LOCAL_DB_HOSTS: JSON.stringify(localDatabaseHosts), LOCAL_CATALOGUE_HOSTS: '["localhost"]' };
 const gzipPayload = Buffer.from('[{"fixture":"gzip"}]');
 const gzipPayloadBytes = gzipSync(gzipPayload);
-const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; assetPath: string; compression?: string }[] };
+const chunkedPayload = Buffer.from('full AdventureWorks SQLite fixture '.repeat(120));
+const chunkedEncoded = gzipSync(chunkedPayload);
+const chunkBoundaries = [0, Math.ceil(chunkedEncoded.length / 2), chunkedEncoded.length];
+const chunkAssetPaths = ['__chunks/chinook.sqlite.gz.part-0001', '__chunks/chinook.sqlite.gz.part-0002'];
+const chunkAssets = new Map<string, Buffer>();
+const chunkMetadata = chunkBoundaries.slice(0, -1).map((start, index) => {
+  const bytes = chunkedEncoded.subarray(start, chunkBoundaries[index + 1]);
+  chunkAssets.set(`/_db/chinook/data/${chunkAssetPaths[index]}`, bytes);
+  return { assetPath: chunkAssetPaths[index], bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+});
+const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; assetPath: string; compression?: string; bytes?: number; sha256?: string; chunks?: { assetPath: string; bytes: number; sha256: string }[] }[] };
 chinookGenerated.exports.push({ publicPath: 'json/chinook.Order Details.json', assetPath: 'json/chinook.Order Details.json.gz', compression: 'gzip' });
+chinookGenerated.exports.push({
+  publicPath: 'chinook.sqlite', assetPath: 'chinook.sqlite', compression: 'gzip', bytes: chunkedEncoded.length,
+  sha256: createHash('sha256').update(chunkedEncoded).digest('hex'), chunks: chunkMetadata,
+});
 
 for (const value of ['', 'abc', 'unicode ✓ and a longer value'.repeat(80)]) {
   const bytes = new TextEncoder().encode(value);
@@ -114,6 +128,8 @@ const assets = {
   async fetch(request: Request) {
     const url = new URL(request.url);
     if (url.pathname.endsWith('/_db/chinook/data/json/chinook.Order%20Details.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
+    const chunk = chunkAssets.get(decodeURIComponent(url.pathname));
+    if (chunk) return new Response(request.method === 'HEAD' ? null : chunk, { headers: { 'Content-Length': String(chunk.length), 'Accept-Ranges': 'bytes' } });
     if (url.pathname.endsWith('/redirect-test/index.html')) return new Response(null, { status: 302, headers: { Location: '/_db/northwind/index.html' } });
     const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
     try {
@@ -201,8 +217,14 @@ for (const [host, name] of [['chinook.demodb.dev', 'Chinook'], ['northwind.demod
 const pubsHomeHtml = await (await fetch('pubs.demodb.dev', '/')).text();
 assert.match(pubsHomeHtml, /Pubs/);
 assert.match(pubsHomeHtml, /href="https:\/\/demodb\.dev\/"[^>]*>All sample databases<\/a>/);
-assert.equal((await fetch('pubs.demodb.dev', '/tables/')).status, 200, 'Pubs has static table navigation while OVDB is unavailable');
-assert.equal((await fetch('pubs.demodb.dev', '/ovdb/v1/databases/pubs/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'unmounted Pubs query capability fails closed');
+assert.equal((await fetch('pubs.demodb.dev', '/tables/')).status, 200, 'Pubs has static table navigation');
+const pubsKeyless = await fetch('pubs.demodb.dev', '/tables/discounts/');
+assert.match(await pubsKeyless.text(), /No primary key is declared for this native table/, 'keyless physical tables are identified from native primary-key metadata');
+assert.equal((await fetch('sakila.demodb.dev', '/data/sakila.sqlite', 'HEAD')).status, 200, 'Sakila keeps its full SQLite download route');
+const sakilaView = await fetch('sakila.demodb.dev', '/tables/actor_info/');
+assert.equal(sakilaView.status, 200, 'Sakila native view remains browsable as schema metadata');
+assert.match(await sakilaView.text(), /actor_info/);
+assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/sakila/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'Sakila does not advertise an unmounted query API');
 
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
 assert.equal(json.status, 200);
@@ -223,6 +245,39 @@ const encodedRange = await worker.fetch(makeRequest('chinook.demodb.dev', '/data
 assert.equal(encodedRange.status, 200, 'compressed exports ignore byte ranges and serve one complete representation');
 assert.equal(encodedRange.headers.get('Content-Range'), null);
 assert.equal(encodedRange.headers.get('Accept-Ranges'), null);
+const chunkedResponse = await fetch('chinook.demodb.dev', '/data/chinook.sqlite');
+assert.equal(chunkedResponse.status, 200);
+assert.equal(chunkedResponse.headers.get('Content-Type'), 'application/vnd.sqlite3');
+assert.equal(chunkedResponse.headers.get('Content-Encoding'), 'gzip');
+assert.equal(chunkedResponse.headers.get('Content-Length'), String(chunkedEncoded.length));
+assert.match(chunkedResponse.headers.get('Vary') ?? '', /Accept-Encoding/i);
+assert.equal(gunzipSync(Buffer.from(await chunkedResponse.arrayBuffer())).compare(chunkedPayload), 0, 'the canonical database URL joins ordered verified chunks into the complete gzip stream');
+const chunkedHead = await fetch('chinook.demodb.dev', '/data/chinook.sqlite', 'HEAD');
+assert.equal(chunkedHead.status, 200);
+assert.equal(chunkedHead.headers.get('Content-Encoding'), 'gzip');
+assert.equal(chunkedHead.headers.get('Content-Length'), String(chunkedEncoded.length));
+assert.equal(await chunkedHead.text(), '');
+const chunkedRange = await worker.fetch(makeRequest('chinook.demodb.dev', '/data/chinook.sqlite', 'GET', { headers: { Range: 'bytes=0-3' } }), { ...local, ASSETS: assets } as Env, {} as ExecutionContext);
+assert.equal(chunkedRange.status, 200, 'chunked compressed exports ignore ranges rather than serving a partial gzip stream');
+assert.equal(chunkedRange.headers.get('Content-Range'), null);
+assert.equal(chunkedRange.headers.get('Accept-Ranges'), null);
+const secondChunk = chunkMetadata[1];
+chunkMetadata[1] = { ...secondChunk, sha256: '0'.repeat(64) };
+const invalidChunkResponse = await fetch('chinook.demodb.dev', '/data/chinook.sqlite');
+await assert.rejects(invalidChunkResponse.arrayBuffer(), /checksum check/, 'a modified chunk fails the response stream instead of returning a truncated or corrupt database');
+chunkMetadata[1] = secondChunk;
+const chunkedExport = chinookGenerated.exports.find((file) => file.publicPath === 'chinook.sqlite' && file.chunks?.length)!;
+const joinedDigest = chunkedExport.sha256;
+chunkedExport.sha256 = '0'.repeat(64);
+const invalidJoinedResponse = await serveChunkedGzip(
+  makeRequest('chinook.demodb.dev', '/data/chinook.sqlite'),
+  { ...local, ASSETS: assets } as Env,
+  new URL('https://chinook.demodb.dev/data/chinook.sqlite'),
+  'chinook',
+  chunkedExport,
+);
+await assert.rejects(invalidJoinedResponse.arrayBuffer(), /joined compressed export/, 'the joined stream checksum is checked after all individual parts match');
+chunkedExport.sha256 = joinedDigest;
 const csv = await fetch('chinook.demodb.dev', '/data/csv/chinook.Artist.csv');
 assert.equal(csv.status, 200);
 assert.equal(csv.headers.get('Access-Control-Allow-Origin'), '*');
@@ -371,7 +426,7 @@ globalThis.fetch = async (input, init) => {
     nextRedirectLocation = undefined;
     return new Response(null, { status: 302, headers: { Location: location } });
   }
-  const requestedMetadata = /^\/v1\/databases\/(chinook|northwind)$/.exec(new URL(request.url).pathname);
+  const requestedMetadata = /^\/v1\/databases\/(chinook|northwind|pubs|sakila)$/.exec(new URL(request.url).pathname);
   const payload = requestedMetadata ? {
     id: requestedMetadata[1], engine: 'sqlite', schemaMode: 'relational', collections: ['Orders', 'Order Details'],
     capabilities: { read: true, query: true, dtql: true, write: false },
@@ -426,6 +481,12 @@ try {
   assert.equal(yamlQuery.status, 200);
   assert.equal(forwarded.at(-1)?.headers.get('Content-Type'), 'text/yaml');
   assert.equal(forwarded.at(-1)?.body, rawYaml, 'raw DTQL YAML remains supported by the legacy query endpoint');
+  const pubsMetadataResponse = await fetch('demodb.dev', '/ovdb/v1/databases/pubs');
+  assert.equal(pubsMetadataResponse.status, 200, 'verified Pubs backend metadata is available through the shared gateway');
+  assert.equal((await pubsMetadataResponse.json() as { id: string }).id, 'pubs');
+  const pubsQuery = await fetch('demodb.dev', '/ovdb/v1/databases/pubs/dtql', 'POST', local, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'from: {name: authors}\nlimit: 1\n' }) });
+  assert.equal(pubsQuery.status, 200, 'verified Pubs query capability is proxied');
+  assert.equal(new URL(forwarded.at(-1)!.url).pathname, '/v1/databases/pubs/dtql');
   assert.equal(forwarded.at(-1)?.redirect, 'manual', 'query fetch rejects redirects without following them');
   nextRedirectLocation = 'https://attacker.example/redirect';
   const beforeMetadataRedirect = forwarded.length;

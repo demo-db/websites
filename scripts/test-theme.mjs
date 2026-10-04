@@ -5,6 +5,23 @@ import { test } from 'node:test';
 
 const source = await readFile(new URL('../public/theme.js', import.meta.url), 'utf8');
 const layout = await readFile(new URL('../src/layouts/SiteLayout.astro', import.meta.url), 'utf8');
+const themeStyles = await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
+
+function lightTokens() {
+  const block = themeStyles.match(/:root:not\(\[data-theme="dark"\]\)\s*\{([^}]+)\}/)?.[1];
+  assert.ok(block, 'light theme token block exists');
+  return Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)].map((match) => [match[1], match[2]]));
+}
+
+function contrast(foreground, background) {
+  const luminance = (color) => {
+    const channels = color.slice(1).match(/../g).map((part) => parseInt(part, 16) / 255);
+    const linear = channels.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
 
 function createBrowser({ hostname = 'demodb.dev', cookie = '', stored = null, blockedCookie = false, blockedStorage = false } = {}) {
   const listeners = new Map();
@@ -69,4 +86,15 @@ test('blocked cookies and local storage do not break rendering or toggling', () 
 test('invalid saved values fall back to light without consulting system preference', () => {
   const browser = createBrowser({ cookie: 'demodb-theme=auto', stored: 'system' });
   assert.equal(browser.document.documentElement.dataset.theme, 'light');
+});
+
+test('small light-theme text meets WCAG AA on its content surfaces and primary hover stays readable', () => {
+  const tokens = lightTokens();
+  const onWhite = ['ink', 'muted', 'faint', 'lime', 'cyan', 'console-code', 'console-text', 'console-comment', 'console-result', 'console-result-secondary', 'preview-text', 'null-color'];
+  for (const name of onWhite) assert.ok(contrast(tokens[name], '#ffffff') >= 4.5, `--${name} contrast on white`);
+  for (const name of ['ink', 'muted', 'faint', 'lime', 'cyan', 'console-text', 'console-result', 'preview-text', 'null-color']) {
+    assert.ok(contrast(tokens[name], tokens['code-surface']) >= 4.5, `--${name} contrast on the light code surface`);
+  }
+  assert.match(themeStyles, /\.button-primary,\s*\.button-primary:hover\s*\{\s*color:var\(--button-text\);/);
+  assert.match(themeStyles, /\.button:not\(\.button-primary\):hover\s*\{\s*color:var\(--button-hover-text\);/);
 });

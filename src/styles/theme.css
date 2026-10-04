@@ -36,7 +36,7 @@
 :root:not([data-theme="dark"]) {
   --ink:#192a40;
   --muted:#4b5f77;
-  --faint:#657991;
+  --faint:#566a80;
   --line:#d8e2ed;
   --panel:#ffffff;
   --panel-2:#edf3f9;
@@ -51,12 +51,12 @@
   --hero-shadow:rgba(32,50,73,.12);
   --console-line:#dce5ef;
   --console-dot:#c2ccd9;
-  --console-code:#657992;
+  --console-code:#566a80;
   --console-text:#293b52;
-  --console-comment:#647a93;
+  --console-comment:#566a80;
   --console-rule:#dce5ef;
   --console-result:#53677e;
-  --console-result-secondary:#8798ab;
+  --console-result-secondary:#65788e;
   --card-background:linear-gradient(145deg,#ffffff,#f0f4f9);
   --card-hover:#8da1b8;
   --accent-glow:rgba(79,105,0,.1);
@@ -65,7 +65,7 @@
   --format-background:linear-gradient(90deg,rgba(229,238,248,.82),transparent);
   --table-divider:#e0e7ef;
   --preview-text:#40536b;
-  --null-color:#70839a;
+  --null-color:#566a80;
   --related-background:#eaf1f7;
   --code-surface:#eff4f9;
   --quiet-background:rgba(30,50,73,.04);
@@ -125,7 +125,7 @@
   color:var(--button-text);
 }
 
-.button:hover {
+.button:not(.button-primary):hover {
   color:var(--button-hover-text);
 }
 

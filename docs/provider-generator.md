@@ -15,7 +15,7 @@ inputs. Add a `generator` object to the manifest:
   "generator": {
     "publisher": {"name": "Example", "url": "https://example.org/", "repository": "https://github.com/example/db"},
     "licences": {"model": "CC-BY-4.0", "meaning": "CC-BY-4.0"},
-    "model": {"address": "modelspec://github.com/example/db/0.1.0", "moduleId": "example-db", "name": "Example DB", "version": "0.1.0"},
+    "model": {"address": "modelspec://github.com/example/db/0.1.0", "moduleId": "example-db", "name": "Example_DB", "version": "0.1.0"},
     "modelEntityAliases": {"HumanResources.Employee": "HumanResources_Employee"},
     "modelPropertyAliases": {"HumanResources.Employee": {"Employee ID": "Employee_ID"}},
     "ovdb": {
@@ -39,10 +39,13 @@ native SQLite name. Optional `columnDescriptions` maps native table names to
 native column names and plain-language descriptions; they stay in schema
 metadata alongside the original DDL.
 
-`modelEntityAliases` and `modelPropertyAliases` are optional. Generated aliases
-replace punctuation with underscores, prefix an underscore when needed, and
-collisions require an explicit alias. Meaning bindings name native table and
-column names; the generator resolves those to ModelSpec aliases. Bindings use
+`modelEntityAliases` and `modelPropertyAliases` are optional. Generated entity
+aliases replace punctuation with underscores; a native entity name starting
+with a digit needs an explicit `modelEntityAliases` entry. Generated property
+aliases replace punctuation with underscores and prefix an underscore when a
+native property starts with a digit. Collisions require an explicit alias.
+Meaning bindings name native table and column names; the generator resolves
+those to ModelSpec aliases. Bindings use
 the MeaningGraph roles `entity`, `identifier`, `display-name`, `foreign-key`,
 or `value`. A bare `of`, `extends`, `valuesOf`, measure input, or dimension
 reference names a local concept when it exists; otherwise it resolves against

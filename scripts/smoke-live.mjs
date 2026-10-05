@@ -140,7 +140,7 @@ async function checkedDecodedSqlite(localId) {
   const corpus = await corpusResponse.json();
   const database = corpus.databases?.find((item) => item.localId === localId);
   const expected = database?.exports?.find((item) => item.format === 'sqlite');
-  if (!expected || expected.decodedBytes !== 125276160 || !/^[a-f0-9]{64}$/.test(expected.decodedSha256 ?? '')) {
+  if (!expected || expected.decodedBytes !== 126820352 || !/^[a-f0-9]{64}$/.test(expected.decodedSha256 ?? '')) {
     throw new Error(`${localId}: corpus metadata does not describe the complete decoded SQLite export`);
   }
   const response = await fetch(`https://${localId}.demodb.dev/data/${localId}.sqlite`, { redirect: 'manual', cache: 'no-store' });

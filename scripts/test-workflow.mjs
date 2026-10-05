@@ -82,7 +82,7 @@ test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL S
   assert.match(liveSmoke, /\/tables\/Production\.Product\//);
   assert.match(liveSmoke, /\/schema\.json/);
   assert.match(liveSmoke, /checkedDecodedSqlite\('adventureworks'\)/);
-  assert.match(liveSmoke, /125276160/);
+  assert.match(liveSmoke, /126820352/);
   assert.match(liveSmoke, /checkedConfiguredDatabaseQueries\(\)/);
 });
 

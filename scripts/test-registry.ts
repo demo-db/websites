@@ -61,7 +61,7 @@ assert.equal(adventureworks.schema.sourceViews?.filter((view) => view.availableA
 assert.equal(adventureworks.schema.sourceViews?.filter((view) => !view.availableAsSqliteView).length, 9, 'SQL Server-only definitions remain descriptive, not queryable');
 assert.ok(adventureworks.schema.sourceViews?.some((view) => view.recordset === 'Person.vAdditionalContactInfo' && !view.availableAsSqliteView));
 assert.ok(adventureworks.tables.some((table) => table.name === 'HumanResources.EmployeeDepartmentHistory' && table.columns.filter((column) => column.primaryKey).map((column) => column.name).join(',') === 'BusinessEntityID,DepartmentID,ShiftID,StartDate'));
-assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.decodedBytes, 125276160);
+assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.decodedBytes, 126820352);
 assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.chunks?.length, 2);
 
 const employees = databaseById.get('employees')!;

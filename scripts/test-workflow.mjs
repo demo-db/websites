@@ -50,29 +50,30 @@ test('binds the transferred Chinook hostname to the verified legacy redirects', 
 });
 
 test('live smoke separates DTQL limits from OVDB server pagination', () => {
-  const northwindCall = liveSmoke.match(/await checkedReadOnlyQuery\('northwind', (".*?"), 2\);/)?.[1];
+  const northwindCall = liveSmoke.match(/\['northwind', \{ query: (".*?"), pageSize: 2, recordset: 'Order Details' \}\]/)?.[1];
   assert.ok(northwindCall, 'Northwind live smoke uses a two-record server page');
   const pagedQuery = JSON.parse(northwindCall);
   assert.match(pagedQuery, /orderBy:/);
   assert.doesNotMatch(pagedQuery, /\b(?:limit|offset):/i, 'server-paginated DTQL cannot specify its own limit or offset');
-  assert.match(liveSmoke, /await checkedReadOnlyQuery\('chinook', 'from: \{name: Artist\}\\nlimit: 1\\n'\);/, 'an unpaged query retains its ordinary DTQL limit');
+  assert.match(liveSmoke, /\['chinook', \{ query: 'from: \{name: Artist\}\\nlimit: 1\\n', recordset: 'Artist' \}\]/, 'Chinook retains its ordinary DTQL limit');
   assert.match(liveSmoke, /if \(pageSize !== undefined\) headers\['OVDB-Page-Size'\] = String\(pageSize\)/);
+  assert.match(liveSmoke, /await checkedConfiguredDatabaseQueries\(\)/, 'all configured providers receive a live read-only query check');
 });
 
-test('live smoke checks Pubs static pages and its verified query endpoint', () => {
+test('live smoke checks Pubs static pages and includes it in shared query coverage', () => {
   assert.match(liveSmoke, /https:\/\/pubs\.demodb\.dev/);
   assert.match(liveSmoke, /\/data\/pubs\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/pubs\/ovdb-database\.json/);
-  assert.match(liveSmoke, /await checkedReadOnlyQuery\('pubs'/);
+  assert.match(liveSmoke, /\['pubs', \{ query: 'from: \{name: authors\}\\nlimit: 1\\n', recordset: 'authors' \}\]/);
 });
 
-test('live smoke checks Sakila native tables, views, and SQLite without claiming query availability', () => {
+test('live smoke checks Sakila native tables, views, SQLite, and query capability through the shared provider loop', () => {
   assert.match(liveSmoke, /https:\/\/sakila\.demodb\.dev/);
   assert.match(liveSmoke, /\/tables\/film_actor\//);
   assert.match(liveSmoke, /\/tables\/actor_info\//);
   assert.match(liveSmoke, /\/data\/sakila\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
-  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('sakila'/);
+  assert.match(liveSmoke, /requiredQueryableDatabaseIds = \['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'\]/);
 });
 
 test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL Server views', () => {
@@ -82,15 +83,15 @@ test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL S
   assert.match(liveSmoke, /\/schema\.json/);
   assert.match(liveSmoke, /checkedDecodedSqlite\('adventureworks'\)/);
   assert.match(liveSmoke, /125276160/);
-  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('adventureworks'/);
+  assert.match(liveSmoke, /checkedConfiguredDatabaseQueries\(\)/);
 });
 
-test('live smoke verifies Employees native tables without claiming query availability', () => {
+test('live smoke verifies Employees native tables and shared query capability coverage', () => {
   assert.match(liveSmoke, /https:\/\/employees\.demodb\.dev/);
   assert.match(liveSmoke, /\/tables\/titles\//);
   assert.match(liveSmoke, /\/tables\/current_dept_emp\//);
   assert.match(liveSmoke, /\/data\/employees\.sqlite/);
-  assert.doesNotMatch(liveSmoke, /checkedReadOnlyQuery\('employees'/);
+  assert.match(liveSmoke, /requiredQueryableDatabaseIds/);
 });
 
 test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {

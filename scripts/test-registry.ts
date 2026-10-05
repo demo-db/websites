@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { databases, databaseById, downloadFiles } from '../src/data/db';
+import { ovdbDatabases } from '../src/data/ovdb';
 
 assert.equal(new Set(databases.map((database) => database.id)).size, databases.length, 'provider IDs are unique');
 for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']) assert.ok(databaseById.has(id), `${id} remains registered`);
+const descriptorById = new Map(ovdbDatabases.map((database) => [database.localId, database]));
 for (const database of databases) {
   assert.equal(database.siteHost, `${database.id}.demodb.dev`);
   assert.ok(database.exports.some((file) => file.format === 'sqlite' && file.table === null), `${database.id} publishes SQLite`);
   assert.ok(database.tables.some((recordset) => recordset.kind === 'table'));
+  const descriptor = descriptorById.get(database.id);
+  assert.ok(descriptor, `${database.id} has a typed OVDB descriptor`);
+  assert.equal(database.ovdb.readOnly, true, `${database.id} remains read-only`);
+  assert.equal(typeof database.ovdb.query, 'boolean', `${database.id} declares query availability`);
+  assert.equal(descriptor.capabilities.query, database.ovdb.query, `${database.id} descriptor and provider query flags agree`);
+  assert.equal(descriptor.capabilities.write, false, `${database.id} descriptor does not expose writes`);
 }
 
 const chinook = databaseById.get('chinook')!;
@@ -44,7 +52,6 @@ assert.ok(sakila.tables.find((table) => table.name === 'address')?.columns.some(
 assert.ok(sakila.tables.find((table) => table.name === 'staff')?.columns.some((column) => column.name === 'picture' && /BLOB/i.test(column.type)));
 assert.ok(sakila.exports.some((file) => file.publicPath === 'sakila.sqlite'));
 assert.ok(sakila.exports.some((file) => file.table === 'film_actor' && file.format === 'json'));
-assert.equal(sakila.ovdb.query, false, 'Sakila does not advertise an unmounted query API');
 
 const adventureworks = databaseById.get('adventureworks')!;
 assert.equal(adventureworks.tables.filter((table) => table.kind === 'table').length, 71);
@@ -56,7 +63,6 @@ assert.ok(adventureworks.schema.sourceViews?.some((view) => view.recordset === '
 assert.ok(adventureworks.tables.some((table) => table.name === 'HumanResources.EmployeeDepartmentHistory' && table.columns.filter((column) => column.primaryKey).map((column) => column.name).join(',') === 'BusinessEntityID,DepartmentID,ShiftID,StartDate'));
 assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.decodedBytes, 125276160);
 assert.equal(adventureworks.exports.find((file) => file.format === 'sqlite' && file.table === null)?.chunks?.length, 2);
-assert.equal(adventureworks.ovdb.query, false, 'AdventureWorks does not advertise an unmounted query API');
 
 const employees = databaseById.get('employees')!;
 assert.equal(employees.tables.filter((table) => table.kind === 'table').length, 6);
@@ -65,6 +71,5 @@ assert.deepEqual(employees.tables.find((table) => table.name === 'titles')?.colu
 assert.deepEqual(employees.tables.find((table) => table.name === 'salaries')?.columns.filter((column) => column.primaryKey).map((column) => column.name), ['emp_no', 'from_date']);
 assert.equal(employees.tables.find((table) => table.name === 'employees')?.rowCount, 1024);
 assert.ok(employees.exports.some((file) => file.publicPath === 'employees.sqlite'));
-assert.equal(employees.ovdb.query, false, 'Employees does not advertise an unmounted query API');
 
 console.log('Provider registry includes validated Chinook, Northwind, Pubs, Sakila, AdventureWorks, and Employees contracts and preserves their native schema.');

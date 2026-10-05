@@ -21,4 +21,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Test shared provider generator
-        run: python3 -m unittest discover -s scripts/provider-tools -v
+        run: |
+          python3 -m unittest discover -s scripts/provider-tools -v
+          python3 -m unittest discover -s scripts/hosting-tools -v

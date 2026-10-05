@@ -6,6 +6,28 @@ Provider commits and contract hashes are locked in [`config/databases.json`](con
 
 AdventureWorks source conversion and OVDB fixture preparation currently use Python. A future Go consolidation is worth considering if it reduces tooling and runtime dependencies while preserving reproducible outputs and exact-decimal and provenance checks; this is an option to evaluate, not a committed or scheduled migration.
 
+## PostgreSQL sample imports
+
+The standard-library tool under [`scripts/hosting-tools/`](scripts/hosting-tools/) validates a provider's pinned SQLite SHA-256 and generates a transactional PostgreSQL script without replacing an existing database schema. Inputs may be a provider root with its `manifest.json` and declared SQLite or gzip source, concatenated gzip chunks, or a staged `decoded.sqlite`. Generated SQL belongs in a private temporary directory, not the repository:
+
+```sh
+python3 scripts/hosting-tools/postgres_samples.py generate /path/to/provider-root \
+  --output /private/tmp/chinook-postgres.sql
+```
+
+For large fixtures, install `psycopg[binary]==3.2.12` in a private Python environment and stream rows with `COPY`. Put a PostgreSQL URL in a private `0600` file. The import creates only the provider's own schema, refuses to overwrite it, and rolls back on failure. The verifier checks source provenance, table columns, keys, indexes, foreign keys, exact typed table row multisets, and view columns and results:
+
+```sh
+python3 scripts/hosting-tools/postgres_samples.py import /path/to/provider-root \
+  --url-file /private/tmp/provider-owner-url
+python3 scripts/hosting-tools/postgres_samples.py verify /path/to/provider-root \
+  --url-file /private/tmp/provider-owner-url
+```
+
+The Python API exposes `import_database(connection, provider_root)` and `verify_database(connection, provider_root)` for existing psycopg 3 connections, including autocommit connections. AdventureWorks `Production.Document.FileExtension` is the sole storage override: the SQLite `TEXT` values include NUL characters, which PostgreSQL `TEXT` cannot store. The importer maps this column to `BYTEA` and preserves each source string's UTF-8 bytes exactly. The import manifest records the override.
+
+## Local development
+
 ```sh
 pnpm install --frozen-lockfile
 DEMODB_CONTRACTS_DIR=/path/to/demo-db pnpm dev

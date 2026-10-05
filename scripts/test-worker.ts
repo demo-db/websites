@@ -226,8 +226,6 @@ assert.equal((await fetch('sakila.demodb.dev', '/data/sakila.sqlite', 'HEAD')).s
 const sakilaView = await fetch('sakila.demodb.dev', '/tables/actor_info/');
 assert.equal(sakilaView.status, 200, 'Sakila native view remains browsable as schema metadata');
 assert.match(await sakilaView.text(), /actor_info/);
-assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/sakila/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'Sakila does not advertise an unmounted query API');
-
 const adventureworksSchema = await fetch('adventureworks.demodb.dev', '/schema.json');
 assert.equal(adventureworksSchema.status, 200, 'AdventureWorks publishes its complete SQLite and source-view schema');
 const adventureworksSchemaData = await adventureworksSchema.json() as { tables: { kind: string; name: string }[]; sourceViews: { recordset: string; availableAsSqliteView: boolean }[] };
@@ -245,13 +243,10 @@ assert.match(adventureworksSchemaHtml, /20 definitions retained/);
 assert.match(adventureworksSchemaHtml, /11 available as SQLite views · 9 source-only/);
 assert.match(adventureworksSchemaHtml, /Person\.vAdditionalContactInfo/);
 assert.match(adventureworksSchemaHtml, /source definition only/);
-assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/adventureworks/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'AdventureWorks does not advertise an unmounted query API');
 assert.equal((await fetch('adventureworks.demodb.dev', '/data/adventureworks.sqlite', 'HEAD')).status, 200, 'AdventureWorks keeps its complete SQLite download route');
 assert.equal((await fetch('employees.demodb.dev', '/tables/titles/')).status, 200, 'Employees composite-key table is browsable');
 assert.equal((await fetch('employees.demodb.dev', '/tables/current_dept_emp/')).status, 200, 'Employees native view is browsable');
 assert.equal((await fetch('employees.demodb.dev', '/data/employees.sqlite', 'HEAD')).status, 200, 'Employees publishes the full SQLite download');
-assert.equal((await fetch('demodb.dev', '/ovdb/v1/databases/employees/dtql', 'POST', local, { body: 'query: {}' })).status, 404, 'Employees does not advertise an unmounted query API');
-
 const json = await fetch('northwind.demodb.dev', '/data/json/northwind.Order%20Details.json');
 assert.equal(json.status, 200);
 assert.equal(json.headers.get('Access-Control-Allow-Origin'), '*');
@@ -538,6 +533,21 @@ try {
   assert.equal(yamlQuery.status, 200);
   assert.equal(forwarded.at(-1)?.headers.get('Content-Type'), 'text/yaml');
   assert.equal(forwarded.at(-1)?.body, rawYaml, 'raw DTQL YAML remains supported by the legacy query endpoint');
+  const configuredQueryDatabases = providerIndex.databases as { id: string; ovdb: { query: boolean } }[];
+  assert.deepEqual(configuredQueryDatabases.map((database) => database.id).sort(), ['adventureworks', 'chinook', 'employees', 'northwind', 'pubs', 'sakila']);
+  for (const database of configuredQueryDatabases) {
+    const before = forwarded.length;
+    const response = await fetch('demodb.dev', `/ovdb/v1/databases/${database.id}/dtql`, 'POST', local, { body: 'query: {}' });
+    if (database.ovdb.query) {
+      assert.equal(response.status, 200, `${database.id} query capability is proxied`);
+      assert.equal(forwarded.length, before + 1, `${database.id} query reaches the fixed backend`);
+      assert.equal(new URL(forwarded.at(-1)!.url).origin, 'https://cloud.openvaultdb.com');
+      assert.equal(new URL(forwarded.at(-1)!.url).pathname, `/v1/databases/${database.id}/dtql`);
+    } else {
+      assert.equal(response.status, 404, `${database.id} query route stays closed while its capability is false`);
+      assert.equal(forwarded.length, before, `${database.id} closed query route does not reach the backend`);
+    }
+  }
   const pubsMetadataResponse = await fetch('demodb.dev', '/ovdb/v1/databases/pubs');
   assert.equal(pubsMetadataResponse.status, 200, 'verified Pubs backend metadata is available through the shared gateway');
   assert.equal((await pubsMetadataResponse.json() as { id: string }).id, 'pubs');

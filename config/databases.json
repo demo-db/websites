@@ -23,20 +23,20 @@
     {
       "id": "sakila",
       "repository": "https://github.com/demo-db/sakila",
-      "commit": "6567d30aec1592fe0917934a8bbe74ff70b04b01",
-      "contractSha256": "f123ebfb9820a473245b7cac38c07c2121469390f80318d9df06c8be51b57210"
+      "commit": "cb9a81a8cbedcd8831737f281f888d5d584fae85",
+      "contractSha256": "54b74e47ad29e4c1d68866e89add885ee833728f04c4d68c46c2486346882655"
     },
     {
       "id": "adventureworks",
       "repository": "https://github.com/demo-db/adventureworks",
-      "commit": "cd8dcdf2079fe31480ad6d6c024b8c17cb91beea",
-      "contractSha256": "462d32735cb3fb85868af977741a83cdb3add508809503934ef7a08daa36d682"
+      "commit": "31bdb4eceff01367ce812b2844530ed17a7d35ae",
+      "contractSha256": "10a916207d9d9717473a6d56280fba7da0812b6a2629a9c3c5acd50a822cf7d7"
     },
     {
       "id": "employees",
       "repository": "https://github.com/demo-db/employees",
-      "commit": "2455bb327aa8444ec496d36e2fe6dcacfc58dc0a",
-      "contractSha256": "fb895607de3bc09af5f3c6e2062f293d46f464456ae50b7b5e231996adab9c00"
+      "commit": "2069e26e8fdb60bdb16507f75569a579cf3da7cf",
+      "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443"
     }
   ]
 }

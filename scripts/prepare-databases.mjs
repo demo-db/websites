@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 import { materializeProviderExports } from './provider-exports.mjs';
+import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
@@ -17,7 +18,6 @@ if (!localRoot && registry.databases.some((db) => !isSha(db.commit) || !isHash(d
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
-const websiteDatabaseSchemaSha256 = sha256(await readFile(join(root, 'schemas/ovdb-database-draft-1.schema.json')));
 const previousManifestIds = await readFile(join(generatedDir, 'public-manifest-ids.json'), 'utf8')
   .then((value) => JSON.parse(value))
   .catch(() => []);
@@ -136,7 +136,7 @@ async function loadProvider(entry) {
   verifyChecksum(checksums, 'manifest.json', manifestBytes);
   verifyChecksum(checksums, 'ovdb-database.json', ovdbDescriptorBytes);
   verifyChecksum(checksums, 'schemas/ovdb-database-draft-1.schema.json', databaseSchemaBytes);
-  if (sha256(databaseSchemaBytes) !== websiteDatabaseSchemaSha256) throw new Error(`${entry.id}: vendored OVDB database schema differs from the website-published schema`);
+  if (!isCompatibleProviderSchema(sha256(databaseSchemaBytes))) throw new Error(`${entry.id}: vendored OVDB database schema is not a supported immutable draft-1 revision`);
   const ovdb = parseYaml(ovdbBytes.toString('utf8'));
   if (ovdb.id !== entry.id) throw new Error(`${entry.id}: ovdb.yaml declares ${ovdb.id}`);
   if (!Array.isArray(contract.exports)) throw new Error(`${entry.id}: contract has no export list`);
@@ -404,6 +404,7 @@ function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
       primaryKey: column.primaryKey,
       primaryKeyPosition: column.primaryKeyPosition ?? null,
       defaultValue: column.defaultValue ?? null,
+      ...(column.decimal ? { decimal: column.decimal } : {}),
     }));
     const expected = {
       modelEntity: native.modelEntity ?? null,
@@ -426,6 +427,7 @@ function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
         primaryKey: column.primaryKey,
         primaryKeyPosition: column.primaryKeyPosition ?? null,
         defaultValue: column.defaultValue ?? null,
+        ...(column.decimal ? { decimal: column.decimal } : {}),
       })),
       primaryKey: published.primaryKey,
       foreignKeys: published.foreignKeys,

@@ -97,6 +97,8 @@ const F = `
 *{box-sizing:border-box}button,input,select{font:inherit;color:inherit}button{cursor:pointer;background:var(--datatug-button-bg,#f5f8fb);border:1px solid var(--datatug-border,#dce5ee);border-radius:5px;padding:.25rem .55rem}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,th button:focus-visible{outline:2px solid var(--datatug-accent,#2879b9);outline-offset:2px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding:.7rem .85rem;border-bottom:1px solid var(--datatug-border,#dce5ee);flex-wrap:wrap}.brand{font-weight:700;letter-spacing:.01em}.tools{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}.tools input{max-width:13rem;min-width:7rem;border:1px solid var(--datatug-border,#dce5ee);border-radius:5px;padding:.26rem .45rem}.status{padding:.8rem;color:var(--datatug-muted,#587087)}.error{color:var(--datatug-error,#ab2e39)}.scroller{overflow:auto;max-height:var(--datatug-max-height,32rem)}table{border-collapse:collapse;min-width:100%;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:.46rem .7rem;border-bottom:1px solid var(--datatug-border,#dce5ee);vertical-align:top;white-space:nowrap;max-width:32rem;overflow:hidden;text-overflow:ellipsis}th{position:sticky;top:0;background:var(--datatug-header-bg,#f4f8fb);color:var(--datatug-muted,#587087);font-size:.84em;font-weight:650}th button{border:0;background:none;padding:0;font-weight:inherit;color:inherit}tbody tr:hover{background:var(--datatug-hover,#f5f9fc)}tbody tr[aria-selected=true]{background:var(--datatug-selected,#e7f3fc)}.footer{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.55rem .85rem;color:var(--datatug-muted,#587087);font-size:.85em}.pager{display:flex;gap:.35rem;align-items:center}.chart{padding:.8rem}.bar{display:grid;grid-template-columns:minmax(5rem, 30%) 1fr auto;gap:.6rem;align-items:center;margin:.38rem 0}.track{height:.8rem;border-radius:3px;background:var(--datatug-header-bg,#f4f8fb);overflow:hidden}.fill{height:100%;background:var(--datatug-accent,#2879b9)}.label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `;
+import { compareDecimalValues } from "./exact-decimal.js";
+
 function d(o, t) {
   const r = document.createElement(o);
   return t !== void 0 && (r.textContent = t), r;
@@ -245,8 +247,10 @@ class H extends U {
     const i = this.search.toLocaleLowerCase(), l = c.rows.map((u, h) => ({ row: u, index: h })).filter(({ row: u }) => !i || c.columns.some((h) => C(u[h]).toLocaleLowerCase().includes(i)));
     if (this.sortColumn) {
       const u = this.sortColumn;
+      let decimalColumns = new Set();
+      try { decimalColumns = new Set(JSON.parse(this.getAttribute("data-decimal-columns") ?? "[]")); } catch {}
       l.sort((h, m) => {
-        const x = h.row[u], g = m.row[u], O = typeof x == "number" && typeof g == "number" ? x - g : C(x).localeCompare(C(g), void 0, { numeric: !0 });
+        const x = h.row[u], g = m.row[u], O = decimalColumns.has(u) ? compareDecimalValues(x, g) : typeof x == "number" && typeof g == "number" ? x - g : C(x).localeCompare(C(g), void 0, { numeric: !0 });
         return (this.sortDesc ? -O : O) || h.index - m.index;
       });
     }

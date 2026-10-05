@@ -41,6 +41,13 @@ export function validateDatabaseDescriptor(value, localId) {
   }
   const names = value.recordsets.map((recordset) => recordset.name);
   if (new Set(names).size !== names.length) throw new Error(`${localId}: OVDB descriptor has duplicate native recordset names`);
+  for (const recordset of value.recordsets) {
+    for (const column of recordset.columns) {
+      if (column.decimal && (column.decimal.scale > column.decimal.precision || column.decimal.storage !== 'text')) {
+        throw new Error(`${localId}: invalid exact-decimal metadata for ${recordset.name}.${column.name}`);
+      }
+    }
+  }
   for (const reference of [value.model, value.meaning]) {
     if (!new URL(reference.url).hostname.endsWith('.demodb.dev')) throw new Error(`${localId}: semantic reference must point to a public DemoDB URL`);
   }

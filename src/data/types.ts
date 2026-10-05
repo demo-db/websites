@@ -5,6 +5,7 @@ export type Column = {
   primaryKey: boolean;
   primaryKeyPosition?: number | null;
   defaultValue?: string | number | null;
+  decimal?: { precision: number; scale: number; storage: 'text' };
 };
 
 export type ForeignKey = {
@@ -85,7 +86,7 @@ export type Database = {
   ovdb: { url: string; deploymentUrl: string; discovery: string; recordsetPage: string | null; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 
-export type OVDBColumn = Pick<Column, 'name' | 'type' | 'nullable' | 'primaryKey' | 'primaryKeyPosition' | 'defaultValue'>;
+export type OVDBColumn = Pick<Column, 'name' | 'type' | 'nullable' | 'primaryKey' | 'primaryKeyPosition' | 'defaultValue' | 'decimal'>;
 export type OVDBRecordset = {
   name: string;
   modelEntity?: string;

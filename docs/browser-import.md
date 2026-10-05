@@ -11,3 +11,5 @@ Storage is estimated before importing, with working room included. The interface
 The public [`/corpus.json`](https://demodb.dev/corpus.json) index is generated from the same pinned contracts. It lists native tables and views, ordered keys, foreign-key metadata, public export URLs and hashes, model/meaning references, provenance, and representation notes. It omits row previews. Per-database `/schema.json` remains the richer compatibility schema and may include sample rows.
 
 IndexedDB is isolated by browser origin. A snapshot imported on a database subdomain is not shared with the catalogue or other database subdomains. Visitors can clear the local copy at any time from the same database site's Downloads page.
+
+JSON exports and IndexedDB keep decimal columns as fixed-point strings, including trailing zeroes. The shared table grid displays those strings unchanged and compares valid decimal lexemes exactly for sorting; malformed values sort in a separate lexical class. CSV and JSON downloads remain provider-generated representations.

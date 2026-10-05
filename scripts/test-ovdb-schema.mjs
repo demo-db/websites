@@ -28,6 +28,18 @@ test('validates global identities, native recordsets and public references for b
   for (const id of ['chinook', 'northwind']) assert.equal(validateDatabaseDescriptor(database(id), id).localId, id);
 });
 
+test('accepts exact decimal metadata as an additive column descriptor and checks its bounds', () => {
+  const value = database('northwind');
+  value.recordsets[0].columns.push({
+    name: 'Amount', type: 'DECIMAL_TEXT(30,4)', nullable: true, primaryKey: false,
+    primaryKeyPosition: null, defaultValue: null,
+    decimal: { precision: 30, scale: 4, storage: 'text' },
+  });
+  assert.equal(validateDatabaseDescriptor(value, 'northwind').recordsets[0].columns[1].decimal.storage, 'text');
+  value.recordsets[0].columns[1].decimal.scale = 31;
+  assert.throws(() => validateDatabaseDescriptor(value, 'northwind'), /invalid exact-decimal metadata/);
+});
+
 test('schema stays publisher-neutral while website validation enforces canonical routes', () => {
   const generic = database('northwind');
   generic.id = 'https://catalog.example/data/northwind/';

@@ -29,8 +29,8 @@
     {
       "id": "adventureworks",
       "repository": "https://github.com/demo-db/adventureworks",
-      "commit": "31bdb4eceff01367ce812b2844530ed17a7d35ae",
-      "contractSha256": "10a916207d9d9717473a6d56280fba7da0812b6a2629a9c3c5acd50a822cf7d7"
+      "commit": "5028a27189b487d6fd8025fafc1307aada707fd2",
+      "contractSha256": "5b2cb733342ac9e848f2674090e0e534082d48111056ff4e6a3b6d4ef4f693e0"
     },
     {
       "id": "employees",

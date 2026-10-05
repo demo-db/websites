@@ -1,8 +1,10 @@
 # DemoDB websites
 
-One Astro static build produces the catalogue at `demodb.dev` and one metadata-driven database site for every pinned provider entry. The Worker selects the catalogue or database from the request host, serves the matching static page tree, and keeps its generated `/_db/<id>/...` paths private. Chinook and Northwind are the current provider-backed examples.
+One Astro static build produces the catalogue at `demodb.dev` and one metadata-driven database site for every pinned provider entry. The Worker selects the catalogue or database from the request host, serves the matching static page tree, and keeps its generated `/_db/<id>/...` paths private. The current provider-backed datasets are Chinook, Northwind, Pubs, Sakila, AdventureWorks, and Employees.
 
 Provider commits and contract hashes are locked in [`config/databases.json`](config/databases.json). Release builds fetch exact GitHub revisions and verify the provider contract, checksums, and every listed export before rendering. For local development, set `DEMODB_CONTRACTS_DIR` to a directory containing provider checkouts named by database id, such as `../` from the `demo-db` organization worktree. That override is rejected in CI and deploy builds.
+
+AdventureWorks source conversion and OVDB fixture preparation currently use Python. A future Go consolidation is worth considering if it reduces tooling and runtime dependencies while preserving reproducible outputs and exact-decimal and provenance checks; this is an option to evaluate, not a committed or scheduled migration.
 
 ```sh
 pnpm install --frozen-lockfile

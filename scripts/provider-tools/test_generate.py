@@ -41,6 +41,8 @@ class ProviderGeneratorTests(unittest.TestCase):
               PRIMARY KEY (EmployeeID)
             );
             INSERT INTO "HumanResources.Employee" (EmployeeID) VALUES (4);
+            CREATE TABLE "Exact Amounts" (id INTEGER PRIMARY KEY, amount DECIMAL_TEXT(30, 4));
+            INSERT INTO "Exact Amounts" VALUES (1, '12345678901234567890.1200');
             CREATE TABLE "dbo.DatabaseLog" (DatabaseLogID INTEGER, Message TEXT);
             INSERT INTO "dbo.DatabaseLog" VALUES (1, 'has no declared key');
             CREATE TABLE "Child" (
@@ -127,7 +129,7 @@ class ProviderGeneratorTests(unittest.TestCase):
                 "ovdb": {
                     "query": True,
                     "deployment": {"engine": "openvaultdb-go", "url": "https://cloud.openvaultdb.com/ovdb/db/fixture", "discovery": "https://fixture.demodb.dev/.well-known/openvaultdb"},
-                    "recordsets": ["Order Details", "HumanResources.Employee", "dbo.DatabaseLog", "Child", "Empty Demo", "Self Link"],
+                    "recordsets": ["Order Details", "HumanResources.Employee", "dbo.DatabaseLog", "Child", "Empty Demo", "Self Link", "Exact Amounts"],
                 },
                 "meaning": {
                     "id": "fixture",
@@ -226,6 +228,9 @@ class ProviderGeneratorTests(unittest.TestCase):
         employee = tables["HumanResources.Employee"]
         self.assertEqual(employee["columns"][3]["generated"], "stored")
         self.assertIn("GENERATED ALWAYS", employee["tableSql"])
+        exact_amounts = tables["Exact Amounts"]
+        self.assertEqual(exact_amounts["columns"][1]["decimal"], {"precision": 30, "scale": 4, "storage": "text"})
+        self.assertEqual(exact_amounts["rows"][0]["amount"], "12345678901234567890.1200")
         self.assertEqual(tables["dbo.DatabaseLog"]["primaryKey"], [])
         self.assertEqual(tables["dbo.DatabaseLog"]["uniqueKeys"], [])
         model = json.loads((self.root / "model/fixture.modelspec.json").read_text())
@@ -276,6 +281,8 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(concepts["employee"]["extends"], "meaning://github.com/meaninggraph/core/employee?ref=abcdef0123456789abcdef0123456789abcdef01")
         descriptor = json.loads((self.root / "ovdb-database.json").read_text())
         self.assertEqual(descriptor["recordsets"][0]["name"], "Order Details")
+        exact_descriptor = next(item for item in descriptor["recordsets"] if item["name"] == "Exact Amounts")
+        self.assertEqual(exact_descriptor["columns"][1]["decimal"], {"precision": 30, "scale": 4, "storage": "text"})
         self.assertEqual(descriptor["recordsets"][0]["modelEntity"], "Order_Details")
         self.assertEqual(next(row for row in descriptor["recordsets"] if row["name"] == "dbo.DatabaseLog")["modelEntity"], "dbo_DatabaseLog")
         self.assertEqual(descriptor["provenance"]["sha256"], hashlib.sha256((self.root / "source.sqlite").read_bytes()).hexdigest())

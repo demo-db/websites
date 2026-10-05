@@ -10,7 +10,7 @@
     "build": "pnpm prepare:databases && astro check && astro build && node scripts/finalize-static.mjs && node scripts/write-build-info.mjs",
     "check": "astro check",
     "preview": "wrangler dev --local",
-    "test": "pnpm build && node --import tsx/esm --test scripts/test-registry.ts scripts/test-similarity.ts scripts/test-worker.ts && node --test scripts/test-build-info.mjs scripts/test-workflow.mjs scripts/test-ovdb-schema.mjs scripts/test-theme.mjs scripts/test-provider-exports.mjs",
+    "test": "pnpm build && node --import tsx/esm --test scripts/test-registry.ts scripts/test-similarity.ts scripts/test-worker.ts && node --test scripts/test-build-info.mjs scripts/test-workflow.mjs scripts/test-ovdb-schema.mjs scripts/test-theme.mjs scripts/test-provider-exports.mjs scripts/test-exact-decimal.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

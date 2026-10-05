@@ -48,16 +48,16 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
     id: 'retry-fixture',
     sourceCommit: 'fixture',
     tables: [
-      { name: 'Parent', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'code' }], foreignKeys: [] },
+      { name: 'Parent', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'code' }, { name: 'amount', decimal: { precision: 30, scale: 4, storage: 'text' } }], foreignKeys: [] },
       { name: 'Child', kind: 'table' as const, rowCount: 1, columns: [{ name: 'id', primaryKey: true, primaryKeyPosition: 1 }, { name: 'parent_code' }], foreignKeys: [{ column: 'parent_code', table: 'Parent', referencedColumn: 'code', constraint: 1, position: 0 }] },
     ],
     exports: [
-      { table: 'Parent', url: 'https://fixture.example/parents.json', bytes: Buffer.byteLength('[{"id":1,"code":"A","label":"right"}]'), sha256: createHash('sha256').update('[{"id":1,"code":"A","label":"right"}]').digest('hex') },
+      { table: 'Parent', url: 'https://fixture.example/parents.json', bytes: Buffer.byteLength('[{"id":1,"code":"A","amount":"9007199254740993.1200","label":"right"}]'), sha256: createHash('sha256').update('[{"id":1,"code":"A","amount":"9007199254740993.1200","label":"right"}]').digest('hex') },
       { table: 'Child', url: 'https://fixture.example/children.json', bytes: Buffer.byteLength('[{"id":7,"parent_code":"A"}]'), sha256: createHash('sha256').update('[{"id":7,"parent_code":"A"}]').digest('hex') },
     ],
   };
-  const bad = new TextEncoder().encode('[{"id":1,"code":"A","label":"wrong"}]');
-  const good = new TextEncoder().encode('[{"id":1,"code":"A","label":"right"}]');
+  const bad = new TextEncoder().encode('[{"id":1,"code":"A","amount":"9007199254740993.1200","label":"wrong"}]');
+  const good = new TextEncoder().encode('[{"id":1,"code":"A","amount":"9007199254740993.1200","label":"right"}]');
   const child = new TextEncoder().encode('[{"id":7,"parent_code":"A"}]');
   assert.equal(bad.byteLength, good.byteLength, 'bad first download reaches checksum verification');
   const originalFetch = globalThis.fetch;
@@ -86,7 +86,7 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    assert.deepEqual(parent, { id: 1, code: 'A', label: 'right' }, 'valid retry replaces rows written from the failed checksum response');
+    assert.deepEqual(parent, { id: 1, code: 'A', amount: '9007199254740993.1200', label: 'right' }, 'IndexedDB retains the high-precision decimal string and valid retry replaces the failed row');
     assert.deepEqual(await followNativeForeignKey(db!, configuration.tables, 'Child', childRow!, configuration.tables[1].foreignKeys[0]), parent, 'foreign keys to a unique non-primary target column resolve through a native index');
     db!.close();
     await clearActiveSnapshot(configuration);
@@ -156,6 +156,7 @@ assert.equal(resolveHost('employees.localhost', local).databaseId, 'employees');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
 assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
+assert.equal(internalAssetPath('northwind', '/embed/exact-decimal.js'), '/embed/exact-decimal.js', 'the exact comparator module is served from database subdomains');
 assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.html');
 
 for (const [host, expected] of [['demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
@@ -163,6 +164,9 @@ for (const [host, expected] of [['demodb.dev', 'Northwind'], ['localhost', 'Demo
   assert.equal(response.status, 200, host);
   assert.ok((await response.text()).includes(expected), `${host} page contains its expected heading`);
 }
+const decimalModule = await fetch('chinook.demodb.dev', '/embed/exact-decimal.js');
+assert.equal(decimalModule.status, 200, 'database subdomains serve the exact decimal comparator');
+assert.match(await decimalModule.text(), /compareDecimalValues/);
 for (const database of providerIndex.databases as { id: string; name: string; siteHost: string }[]) {
   const response = await fetch(database.siteHost, '/');
   assert.equal(response.status, 200, database.siteHost);

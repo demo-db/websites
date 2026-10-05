@@ -404,6 +404,7 @@ function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
       primaryKey: column.primaryKey,
       primaryKeyPosition: column.primaryKeyPosition ?? null,
       defaultValue: column.defaultValue ?? null,
+      ...(column.decimal ? { decimal: column.decimal } : {}),
     }));
     const expected = {
       modelEntity: native.modelEntity ?? null,
@@ -426,6 +427,7 @@ function validateDescriptorSchemaProjection(descriptor, nativeRecordsets) {
         primaryKey: column.primaryKey,
         primaryKeyPosition: column.primaryKeyPosition ?? null,
         defaultValue: column.defaultValue ?? null,
+        ...(column.decimal ? { decimal: column.decimal } : {}),
       })),
       primaryKey: published.primaryKey,
       foreignKeys: published.foreignKeys,

@@ -27,7 +27,7 @@ from urllib.parse import quote
 
 
 MAX_STATIC_EXPORT_BYTES = 25 * 1024 * 1024
-DATABASE_SCHEMA_SHA256 = "2424ef00acd462ab5a8abc546fe2d1fffbbb5397e312332aedc77b3e73109488"
+DATABASE_SCHEMA_SHA256 = "5c3acdf1b858f45a78558555e92255f847fb54d8d1bcbef5567c89bdff77758d"
 DATABASE_SCHEMA_NAME = "ovdb-database-draft-1.schema.json"
 CORE_ADDRESS_PATTERN = re.compile(r"^meaning://github\.com/[a-z0-9_.-]+/[a-z0-9_.-]+$")
 MODEL_ENTITY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -87,6 +87,17 @@ def model_type(sql_type: str) -> str:
     if "BLOB" in value or "BINARY" in value:
         return "document"
     return "string"
+
+
+def decimal_metadata(sql_type: str) -> dict[str, Any] | None:
+    """Describe the lossless DECIMAL_TEXT(p,s) provider storage convention."""
+    match = re.fullmatch(r"\s*DECIMAL_TEXT\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*", sql_type, re.IGNORECASE)
+    if not match:
+        return None
+    precision, scale = (int(value) for value in match.groups())
+    if precision < 1 or precision > 1000 or scale > precision:
+        raise GenerationError(f"invalid DECIMAL_TEXT precision/scale declaration {sql_type!r}")
+    return {"precision": precision, "scale": scale, "storage": "text"}
 
 
 def hcl_value(value: Any) -> str:
@@ -434,6 +445,7 @@ def recordset_info(connection: sqlite3.Connection, name: str, kind: str, descrip
             "primaryKeyOrder": column[5],
             "primaryKeyPosition": column[5] or None,
             "defaultValue": column[4],
+            **({"decimal": decimal} if (decimal := decimal_metadata(column[2] or "")) else {}),
             **({"generated": "virtual" if column[6] == 2 else "stored"} if column[6] in (2, 3) else {}),
             **({"hidden": True} if column[6] == 1 else {}),
         } for column in raw_columns]
@@ -781,7 +793,7 @@ def ovdb_files(root: Path, manifest: dict[str, Any], config: dict[str, Any], sch
             "kind": "table",
             "description": table["description"],
             "rowCount": table["rowCount"],
-            "columns": [{key: column[key] for key in ("name", "type", "nullable", "primaryKey", "primaryKeyPosition", "defaultValue")} for column in table["columns"]],
+            "columns": [{key: column[key] for key in ("name", "type", "nullable", "primaryKey", "primaryKeyPosition", "defaultValue", "decimal") if key in column} for column in table["columns"]],
             "primaryKey": table["primaryKey"],
             "foreignKeys": [{key: fk[key] for key in ("column", "table", "referencedColumn", "constraint", "position")} for fk in table["foreignKeys"]],
         }

@@ -10,8 +10,8 @@ leaves the destination untouched.
 The native directory includes `export-manifest.json` and a SHA-pinned
 `native-parity-report.json` with the independent row and schema check results.
 
-Install the Python YAML dependency and use a DataTug CLI build that supports
-`db export` (the old installed CLI may only expose `db copy`):
+Install the Python YAML dependency and use DataTug CLI v0.61.1 or newer for
+`db export` with portable collection IDs:
 
 ```sh
 python3 -m venv /private/tmp/demodb-export-venv

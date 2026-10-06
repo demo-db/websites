@@ -1,11 +1,42 @@
 ---
 import OVDBDatabasePage from '../../../../components/OVDBDatabasePage.astro';
-import { ovdbDatabases } from '../../../../data/ovdb';
+import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import { ovdbDatabases, storageGroups } from '../../../../data/ovdb';
+import type { OVDBDatabase } from '../../../../data/types';
 
 export function getStaticPaths() {
-  return ovdbDatabases.map((database) => ({ params: { id: database.localId }, props: { database } }));
+  return [
+    ...ovdbDatabases.map((database) => ({ params: { id: database.localId }, props: { database } })),
+    ...storageGroups.flatMap(({ database, storages }) => storages.map((storage) => ({
+      params: { id: storage.id }, props: { database, storage },
+    }))),
+  ];
 }
 
-const { database } = Astro.props;
+const { database, storage } = Astro.props as { database: OVDBDatabase; storage?: { id: string; engine: string; readiness: 'public-api' | 'hosted-api-pending' } };
+const isPublic = storage?.readiness === 'public-api';
+const canonical = `/ovdb/db/${storage?.id}/`;
 ---
-<OVDBDatabasePage database={database} />
+{storage ? <SiteLayout title={`${database.title} · ${storage.engine} storage · DemoDB`} description={`${database.title} ${storage.engine} storage on DemoDB. ${isPublic ? 'Public read-only OpenVaultDB API available.' : 'Hosted on Neon; public OpenVaultDB access pending.'}`} canonical={canonical}>
+  <section class="shell page-hero">
+    <a class="back-link" href="/ovdb/">← Server and storage catalogue</a>
+    <p class="eyebrow">{database.title} · {storage.engine}</p>
+    <h1>{database.title}<br /><em>{storage.engine} storage</em></h1>
+    <p class="hero-lede">{isPublic ? 'Published on the shared OpenVaultDB server with a public read-only API.' : 'The PostgreSQL copy is hosted on Neon. Public OpenVaultDB API access is being prepared.'}</p>
+    <div class="hero-actions">
+      {isPublic && <a class="button button-primary" href={database.apiUrl}>Open read-only API <span aria-hidden="true">↗</span></a>}
+      <a class="button button-quiet" href={database.homepage}>Explore dataset and schema <span aria-hidden="true">→</span></a>
+      {isPublic && <a class="button button-quiet" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Database descriptor ↗</a>}
+    </div>
+  </section>
+  <section class="shell section intro-grid">
+    <div><p class="eyebrow">Storage status</p><h2>{isPublic ? 'Available through OpenVaultDB.' : 'Hosted copy, access pending.'}</h2></div>
+    <div class="intro-copy">
+      <p>{isPublic ? database.description : `Explore the ${database.title} dataset in its hosted PostgreSQL edition.`}</p>
+      <p>Storage ID: <code>{storage.id}</code>. Dataset ID: <code>{database.localId}</code>.</p>
+      {isPublic ? <p>{database.recordsets.length} published collections. <a href={`/${database.localId}/`}>Browse tables and semantic references →</a></p> : <p>Neon hosts this PostgreSQL edition of the dataset. A public endpoint and machine-readable OVDB descriptor have not been published yet. Browse the dataset site for its schema, provenance, and downloadable exports.</p>}
+      {!isPublic && database.localId === 'employees' && <p>This hosted copy uses the same browser edition: 1,024 selected employees and their employment history.</p>}
+      {!isPublic && database.localId === 'adventureworks' && <p>The PostgreSQL import stores <code>Production.Document.FileExtension</code> as <code>BYTEA</code> to preserve source NUL bytes. The linked dataset schema describes the source edition.</p>}
+    </div>
+  </section>
+</SiteLayout> : <OVDBDatabasePage database={database} />}

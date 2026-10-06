@@ -2,12 +2,12 @@
   "version": 1,
   "catalogueHost": "demodb.dev",
   "ingitdbRevisions": {
-    "chinook": "732375a3af3d8750ea8cc908d7347678eb41c3fc",
-    "northwind": "5cedb821482cebb2618f7f741a40c9b2c815a28c",
-    "pubs": "e34b2c06400ab08ab72adabb5129e67e50f9ff22",
-    "sakila": "48b5c3583510d1c773830a00d5f0a2d31dd67764",
-    "adventureworks": "0a83ff3161b7ae2247ccf9496c62320afbe80044",
-    "employees": "5609538571e19a4fba2445362410e9f341af29f5"
+    "chinook": "411cb7aead96a0b4314f3068c0a0455f869dfdee",
+    "northwind": "adb71d17af9aa457d19326d0d275f7b924267659",
+    "pubs": "3e37e01e28f610f1d65c9e809a79ab6522928ad2",
+    "sakila": "7e7de96d904dedc130165691e59a8268ce5fb6d2",
+    "adventureworks": "b4f6a9909c0de58767663dce9006c7ac522ce6a7",
+    "employees": "397f3e32cb970e55bc4a528bb255c41272f6103f"
   },
   "databases": [
     {

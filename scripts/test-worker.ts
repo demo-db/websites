@@ -460,11 +460,15 @@ for (const { database, storages } of storageGroups) {
       assert.equal(storage.revision, revision);
       assert.match(html, new RegExp(`git checkout ${revision}`));
       assert.match(html, /ingitdb validate --path ingitdb/);
+      assert.match(html, /inGitDB CLI v0\.70\.0 or newer/);
       assert.match(html, /Views are metadata only/);
       assert.match(html, /parity checker/);
       assert.match(html, /native inGitDB validation does not enforce those SQL constraints/);
       assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/tree/${revision}/ingitdb"`));
       assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/export-manifest.json"`));
+      assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/native-parity-report.json"`));
+      assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/.ingitdb/source-collections.json"`));
+      assert.ok(html.includes('https://github.com/demo-db/websites/blob/main/scripts/hosting-tools/validate_datatug_exports.py'));
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
       assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404);

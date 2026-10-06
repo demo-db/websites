@@ -23,4 +23,6 @@ jobs:
       - name: Test shared provider generator
         run: |
           python3 -m unittest discover -s scripts/provider-tools -v
-          python3 -m unittest discover -s scripts/hosting-tools -v
+          python3 -m venv /tmp/demodb-hosting-tests
+          /tmp/demodb-hosting-tests/bin/pip install -r scripts/hosting-tools/requirements.txt
+          /tmp/demodb-hosting-tests/bin/python -m unittest discover -s scripts/hosting-tools -v

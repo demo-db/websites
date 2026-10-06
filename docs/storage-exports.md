@@ -37,6 +37,13 @@ file count. Composite source primary keys form ordered transport IDs; keyless
 tables use source row order and transport ordinals. These IDs are not extra SQL
 columns. Source views retain their ordered names, columns and SQL as metadata;
 they are not materialized in the target.
+Native collection IDs keep ordinary source names. Names outside inGitDB's ID
+alphabet, including Northwind's `Order Details`, use `dt_` plus lowercase hex
+of the exact UTF-8 source name. The `dt_` prefix is reserved to avoid a
+collision with a literal source name. `.ingitdb/source-collections.json`
+records every native ID and original SQL name, and the export manifest hashes
+that mapping. Native foreign-key targets use the native IDs; the original SQL
+DDL and actions remain in source metadata.
 
 The independent checker compares exact SQLite table DDL, ordered declared
 columns and defaults, index terms including expressions/collations/partial
@@ -47,9 +54,9 @@ a different valid ID fails. The report distinguishes snapshot parity from
 native SQL constraint enforcement. SQLite's source FK checker must report zero
 orphans; source primary keys, UNIQUE, CHECK and FK semantics are metadata in
 the native edition and are not enforced on subsequent inGitDB edits.
-Reading these source-schema definitions requires inGitDB CLI v0.69.0 or
-newer; JSONL, INGR, and lossless CSV require a CLI build using inGitDB core
-v0.9.0 or newer.
+Use inGitDB CLI v0.70.0 or newer to validate and query these editions. That
+release includes the inGitDB core v0.9.0 readers needed for JSONL, INGR, and
+lossless CSV.
 
 BigQuery directories contain NDJSON and table schemas. The manifest maps
 normalized BigQuery field names to source names and records file checksums.

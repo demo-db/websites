@@ -184,7 +184,8 @@ def record_id(row: tuple[Any, ...], columns: list[dict[str, Any]], ordinal: int)
     return "pk-" + base64.urlsafe_b64encode(canonical(values).encode()).decode().rstrip("=")
 
 
-def export_table(snapshot: Any, table: dict[str, Any], output: Path, native_root: Path) -> dict[str, Any]:
+def export_table(snapshot: Any, table: dict[str, Any], output: Path, native_root: Path,
+                 native_id: str) -> dict[str, Any]:
     table_name = table["name"]
     cols = table["columns"]
     names = [col["name"] for col in cols]
@@ -192,9 +193,9 @@ def export_table(snapshot: Any, table: dict[str, Any], output: Path, native_root
     bq_dir = output / "bigquery" / table_name
     bq_dir.mkdir(parents=True, exist_ok=True)
     rows_path = bq_dir / "rows.ndjson"
-    native_definition = yaml.safe_load((native_root / table_name / ".collection" / "definition.yaml").read_text(encoding="utf-8"))
+    native_definition = yaml.safe_load((native_root / native_id / ".collection" / "definition.yaml").read_text(encoding="utf-8"))
     native_fields = {field["name"]: field for field in native_definition["source_schema"]["fields"]}
-    records_path = native_root / table_name / native_definition["record_file"]["name"]
+    records_path = native_root / native_id / native_definition["record_file"]["name"]
     observed: dict[str, set[str]] = {name: set() for name in names}
     for row in snapshot.rows(table_name):
         for col, value in zip(cols, row):
@@ -228,7 +229,7 @@ def export_table(snapshot: Any, table: dict[str, Any], output: Path, native_root
     schema_path = bq_dir / "schema.json"
     schema_path.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8")
     return {
-        "nativeName": table_name, "collection": table_name, "rows": count,
+        "nativeName": table_name, "collection": native_id, "rows": count,
         "primaryKey": primary_key,
         "transportId": "encoded-native-primary-key" if any(col["pk"] for col in cols) else "source-row-ordinal-not-native-key",
         "sourceSql": table["sql"],
@@ -314,7 +315,11 @@ def export(root: Path, output: Path, *, datatug: Path | None = None,
         if not parity["metadataAndDataMatch"]:
             raise ImportError(f"DataTug native export differs from pinned SQLite: {parity['errors'][:5]}")
         parity_path = persist_public_parity(native_root, parity)
-        tables = [export_table(snapshot, table, staging, native_root) for table in snapshot.tables]
+        mapping_path = native_root / ".ingitdb" / "source-collections.json"
+        mapping = json.loads(mapping_path.read_text(encoding="utf-8"))["collections"]
+        source_to_native = {source: native for native, source in mapping.items()}
+        tables = [export_table(snapshot, table, staging, native_root, source_to_native[table["name"]])
+                  for table in snapshot.tables]
         result = {"format": "demodb-storage-export/v2", "generator": "datatug-dalgo-to-ingitdb",
                   "recordFormat": records_format,
                   "generatorVersion": cli_version["version"], "generatorCommit": cli_version["commit"],
@@ -324,6 +329,8 @@ def export(root: Path, output: Path, *, datatug: Path | None = None,
                              "providerContractSha256": pin["contractSha256"],
                              "fixtureSha256": snapshot.source_sha256, "fixtureBytes": snapshot.source_bytes},
                   "rowCount": sum(table["rows"] for table in tables), "tables": tables,
+                  "sourceCollections": {"path": "ingitdb/.ingitdb/source-collections.json",
+                                        "sha256": digest(mapping_path)},
                   "views": [{"name": view["name"], "status": "source-definition-only",
                              "columns": view["columns"], "sourceSql": view["sql"]} for view in snapshot.views],
                   "status": "prepared-not-hosted", "nativeParity": {"format": parity["format"],

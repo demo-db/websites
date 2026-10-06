@@ -46,6 +46,16 @@ def _unique_json_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _native_collection_id(source_name: str) -> str:
+    """Derive the portable native ID independently from DataTug's Go writer."""
+    valid = bool(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9._]*[A-Za-z0-9])?", source_name))
+    base = source_name.split(".", 1)[0].upper()
+    windows_device = base in {"CON", "PRN", "AUX", "NUL"} or bool(re.fullmatch(r"(?:COM|LPT)[1-9]", base))
+    if valid and source_name[:3].lower() != "dt_" and not windows_device:
+        return source_name
+    return "dt_" + source_name.encode("utf-8").hex()
+
+
 class _UniqueYAMLLoader(yaml.SafeLoader):
     def construct_mapping(self, node: Any, deep: bool = False) -> dict[Any, Any]:
         result: dict[Any, Any] = {}
@@ -58,7 +68,7 @@ class _UniqueYAMLLoader(yaml.SafeLoader):
 
 
 def _native_records(path: Path, definition: dict[str, Any], table_name: str,
-                    columns: list[str]) -> dict[str, dict[str, Any]]:
+                    columns: list[str], native_id: str | None = None) -> dict[str, dict[str, Any]]:
     """Decode DataTug's documented record formats without using its exporter."""
     record_file = definition["record_file"]
     record_format = record_file["format"]
@@ -70,6 +80,8 @@ def _native_records(path: Path, definition: dict[str, Any], table_name: str,
         with path.open(encoding="utf-8") as stream:
             values = (json.load(stream, object_pairs_hook=_unique_json_pairs) if record_format == "json"
                       else yaml.load(stream, Loader=_UniqueYAMLLoader))
+        if record_format == "yaml" and values is None and path.stat().st_size == 0:
+            values = {}  # DataTug writes an empty YAML stream for a zero-row table.
         if not isinstance(values, dict) or any(not isinstance(key, str) or not isinstance(row, dict)
                                                    for key, row in values.items()):
             raise ImportError(f"{table_name}: native record file is not an ID-keyed map")
@@ -111,7 +123,7 @@ def _native_records(path: Path, definition: dict[str, Any], table_name: str,
             raise ImportError(f"{table_name}: unexpected INGR record type")
         with path.open(encoding="utf-8") as stream:
             header = stream.readline().rstrip("\r\n")
-            prefix = f"# INGR.io | {table_name}: "
+            prefix = f"# INGR.io | {native_id or table_name}: "
             if not header.startswith(prefix):
                 raise ImportError(f"{table_name}: invalid INGR header")
             header_columns = [part.strip().split(":", 1)[0] for part in header[len(prefix):].split(",")]
@@ -322,7 +334,7 @@ def _portable_field_errors(table: dict[str, Any], schema: dict[str, Any],
     return errors
 
 
-def _foreign_key_errors(table: dict[str, Any], native: dict[str, Any]) -> list[str]:
+def _foreign_key_errors(table: dict[str, Any], native: dict[str, Any], source_to_native: dict[str, str]) -> list[str]:
     name = table["name"]
     grouped: dict[int, list[tuple[Any, ...]]] = {}
     for row in table["foreign_keys"]:
@@ -330,7 +342,7 @@ def _foreign_key_errors(table: dict[str, Any], native: dict[str, Any]) -> list[s
     expected = []
     for group_id, parts in sorted(grouped.items()):
         parts.sort(key=lambda part: part[1])
-        expected.append((f"{name}_fk_{group_id}", [part[3] for part in parts], parts[0][2],
+        expected.append((f"{name}_fk_{group_id}", [part[3] for part in parts], source_to_native.get(parts[0][2]),
                          [part[4] for part in parts], "disabled", parts[0][5], parts[0][6]))
     actual = []
     for fk in native.get("foreign_keys", []):
@@ -365,22 +377,37 @@ def validate(source_root: Path, native_root: Path, *, check_data: bool = True) -
     try:
         collections = _yaml_file(_safe_file(native_root, ".ingitdb/root-collections.yaml"))
         source_names = [table["name"] for table in snapshot.tables]
-        if set(collections) != set(source_names) or len(collections) != len(source_names):
-            errors.append("native collection names differ from pinned SQLite tables")
+        source_ids = {name: _native_collection_id(name) for name in source_names}
+        if len(set(source_ids.values())) != len(source_names) or \
+                len({native_id.lower() for native_id in source_ids.values()}) != len(source_names):
+            errors.append("source table names produce colliding native collection IDs")
+        try:
+            mapping = json.loads(_safe_file(native_root, ".ingitdb/source-collections.json").read_text(encoding="utf-8"),
+                                 object_pairs_hook=_unique_json_pairs)
+            actual_mapping = mapping["collections"]
+            if mapping["format"] != "datatug-source-collections/v1" or not isinstance(actual_mapping, dict) or \
+                    set(mapping) != {"format", "collections"} or \
+                    actual_mapping != {native_id: name for name, native_id in source_ids.items()}:
+                errors.append("native collection-to-source mapping differs from pinned SQLite tables")
+        except (OSError, ValueError, KeyError, TypeError, ImportError) as exc:
+            errors.append(f"cannot inspect native collection-to-source mapping: {exc}")
+        if set(collections) != set(source_ids.values()) or len(collections) != len(source_names):
+            errors.append("native collection IDs differ from pinned SQLite tables")
         for table in snapshot.tables:
             name = table["name"]
-            if collections.get(name) != name:
+            native_id = source_ids[name]
+            if collections.get(native_id) != native_id:
                 errors.append(f"{name}: native collection path differs")
                 continue
             try:
-                definition = _yaml_file(_safe_file(native_root, f"{name}/.collection/definition.yaml"))
+                definition = _yaml_file(_safe_file(native_root, f"{native_id}/.collection/definition.yaml"))
                 schema = definition["source_schema"]
                 source_definition = json.loads(schema["source_definition_json"], object_pairs_hook=_unique_json_pairs)
             except (OSError, KeyError, ValueError, ImportError) as exc:
                 errors.append(f"{name}: cannot inspect native source schema: {exc}")
                 continue
             errors.extend(_source_definition_errors(table, source_definition, snapshot.db))
-            errors.extend(_foreign_key_errors(table, schema))
+            errors.extend(_foreign_key_errors(table, schema, source_ids))
             errors.extend(_portable_index_errors(table, schema, snapshot.db))
             columns = table["columns"]
             column_names = [column["name"] for column in columns]
@@ -408,14 +435,14 @@ def validate(source_root: Path, native_root: Path, *, check_data: bool = True) -
             if not check_data:
                 continue
             try:
-                records = _native_records(_safe_file(native_root, f"{name}/{definition['record_file']['name']}"),
-                                          definition, name, column_names)
+                records = _native_records(_safe_file(native_root, f"{native_id}/{definition['record_file']['name']}"),
+                                          definition, name, column_names, native_id)
                 fields = portable_fields
                 if set(fields) != set(column_names):
                     errors.append(f"{name}: portable source fields differ from SQLite columns")
                 storage: dict[str, dict[str, str]] = {}
                 for sidecar_name in schema.get("storage_class_files", []):
-                    for line in _safe_file(native_root, f"{name}/{sidecar_name}").read_text(encoding="utf-8").splitlines():
+                    for line in _safe_file(native_root, f"{native_id}/{sidecar_name}").read_text(encoding="utf-8").splitlines():
                         item = json.loads(line, object_pairs_hook=_unique_json_pairs)
                         if item["id"] in storage:
                             data_errors.append(f"{name}: duplicate storage-class row {item['id']}")

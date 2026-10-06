@@ -68,6 +68,9 @@ class NativeParityTest(unittest.TestCase):
             native_dir.mkdir(parents=True)
             (root / ".ingitdb").mkdir()
             (root / ".ingitdb/root-collections.yaml").write_text("users: users\n")
+            mapping_path = root / ".ingitdb/source-collections.json"
+            mapping_path.write_text(json.dumps({"format": "datatug-source-collections/v1",
+                                                "collections": {"users": "users"}}))
             views = [{"name": "user_names", "createsql": view_sql, "columns": ["name"]}]
             views_path = root / ".ingitdb/source-views.yaml"
             views_path.write_text(yaml.safe_dump(views))
@@ -88,6 +91,16 @@ class NativeParityTest(unittest.TestCase):
                     return parity.validate(root, root)
 
             self.assertTrue(run()["metadataAndDataMatch"], run()["errors"])
+            mapping_path.write_text(json.dumps({"format": "datatug-source-collections/v1",
+                                                "collections": {"users": "other"}}))
+            self.assertIn("collection-to-source mapping differs", " ".join(run()["errors"]))
+            mapping_path.write_text(json.dumps({"format": "datatug-source-collections/v1",
+                                                "collections": {"users": "users", "extra": "other"}}))
+            self.assertIn("collection-to-source mapping differs", " ".join(run()["errors"]))
+            mapping_path.write_text('{"format":"datatug-source-collections/v1","collections":{"users":"users","users":"other"}}')
+            self.assertIn("duplicate JSON key", " ".join(run()["errors"]))
+            mapping_path.write_text(json.dumps({"format": "datatug-source-collections/v1",
+                                                "collections": {"users": "users"}}))
             records[first], records[second] = records[second], records[first]
             records_path.write_text(json.dumps(records))
             self.assertIn("typed value differs", " ".join(run()["errors"]))
@@ -135,12 +148,30 @@ class NativeParityTest(unittest.TestCase):
         native = {"foreign_keys": [{"name": "child_fk_4", "fields": ["a", "b"], "referenced_collection": "parent",
                                     "referenced_fields": ["x", "y"], "source_enforcement": "disabled",
                                     "on_update": "CASCADE", "on_delete": "SET NULL"}]}
-        self.assertEqual(parity._foreign_key_errors(table, native), [])
+        self.assertEqual(parity._foreign_key_errors(table, native, {"parent": "parent"}), [])
         native["foreign_keys"][0]["fields"] = ["b", "a"]
-        self.assertIn("ordered foreign-key", parity._foreign_key_errors(table, native)[0])
+        self.assertIn("ordered foreign-key", parity._foreign_key_errors(table, native, {"parent": "parent"})[0])
         native["foreign_keys"][0]["fields"] = ["a", "b"]
         native["foreign_keys"][0]["on_delete"] = "NO ACTION"
-        self.assertIn("actions differ", parity._foreign_key_errors(table, native)[0])
+        self.assertIn("actions differ", parity._foreign_key_errors(table, native, {"parent": "parent"})[0])
+
+    def test_collection_identity_mapping_is_injective_and_fk_targets_are_native(self):
+        source = "Order Details"
+        native_id = parity._native_collection_id(source)
+        self.assertEqual(native_id, "dt_4f726465722044657461696c73")
+        self.assertNotEqual(native_id, parity._native_collection_id(native_id))
+        self.assertNotEqual(parity._native_collection_id(native_id),
+                            parity._native_collection_id(native_id.upper()))
+        self.assertEqual(parity._native_collection_id("Album"), "Album")
+        self.assertEqual(parity._native_collection_id("CON"), "dt_434f4e")
+        self.assertEqual(parity._native_collection_id("nul.txt"), "dt_6e756c2e747874")
+        table = {"name": "child", "foreign_keys": [(1, 0, source, "parent_id", "id", "NO ACTION", "NO ACTION", "NONE")]}
+        schema = {"foreign_keys": [{"name": "child_fk_1", "fields": ["parent_id"],
+                                    "referenced_collection": native_id, "referenced_fields": ["id"],
+                                    "source_enforcement": "disabled", "on_update": "NO ACTION", "on_delete": "NO ACTION"}]}
+        self.assertEqual(parity._foreign_key_errors(table, schema, {source: native_id}), [])
+        schema["foreign_keys"][0]["referenced_collection"] = source
+        self.assertIn("foreign-key", " ".join(parity._foreign_key_errors(table, schema, {source: native_id})))
 
     def test_portable_index_metadata_is_checked_independently_of_source_sql(self):
         db = sqlite3.connect(":memory:")

@@ -77,6 +77,8 @@ class ValidationTest(unittest.TestCase):
                 database_id = "synthetic"
                 source_sha256 = "a" * 64
                 tables = [parent, child]
+                views = [{"name": "parent_view", "columns": ["x"],
+                          "sql": "CREATE VIEW parent_view AS SELECT x FROM parent"}]
                 def row_count(self, _name): return 0
                 def close(self): pass
 
@@ -94,7 +96,9 @@ class ValidationTest(unittest.TestCase):
                                      "primary_key": ["x"] if name == "parent" else [],
                                      "record_file": {"type": "map[$record_id]map[$field_name]any"}}
             manifest = {"datasetId": "synthetic", "source": {"fixtureSha256": "a" * 64},
-                        "rowCount": 0, "tables": tables}
+                        "rowCount": 0, "tables": tables,
+                        "views": [{"name": "parent_view", "status": "source-definition-only",
+                                   "columns": ["x"], "sourceSql": "CREATE VIEW parent_view AS SELECT x FROM parent"}]}
 
             def run():
                 (root / "export-manifest.json").write_text(json.dumps(manifest))
@@ -114,6 +118,12 @@ class ValidationTest(unittest.TestCase):
             manifest["tables"][1]["foreignKeyConstraints"][0]["localColumns"].reverse()
             manifest["tables"][1]["columns"][0]["sourceDeclaredNullable"] = False
             self.assertIn("sourceDeclaredNullable differs", " ".join(run()["errors"]))
+            manifest["tables"][1]["columns"][0]["sourceDeclaredNullable"] = True
+            manifest["views"][0]["sourceSql"] = "CREATE VIEW parent_view AS SELECT 1 AS x"
+            self.assertIn("source view definitions or columns differ", " ".join(run()["errors"]))
+            manifest["views"][0]["sourceSql"] = Snapshot.views[0]["sql"]
+            manifest["views"][0]["columns"] = ["renamed"]
+            self.assertIn("source view definitions or columns differ", " ".join(run()["errors"]))
 
     def test_row_swap_under_existing_record_ids_fails_even_when_multiset_matches(self):
         with tempfile.TemporaryDirectory() as temp:

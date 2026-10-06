@@ -175,6 +175,11 @@ def validate(source_root: Path, ingitdb_root: Path, *, check_data: bool = True) 
             errors.append("published native table names differ from source")
         if manifest.get("rowCount") != sum(snapshot.row_count(name) for name in source_tables):
             errors.append("database row count differs from source")
+        expected_views = [{"name": view["name"], "status": "source-definition-only",
+                           "columns": view["columns"], "sourceSql": view["sql"]}
+                          for view in snapshot.views]
+        if manifest.get("views") != expected_views:
+            errors.append("ordered source view definitions or columns differ")
         fk_count = unique_count = check_count = row_count = 0
         for name, source in source_tables.items():
             published = published_tables.get(name)
@@ -258,7 +263,7 @@ def validate(source_root: Path, ingitdb_root: Path, *, check_data: bool = True) 
             except (OSError, ValueError, ImportError, KeyError, TypeError, sqlite3.Error, binascii.Error) as exc:
                 data_errors.append(f"exported FK orphan check failed: {exc}")
         return {"format": "demodb-schema-parity/v1", "datasetId": snapshot.database_id, "sourceSha256": snapshot.source_sha256,
-                "tables": len(source_tables), "rows": row_count, "foreignKeyConstraints": fk_count,
+                "tables": len(source_tables), "views": len(expected_views), "rows": row_count, "foreignKeyConstraints": fk_count,
                 "uniqueIndexes": unique_count, "checkConstraints": check_count, "sourceOrphans": source_orphans,
                 "exportedOrphans": exported_orphans, "dataChecked": check_data,
                 "metadataMatches": not errors, "metadataAndDataMatch": not (errors or data_errors) if check_data else None,

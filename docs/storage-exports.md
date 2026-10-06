@@ -50,7 +50,8 @@ python3 scripts/hosting-tools/validate_storage_exports.py /path/to/provider /pat
 The checker compares the source fixture hash, exact table SQL, ordered columns,
 declared types and nullability, defaults, primary keys, index definitions,
 composite foreign keys and their actions, native inGitDB definitions, record
-checksums and IDs, and the full typed row multiset. It replays exported rows
+checksums and IDs, ordered source view definitions, and the full typed row
+multiset. It replays exported rows
 under the source SQLite schema and runs `PRAGMA foreign_key_check`, preserving
 SQLite affinity and collation behavior. The JSON report distinguishes
 `metadataAndDataMatch` from `nativeConstraintEquivalent`.

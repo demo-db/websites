@@ -1,6 +1,14 @@
 {
   "version": 1,
   "catalogueHost": "demodb.dev",
+  "ingitdbRevisions": {
+    "chinook": "3a82329c032251cac9a08211e197afd923e7569c",
+    "northwind": "075e6a4036a202a99871c892ba0851694ee23309",
+    "pubs": "5d7a356a1c442e833fc907ed0ff64b3c8015932d",
+    "sakila": "ec28864750ebf38a8024b48f3423818aa882d817",
+    "adventureworks": "983b1f1b788b334c42336ec10b452b8dc0bca304",
+    "employees": "f7c4f162abd17834ddc1c2c6e0442f004b8b6a99"
+  },
   "databases": [
     {
       "id": "chinook",

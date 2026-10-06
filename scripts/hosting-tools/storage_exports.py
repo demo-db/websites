@@ -64,6 +64,19 @@ def publish_exclusive(staging: Path, output: Path) -> None:
         raise OSError(code, os.strerror(code), str(output))
 
 
+PUBLIC_PARITY_FIELDS = ("format", "datasetId", "sourceSha256", "tables", "views", "rows",
+                        "sourceOrphans", "dataChecked", "metadataMatches", "metadataAndDataMatch",
+                        "nativeConstraintEquivalent", "errors", "errorCount", "nativeLimitations")
+
+
+def persist_public_parity(native_root: Path, parity: dict[str, Any]) -> Path:
+    """Retain only portable checker fields in a publicly distributable receipt."""
+    public_report = {field: parity[field] for field in PUBLIC_PARITY_FIELDS}
+    path = native_root / "native-parity-report.json"
+    path.write_text(json.dumps(public_report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
 def decimal_declared(declared: str) -> bool:
     return bool(DECIMAL_TEXT.fullmatch(declared) or DECIMAL_TYPED.fullmatch(declared) or
                 re.fullmatch(r"(?i)(?:NUMERIC|DECIMAL|MONEY)", declared.strip()))
@@ -300,6 +313,7 @@ def export(root: Path, output: Path, *, datatug: Path | None = None,
             raise ImportError("DataTug parity receipt refers to different SQLite source bytes")
         if not parity["metadataAndDataMatch"]:
             raise ImportError(f"DataTug native export differs from pinned SQLite: {parity['errors'][:5]}")
+        parity_path = persist_public_parity(native_root, parity)
         tables = [export_table(snapshot, table, staging, native_root) for table in snapshot.tables]
         result = {"format": "demodb-storage-export/v2", "generator": "datatug-dalgo-to-ingitdb",
                   "recordFormat": records_format,
@@ -313,7 +327,10 @@ def export(root: Path, output: Path, *, datatug: Path | None = None,
                   "views": [{"name": view["name"], "status": "source-definition-only",
                              "columns": view["columns"], "sourceSql": view["sql"]} for view in snapshot.views],
                   "status": "prepared-not-hosted", "nativeParity": {"format": parity["format"],
-                  "tables": parity["tables"], "rows": parity["rows"], "metadataAndDataMatch": True}}
+                  "sourceSha256": parity["sourceSha256"], "tables": parity["tables"], "rows": parity["rows"],
+                  "dataChecked": parity["dataChecked"], "metadataAndDataMatch": True,
+                  "sourceOrphans": parity["sourceOrphans"], "errorCount": parity["errorCount"],
+                  "report": {"path": "ingitdb/native-parity-report.json", "sha256": digest(parity_path)}}}
         serialized = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         (staging / "export-manifest.json").write_text(serialized, encoding="utf-8")
         (native_root / "export-manifest.json").write_text(serialized, encoding="utf-8")

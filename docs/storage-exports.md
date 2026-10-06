@@ -7,6 +7,8 @@ and prepares BigQuery NDJSON/schema files. It does not provision BigQuery.
 The inGitDB files come from DataTug; Python writes only BigQuery files and a
 provenance manifest. The output directory must be new or empty. A failed run
 leaves the destination untouched.
+The native directory includes `export-manifest.json` and a SHA-pinned
+`native-parity-report.json` with the independent row and schema check results.
 
 Install the Python YAML dependency and use a DataTug CLI build that supports
 `db export` (the old installed CLI may only expose `db copy`):

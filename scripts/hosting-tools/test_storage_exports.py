@@ -1,5 +1,6 @@
 """Boundary checks for reproducible storage exports."""
 import importlib.util
+import json
 import pathlib
 import sys
 import tempfile
@@ -67,6 +68,20 @@ class StorageExportsTest(unittest.TestCase):
             with self.assertRaises(OSError):
                 exports.publish_exclusive(staging, output)
             self.assertTrue(output.is_dir())
+
+    def test_public_parity_receipt_excludes_private_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temp:
+            parity = {field: None for field in exports.PUBLIC_PARITY_FIELDS}
+            parity.update({"format": "demodb-datatug-parity/v1", "sourceSha256": "f" * 64,
+                           "metadataAndDataMatch": True, "errorCount": 0,
+                           "privatePath": "/Users/alex/private/source.sqlite",
+                           "sourceUrl": "postgres://private-credential@example.invalid/db"})
+            path = exports.persist_public_parity(pathlib.Path(temp), parity)
+            published = json.loads(path.read_text())
+            self.assertEqual(set(published), set(exports.PUBLIC_PARITY_FIELDS))
+            self.assertEqual(published["sourceSha256"], "f" * 64)
+            self.assertNotIn("privatePath", published)
+            self.assertNotIn("sourceUrl", published)
 
 
 if __name__ == "__main__":

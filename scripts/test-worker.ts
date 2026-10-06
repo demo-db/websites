@@ -8,6 +8,7 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
+import { storageGroups } from '../src/data/ovdb';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -162,7 +163,10 @@ assert.equal(internalAssetPath('northwind', '/_db/northwind/index.html'), '/404.
 for (const [host, expected] of [['demodb.dev', 'Northwind'], ['localhost', 'DemoDB']] as const) {
   const response = await fetch(host, '/');
   assert.equal(response.status, 200, host);
-  assert.ok((await response.text()).includes(expected), `${host} page contains its expected heading`);
+  const html = await response.text();
+  assert.ok(html.includes(expected), `${host} page contains its expected heading`);
+  assert.match(html, /Explore OpenVaultDB server/);
+  assert.match(html, /Browse server and storage catalogue/);
 }
 const decimalModule = await fetch('chinook.demodb.dev', '/embed/exact-decimal.js');
 assert.equal(decimalModule.status, 200, 'database subdomains serve the exact decimal comparator');
@@ -187,6 +191,7 @@ const siteMapXml = await siteMap.text();
 for (const database of providerIndex.databases as { siteHost: string }[]) assert.match(siteMapXml, new RegExp(`https:\/\/${database.siteHost.replaceAll('.', '\\.')}\/`));
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/ovdb\//);
 assert.match(siteMapXml, /https:\/\/demodb\.dev\/northwind\//);
+for (const { storages } of storageGroups) for (const storage of storages) assert.ok(siteMapXml.includes(`https://demodb.dev/ovdb/db/${storage.id}/`));
 const corpusResponse = await fetch('demodb.dev', '/corpus.json');
 assert.equal(corpusResponse.status, 200);
 assert.equal(corpusResponse.headers.get('Access-Control-Allow-Origin'), '*');
@@ -425,6 +430,38 @@ assert.deepEqual(serverManifest.databases.map((database) => database.localId).so
 assert.equal(serverManifest.databases.find((database) => database.localId === 'pubs')?.id, 'https://demodb.dev/pubs/');
 assert.ok(serverManifest.databases.every((database) => database.manifestUrl === `${database.serverDbBaseUrl}ovdb-database.json`));
 assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
+const storageCatalogueHtml = await (await fetch('demodb.dev', '/ovdb/')).text();
+assert.match(storageCatalogueHtml, /Six datasets\. Two storage engines each/);
+assert.match(storageCatalogueHtml, /six SQLite databases with working public APIs/);
+assert.equal(storageGroups.length, 6);
+for (const { database, storages } of storageGroups) {
+  assert.equal(storages.length, 2);
+  for (const storage of storages) {
+    const path = `/ovdb/db/${storage.id}/`;
+    assert.ok(storageCatalogueHtml.includes(`href="${path}"`), `${storage.id} linked from catalogue`);
+    const response = await fetch('demodb.dev', path);
+    assert.equal(response.status, 200, `${storage.id} page exists`);
+    const html = await response.text();
+    assert.match(html, new RegExp(`rel="canonical" href="https://demodb.dev${path}"`));
+    assert.match(html, new RegExp(`Storage ID: <code>${storage.id}</code>`));
+    assert.match(html, new RegExp(`Dataset ID: <code>${database.localId}</code>`));
+    assert.equal((await fetch('demodb.dev', path, 'HEAD')).status, 200);
+    assert.equal((await fetch('demodb.dev', path, 'POST')).status, 405);
+    assert.equal((await fetch('demodb.dev', path.slice(0, -1))).headers.get('Location'), `https://demodb.dev${path}`);
+    if (storage.readiness === 'public-api') {
+      assert.match(html, new RegExp(`href="${database.apiUrl}"`));
+      assert.match(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
+    } else {
+      assert.match(html, /hosted on Neon/);
+      assert.match(html, /Public OpenVaultDB API access is being prepared/);
+      assert.doesNotMatch(html, /served from a pinned copy of the upstream SQLite fixture|The pinned SQLite build is read-only/);
+      assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
+      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
+      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'pending PostgreSQL storage has no public API route');
+    }
+  }
+}
+assert.equal((await fetch('demodb.dev', '/ovdb/db/missing-postgresql/')).status, 404);
 assert.equal((await fetch('demodb.dev', '/ovdb/v1')).status, 200, 'declared API root returns the server descriptor');
 assert.equal((await fetch('demodb.dev', '/ovdb/schemas/ovdb-database-draft-1.schema.json')).status, 200);
 const centralDiscovery = await fetch('demodb.dev', '/.well-known/openvaultdb');

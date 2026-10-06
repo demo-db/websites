@@ -1,6 +1,7 @@
 import runtime from './data/generated/runtime.json';
 import providerIndex from './data/generated/index.json';
 import ovdbIndex from './data/generated/ovdb.json';
+import { storageById } from './data/ovdb';
 
 type Runtime = {
   catalogueHost: string;
@@ -83,6 +84,14 @@ export default {
       if (url.pathname.startsWith('/data/') || url.pathname.startsWith('/model/')) return notFound();
       if (url.pathname === '/ovdb/v1' || url.pathname === '/ovdb/v1/') return serverApiIndex(request);
       if (url.pathname.startsWith('/ovdb/v1/')) return proxyOVDB(request, url);
+      if (url.pathname.startsWith('/ovdb/db/')) {
+        const storageRoute = /^\/ovdb\/db\/([a-z][a-z0-9-]{0,39})(\/?)$/.exec(url.pathname);
+        if (storageRoute && storageById.has(storageRoute[1])) {
+          if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+          if (!storageRoute[2]) return redirectPreservingRequest(request, `https://demodb.dev${url.pathname}/${url.search}`);
+          return serveAsset(request, env, url, `${url.pathname}index.html`);
+        }
+      }
       const legacyDbRoute = /^\/ovdb\/(?:dbs\/([a-z][a-z0-9-]{0,39})\/?|db\/([a-z][a-z0-9-]{0,39}))$/.exec(url.pathname);
       const legacyDbId = legacyDbRoute?.[1] ?? legacyDbRoute?.[2];
       if (legacyDbId && ovdbDatabases.has(legacyDbId)) {
@@ -529,7 +538,7 @@ function hostMetadata(method: string, host: string, path: string, db?: Database)
 function sitemap(host: string, db?: Database): string {
   const urls = db
     ? ['/', '/tables/', '/schema/', '/downloads/', '/queries/', '/about/', '/model/', ...db.tables.map((table) => `/tables/${encodeURIComponent(table.name)}/`)].map((path) => `https://${host}${path}`)
-    : [`https://${host}/`, 'https://demodb.dev/corpus.json', 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json', ...[...ovdbDatabases.keys()].flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]), ...databaseList.map((database) => `https://${database.siteHost}/`)];
+    : [`https://${host}/`, 'https://demodb.dev/corpus.json', 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json', ...[...storageById.keys()].map((id) => `https://demodb.dev/ovdb/db/${id}/`), ...[...ovdbDatabases.keys()].flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]), ...databaseList.map((database) => `https://${database.siteHost}/`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${xmlEscape(url)}</loc></url>`).join('')}</urlset>\n`;
 }
 

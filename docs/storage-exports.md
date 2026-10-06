@@ -37,3 +37,28 @@ scale, and wider decimals remain strings. The manifest's
 `prepared-not-hosted` status is intentional. A BigQuery project, location,
 cost policy, ingestion receipts, and query validation are required before
 publishing any hosted storage entry.
+
+## Verify a published inGitDB edition
+
+Run the parity checker against the provider's pinned SQLite fixture and the
+published `ingitdb/` directory:
+
+```sh
+python3 scripts/hosting-tools/validate_storage_exports.py /path/to/provider /path/to/provider/ingitdb --report /private/tmp/schema-parity.json
+```
+
+The checker compares the source fixture hash, exact table SQL, ordered columns,
+declared types and nullability, defaults, primary keys, index definitions,
+composite foreign keys and their actions, native inGitDB definitions, record
+checksums and IDs, and the full typed row multiset. It replays exported rows
+under the source SQLite schema and runs `PRAGMA foreign_key_check`, preserving
+SQLite affinity and collation behavior. The JSON report distinguishes
+`metadataAndDataMatch` from `nativeConstraintEquivalent`.
+
+The current inGitDB format stores the SQL primary keys, foreign keys, unique
+indexes, and CHECK constraints as source metadata. Its native validator does
+not enforce the same SQL constraints on later record edits. The parity checker
+returns success when the published snapshot matches its pinned source and
+reports those limitations separately. Pass `--require-native-constraints` to
+fail when full native constraint enforcement is required. `--metadata-only`
+skips row checks and sets `dataChecked` to false.

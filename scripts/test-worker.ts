@@ -461,6 +461,8 @@ for (const { database, storages } of storageGroups) {
       assert.match(html, new RegExp(`git checkout ${revision}`));
       assert.match(html, /ingitdb validate --path ingitdb/);
       assert.match(html, /Views are metadata only/);
+      assert.match(html, /parity checker/);
+      assert.match(html, /native inGitDB validation does not enforce those SQL constraints/);
       assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/tree/${revision}/ingitdb"`));
       assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/export-manifest.json"`));
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);

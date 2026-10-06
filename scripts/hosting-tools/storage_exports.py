@@ -128,6 +128,17 @@ def collection_slug(name: str) -> str:
     return f"{readable or 'table'}_{hashlib.sha256(name.encode()).hexdigest()[:8]}"
 
 
+def ingitdb_type(declared: str, observed: set[str], mixed: bool) -> str:
+    """Choose only a type that validates the JSON transport values as written."""
+    if mixed:
+        return "any"  # A SQLite type envelope is a JSON object.
+    if DECIMAL_TEXT.fullmatch(declared) or DECIMAL_TYPED.fullmatch(declared):
+        return "string"  # Exact decimals travel as strings, including NUMERIC.
+    kinds = observed - {"null"}
+    return {frozenset({"str"}): "string", frozenset({"bytes"}): "string",
+            frozenset({"int"}): "int", frozenset({"float"}): "float"}.get(frozenset(kinds), "any")
+
+
 def record_id(row: tuple[Any, ...], columns: list[dict[str, Any]], ordinal: int) -> str:
     keys = sorted(((col["pk"], i) for i, col in enumerate(columns) if col["pk"]))
     if not keys:
@@ -183,11 +194,20 @@ def export_table(snapshot: Any, table: dict[str, Any], output: Path) -> dict[str
             records.write("  " + canonical(rid) + ": " + canonical(native))
             bq.write(canonical(bq_row) + "\n")
         records.write("\n}\n")
-    # `any` preserves SQLite's dynamic types and source field names. The
-    # companion manifest carries exact declared types, PKs, FKs and encodings.
-    definition = "record_file:\n  name: records.json\n  format: json\n  type: \"map[$record_id]map[$field_name]any\"\ncolumns:\n"
-    for name in names:
-        definition += "  " + canonical(name) + ":\n    type: any\n"
+    # Native types/requiredness can validate the transported scalar values.
+    # inGitDB foreign_key compares a raw scalar with a target record ID. Our
+    # record IDs encode ordered PK tuples, so native foreign_key would reject
+    # valid source references and cannot express composite keys or SQL actions.
+    primary_key = [col["name"] for col in sorted(cols, key=lambda c: c["pk"]) if col["pk"]]
+    definition = "record_file:\n  name: records.json\n  format: json\n  type: \"map[$record_id]map[$field_name]any\"\n"
+    if primary_key:
+        definition += "primary_key: " + canonical(primary_key) + "\n"
+    definition += "columns:\n"
+    for col in cols:
+        name = col["name"]
+        definition += "  " + canonical(name) + ":\n    type: " + ingitdb_type(col["type"], observed[name], mixed[name]) + "\n"
+        if col["notnull"] or col["pk"]:
+            definition += "    required: true\n"
     (ingit_dir / ".collection" / "definition.yaml").write_text(definition, encoding="utf-8")
     fields = [{"name": "_transport_id", "type": "STRING", "mode": "REQUIRED"}]
     for col in cols:
@@ -197,11 +217,26 @@ def export_table(snapshot: Any, table: dict[str, Any], output: Path) -> dict[str
     schema_path.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8")
     return {
         "nativeName": table_name, "collection": slug, "rows": count,
-        "primaryKey": [col["name"] for col in sorted(cols, key=lambda c: c["pk"]) if col["pk"]],
+        "primaryKey": primary_key,
         "transportId": "encoded-native-primary-key" if any(col["pk"] for col in cols) else "source-row-ordinal-not-native-key",
-        "foreignKeys": [{"id": fk[0], "sequence": fk[1], "table": fk[2], "from": fk[3], "to": fk[4]} for fk in table["foreign_keys"]],
+        "sourceSql": table["sql"],
+        "indexes": table["indexes"],
+        "foreignKeys": [{"id": fk[0], "sequence": fk[1], "table": fk[2], "from": fk[3], "to": fk[4],
+                         "onUpdate": fk[5], "onDelete": fk[6], "match": fk[7]} for fk in table["foreign_keys"]],
+        "foreignKeyConstraints": [
+            {"id": fk_id, "localColumns": [row[3] for row in group], "referencedTable": group[0][2],
+             "referencedColumns": [row[4] for row in group], "onUpdate": group[0][5],
+             "onDelete": group[0][6], "match": group[0][7], "enforced": False}
+            for fk_id, group in sorted((fk_id, sorted((row for row in table["foreign_keys"] if row[0] == fk_id),
+                                                  key=lambda row: row[1])) for fk_id in {row[0] for row in table["foreign_keys"]})
+        ],
         "columns": [{"nativeName": col["name"], "declaredType": col["type"], "bigqueryName": bq_names[col["name"]],
-                     "bigqueryType": fields[i + 1]["type"], "encoding": "sqlite-typed-json" if mixed[col["name"]] else
+                     "bigqueryType": fields[i + 1]["type"], "sourceNotNull": col["notnull"],
+                     "primaryKeyPosition": col["pk"], "sourceDeclaredNullable": not col["notnull"],
+                     "defaultValue": col["default"],
+                     "ingitdbType": ingitdb_type(col["type"], observed[col["name"]], mixed[col["name"]]),
+                     "exportRequired": bool(col["notnull"] or col["pk"]),
+                     "encoding": "sqlite-typed-json" if mixed[col["name"]] else
                      "base64" if fields[i + 1]["type"] == "BYTES" else
                      "decimal-string-from-source" if DECIMAL_TEXT.fullmatch(col["type"]) or DECIMAL_TYPED.fullmatch(col["type"]) else "native-json"}
                     for i, col in enumerate(cols)],

@@ -4,8 +4,6 @@ import pathlib
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
-import json
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -32,40 +30,43 @@ class StorageExportsTest(unittest.TestCase):
             self.assertEqual(exports.decode_value(encoded, "", True, type(value)), value)
         self.assertEqual(exports.bigquery_type("", {"str", "int"}), "STRING")
 
-    def test_large_integer_fails_closed_for_json_reader(self):
-        with self.assertRaisesRegex(exports.ImportError, "lossless inGitDB JSON"):
-            exports.scalar(2**53, "INTEGER")
+    def test_large_integer_remains_exact_in_bigquery_rows(self):
+        self.assertEqual(exports.scalar(2**53 + 1, "INTEGER"), 2**53 + 1)
+        self.assertEqual(exports.bigquery_type("NUMERIC", {"float"}), "STRING")
 
-    def test_second_export_refuses_nonempty_output_without_changing_it(self):
+    def test_export_refuses_nonempty_output_before_reading_source_or_running_cli(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
-            provider = root / "provider"
-            provider.mkdir()
-            source = {"repository": "https://example.test/source", "revision": "test"}
-            (provider / "manifest.json").write_text(json.dumps({"source": source}))
-            contract = provider / "contract.json"
-            contract.write_text(json.dumps({"manifest": {"source": source}}))
-            catalogue = json.loads((HERE.parents[1] / "config" / "databases.json").read_text())
-            pin = next(entry for entry in catalogue["databases"] if entry["id"] == "chinook")
-
-            class Snapshot:
-                database_id = "chinook"
-                source_sha256 = "a" * 64
-                source_bytes = 1
-                tables = []
-                views = []
-
-                def close(self):
-                    pass
-
             output = root / "output"
-            with patch.object(exports, "inspect", return_value=Snapshot()), \
-                 patch.object(exports, "digest", side_effect=lambda path: pin["contractSha256"] if path == contract else ""):
-                exports.export(provider, output)
-            first = (output / "export-manifest.json").read_bytes()
+            output.mkdir()
+            (output / "sentinel").write_bytes(b"caller data")
             with self.assertRaisesRegex(exports.ImportError, "not empty"):
-                exports.export(provider, output)
-            self.assertEqual((output / "export-manifest.json").read_bytes(), first)
+                exports.export(root / "missing-provider", output)
+            self.assertEqual((output / "sentinel").read_bytes(), b"caller data")
+
+    def test_export_rejects_unsupported_format_before_touching_destination(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = pathlib.Path(temp) / "new-output"
+            with self.assertRaisesRegex(exports.ImportError, "unsupported native records format"):
+                exports.export(pathlib.Path(temp) / "missing-provider", output, records_format="xml")
+            self.assertFalse(output.exists())
+
+    def test_exclusive_publish_refuses_destination_created_after_guard(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            staging, output = root / "staging", root / "output"
+            staging.mkdir()
+            (staging / "candidate").write_bytes(b"new")
+            output.mkdir()
+            (output / "sentinel").write_bytes(b"caller data")
+            with self.assertRaises(OSError):
+                exports.publish_exclusive(staging, output)
+            self.assertEqual((output / "sentinel").read_bytes(), b"caller data")
+            self.assertEqual((staging / "candidate").read_bytes(), b"new")
+            (output / "sentinel").unlink()
+            with self.assertRaises(OSError):
+                exports.publish_exclusive(staging, output)
+            self.assertTrue(output.is_dir())
 
 
 if __name__ == "__main__":

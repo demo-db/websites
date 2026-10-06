@@ -10,8 +10,8 @@ export const ovdbDatabaseById = new Map(ovdbDatabases.map((database) => [databas
 export const storageGroups = ovdbDatabases.map((database) => ({
   database,
   storages: [
-    { id: `${database.localId}-sqlite`, engine: 'SQLite', readiness: 'public-api' as const },
-    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', readiness: 'hosted-api-pending' as const },
+    { id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'], readiness: 'public-api' as const },
+    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql', 'neon'], readiness: 'hosted-api-pending' as const },
   ],
 }));
 export const storageById = new Map(storageGroups.flatMap((group) =>

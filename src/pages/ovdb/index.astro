@@ -18,7 +18,7 @@ import { ovdbDatabases, ovdbServer, storageGroups } from '../../data/ovdb';
         <article class="database-card storage-group">
           <span class="database-kicker">{database.recordsets.length} published SQLite collections</span>
           <h2>{database.title}</h2><p>Explore the {database.title} dataset in SQLite or PostgreSQL storage.</p>
-          <div class="storage-choices">{storages.map((storage) => <a href={`/ovdb/db/${storage.id}/`}><strong>{storage.engine}<small>{storage.id}</small></strong><span>{storage.readiness === 'public-api' ? 'Public read-only API' : 'Hosted on Neon · public API pending'}</span><span aria-hidden="true">→</span></a>)}</div>
+          <div class="storage-choices">{storages.map((storage) => <a href={`/ovdb/db/${storage.id}/`}><strong>{storage.engine}<small>{storage.id}</small></strong><span>{storage.readiness === 'public-api' ? 'Public read-only API' : 'Hosted on Neon · public API pending'}<span class="storage-tags">{storage.tags.map((tag) => <span class="storage-tag">{tag}</span>)}</span></span><span aria-hidden="true">→</span></a>)}</div>
         </article>
       ))}
     </div>

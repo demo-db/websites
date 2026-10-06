@@ -13,7 +13,7 @@ export function getStaticPaths() {
   ];
 }
 
-const { database, storage } = Astro.props as { database: OVDBDatabase; storage?: { id: string; engine: string; readiness: 'public-api' | 'hosted-api-pending' } };
+const { database, storage } = Astro.props as { database: OVDBDatabase; storage?: { id: string; engine: string; tags: string[]; readiness: 'public-api' | 'hosted-api-pending' } };
 const isPublic = storage?.readiness === 'public-api';
 const canonical = `/ovdb/db/${storage?.id}/`;
 ---
@@ -23,6 +23,7 @@ const canonical = `/ovdb/db/${storage?.id}/`;
     <p class="eyebrow">{database.title} · {storage.engine}</p>
     <h1>{database.title}<br /><em>{storage.engine} storage</em></h1>
     <p class="hero-lede">{isPublic ? 'Published on the shared OpenVaultDB server with a public read-only API.' : 'The PostgreSQL copy is hosted on Neon. Public OpenVaultDB API access is being prepared.'}</p>
+    <div class="storage-tags" aria-label="Storage tags">{storage.tags.map((tag) => <span class="storage-tag">{tag}</span>)}</div>
     <div class="hero-actions">
       {isPublic && <a class="button button-primary" href={database.apiUrl}>Open read-only API <span aria-hidden="true">↗</span></a>}
       <a class="button button-quiet" href={database.homepage}>Explore dataset and schema <span aria-hidden="true">→</span></a>

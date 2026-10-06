@@ -14,7 +14,7 @@ const sites = [
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/data/employees.sqlite', '/.well-known/openvaultdb']],
 ];
-const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`]);
+const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`]);
 
 async function checked(url, validate) {
   let last = 'request was not attempted';
@@ -116,7 +116,7 @@ for (const [origin, paths] of sites) {
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
 await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) && body.includes('public OVDB access is pending'));
 for (const id of storageIds) {
-  await checked(`https://demodb.dev/ovdb/db/${id}/`, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql') ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API') : body.includes('Open read-only API')));
+  await checked(`https://demodb.dev/ovdb/db/${id}/`, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql') ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API') : id.endsWith('-ingitdb') ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API') : body.includes('Open read-only API')));
 }
 await checkedConfiguredDatabaseQueries();
 await checkedAdventureWorksSchema();

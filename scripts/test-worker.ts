@@ -8,7 +8,8 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
-import { storageGroups } from '../src/data/ovdb';
+import { publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
+import registry from '../config/databases.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -431,11 +432,14 @@ assert.equal(serverManifest.databases.find((database) => database.localId === 'p
 assert.ok(serverManifest.databases.every((database) => database.manifestUrl === `${database.serverDbBaseUrl}ovdb-database.json`));
 assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
 const storageCatalogueHtml = await (await fetch('demodb.dev', '/ovdb/')).text();
-assert.match(storageCatalogueHtml, /Six datasets\. Two storage engines each/);
+assert.match(storageCatalogueHtml, /6 datasets\. 3 storage engines each/);
 assert.match(storageCatalogueHtml, /six SQLite databases with working public APIs/);
 assert.equal(storageGroups.length, 6);
+assert.equal(storageEngineCount, 3);
+assert.equal(storageEntryCount, 18);
+assert.equal(publicOvdbApiCount, 6);
 for (const { database, storages } of storageGroups) {
-  assert.equal(storages.length, 2);
+  assert.equal(storages.length, 3);
   for (const storage of storages) {
     const path = `/ovdb/db/${storage.id}/`;
     assert.ok(storageCatalogueHtml.includes(`href="${path}"`), `${storage.id} linked from catalogue`);
@@ -451,6 +455,19 @@ for (const { database, storages } of storageGroups) {
     if (storage.readiness === 'public-api') {
       assert.match(html, new RegExp(`href="${database.apiUrl}"`));
       assert.match(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
+    } else if (storage.readiness === 'hosted-repository') {
+      const revision = registry.ingitdbRevisions[database.localId as keyof typeof registry.ingitdbRevisions];
+      assert.equal(storage.revision, revision);
+      assert.match(html, new RegExp(`git checkout ${revision}`));
+      assert.match(html, /ingitdb validate --path ingitdb/);
+      assert.match(html, /Views are metadata only/);
+      assert.match(html, /parity checker/);
+      assert.match(html, /native inGitDB validation does not enforce those SQL constraints/);
+      assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/tree/${revision}/ingitdb"`));
+      assert.ok(html.includes(`href="https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/export-manifest.json"`));
+      assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
+      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
+      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404);
     } else {
       assert.match(html, /hosted on Neon/);
       assert.match(html, /Public OpenVaultDB API access is being prepared/);

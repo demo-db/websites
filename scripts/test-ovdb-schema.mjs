@@ -40,6 +40,16 @@ test('accepts exact decimal metadata as an additive column descriptor and checks
   assert.throws(() => validateDatabaseDescriptor(value, 'northwind'), /invalid exact-decimal metadata/);
 });
 
+test('accepts normalized optional dataset tags without duplicate or display-only values', () => {
+  const value = database('chinook');
+  value.tags = ['chinook', 'sqlite'];
+  assert.equal(validateDatabaseDescriptor(value, 'chinook').tags.length, 2);
+  value.tags.push('SQLite');
+  assert.throws(() => validateDatabaseDescriptor(value, 'chinook'), /tags|pattern/i);
+  value.tags = ['chinook', 'chinook'];
+  assert.throws(() => validateDatabaseDescriptor(value, 'chinook'), /tags|unique/i);
+});
+
 test('schema stays publisher-neutral while website validation enforces canonical routes', () => {
   const generic = database('northwind');
   generic.id = 'https://catalog.example/data/northwind/';

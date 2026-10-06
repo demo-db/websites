@@ -106,6 +106,7 @@ export type OVDBDatabase = {
   serverDbBaseUrl: string;
   title: string;
   description: string;
+  tags?: string[];
   homepage: string;
   apiUrl: string;
   capabilities: { read: true; query: boolean; write: false };

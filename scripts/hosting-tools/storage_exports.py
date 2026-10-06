@@ -212,6 +212,8 @@ def export_table(snapshot: Any, table: dict[str, Any], output: Path) -> dict[str
 
 
 def export(root: Path, output: Path) -> dict[str, Any]:
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ImportError(f"output directory is not empty: {output}")
     snapshot = inspect(root)
     try:
         manifest = json.loads((root / "manifest.json").read_text())
@@ -237,7 +239,8 @@ def export(root: Path, output: Path) -> dict[str, Any]:
                              "providerContractSha256": pin["contractSha256"],
                              "fixtureSha256": snapshot.source_sha256, "fixtureBytes": snapshot.source_bytes},
                   "rowCount": sum(table["rows"] for table in tables), "tables": tables,
-                  "views": [{"name": view["name"], "status": "source-definition-only"} for view in snapshot.views],
+                  "views": [{"name": view["name"], "status": "source-definition-only",
+                             "columns": view["columns"], "sourceSql": view["sql"]} for view in snapshot.views],
                   "status": "prepared-not-hosted"}
         (output / "export-manifest.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
         return result

@@ -5,6 +5,8 @@
 PostgreSQL importer. It writes an inGitDB database and BigQuery load files to
 an output directory; it never provisions or advertises a hosted service.
 The provider contract hash must match `config/databases.json` before export.
+The output path must be new or empty; a rerun refuses to overwrite or leave
+stale collections from an earlier export.
 
 ```sh
 python3 scripts/hosting-tools/storage_exports.py /path/to/provider /private/tmp/chinook-storage
@@ -18,8 +20,8 @@ collection name back to the native table name and records the source SHA-256,
 row count, columns, composite primary key, foreign keys, field encodings, and
 checksums. Native primary keys become deterministic transport IDs. Tables
 without a primary key use source row ordinals as transport IDs; these are not
-native keys. Views are listed as source definitions only, with no queryable
-inGitDB or BigQuery table implied.
+native keys. Views include their source SQL and column names as provenance,
+with no queryable inGitDB or BigQuery table implied.
 
 Binary SQLite values are base64 encoded. `DECIMAL_TEXT` retains its source
 lexical string in inGitDB; numeric BigQuery values are normalized to decimal

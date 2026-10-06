@@ -2,7 +2,10 @@
 import importlib.util
 import pathlib
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
+import json
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -32,6 +35,37 @@ class StorageExportsTest(unittest.TestCase):
     def test_large_integer_fails_closed_for_json_reader(self):
         with self.assertRaisesRegex(exports.ImportError, "lossless inGitDB JSON"):
             exports.scalar(2**53, "INTEGER")
+
+    def test_second_export_refuses_nonempty_output_without_changing_it(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            provider = root / "provider"
+            provider.mkdir()
+            source = {"repository": "https://example.test/source", "revision": "test"}
+            (provider / "manifest.json").write_text(json.dumps({"source": source}))
+            contract = provider / "contract.json"
+            contract.write_text(json.dumps({"manifest": {"source": source}}))
+            catalogue = json.loads((HERE.parents[1] / "config" / "databases.json").read_text())
+            pin = next(entry for entry in catalogue["databases"] if entry["id"] == "chinook")
+
+            class Snapshot:
+                database_id = "chinook"
+                source_sha256 = "a" * 64
+                source_bytes = 1
+                tables = []
+                views = []
+
+                def close(self):
+                    pass
+
+            output = root / "output"
+            with patch.object(exports, "inspect", return_value=Snapshot()), \
+                 patch.object(exports, "digest", side_effect=lambda path: pin["contractSha256"] if path == contract else ""):
+                exports.export(provider, output)
+            first = (output / "export-manifest.json").read_bytes()
+            with self.assertRaisesRegex(exports.ImportError, "not empty"):
+                exports.export(provider, output)
+            self.assertEqual((output / "export-manifest.json").read_bytes(), first)
 
 
 if __name__ == "__main__":

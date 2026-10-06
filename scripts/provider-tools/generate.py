@@ -27,7 +27,7 @@ from urllib.parse import quote
 
 
 MAX_STATIC_EXPORT_BYTES = 25 * 1024 * 1024
-DATABASE_SCHEMA_SHA256 = "5c3acdf1b858f45a78558555e92255f847fb54d8d1bcbef5567c89bdff77758d"
+DATABASE_SCHEMA_SHA256 = "4af5dc5f48bce1bc2ba5cb6664dd2c28adcadd818c74da0e78fe428f6f6ec55b"
 DATABASE_SCHEMA_NAME = "ovdb-database-draft-1.schema.json"
 CORE_ADDRESS_PATTERN = re.compile(r"^meaning://github\.com/[a-z0-9_.-]+/[a-z0-9_.-]+$")
 MODEL_ENTITY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

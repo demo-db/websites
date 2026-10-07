@@ -499,7 +499,7 @@ for (const { database, storages } of storageGroups) {
       assert.match(html, /execution project selected by you/);
       assert.match(html, /DataTug browser connection is not enabled yet/);
       assert.match(html, /Unverified primary- and foreign-key declarations are omitted/);
-      assert.match(html, /secondary indexes are not represented/);
+      assert.match(html, /no BigQuery search or vector indexes were created/);
       assert.ok(html.includes('https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json'));
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);

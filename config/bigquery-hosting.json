@@ -20,7 +20,7 @@
   "schemaNotes": {
     "primaryKeys": "Unverified primary-key metadata was omitted from BigQuery declarations; BigQuery does not enforce declared keys.",
     "foreignKeys": "Unverified foreign-key metadata was omitted from BigQuery declarations; BigQuery does not enforce declared keys.",
-    "secondaryIndexes": "Not represented; BigQuery has no secondary indexes."
+    "secondaryIndexes": "Source relational indexes were not migrated; no BigQuery search or vector indexes were created."
   },
   "verification": {
     "method": "Independent BigQuery table and row counts compared with each pinned source SQLite fixture.",

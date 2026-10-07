@@ -201,19 +201,19 @@ def verify(path: Path, manifest_path: Path | None = None) -> dict[str, Any]:
     expected = checksum_path.read_text(encoding="ascii").split()[0]
     with tempfile.NamedTemporaryFile(prefix="demodb-snapshot-", suffix=".zip", dir=manifest_path.parent, delete=False) as target:
         assembled_path = Path(target.name)
+    try:
         digest = hashlib.sha256()
         total_bytes = 0
-        for part in archive["parts"]:
-            part_path = safe_source_file(manifest_path.parent, part["file"])
-            if part_path.stat().st_size != part.get("bytes") or sha256_file(part_path) != part.get("sha256"):
-                assembled_path.unlink(missing_ok=True)
-                raise SnapshotError(f"archive part checksum differs: {part['file']}")
-            with part_path.open("rb") as stream:
-                while block := stream.read(1024 * 1024):
-                    target.write(block)
-                    digest.update(block)
-                    total_bytes += len(block)
-    try:
+        with assembled_path.open("wb") as target:
+            for part in archive["parts"]:
+                part_path = safe_source_file(manifest_path.parent, part["file"])
+                if part_path.stat().st_size != part.get("bytes") or sha256_file(part_path) != part.get("sha256"):
+                    raise SnapshotError(f"archive part checksum differs: {part['file']}")
+                with part_path.open("rb") as stream:
+                    while block := stream.read(1024 * 1024):
+                        target.write(block)
+                        digest.update(block)
+                        total_bytes += len(block)
         if total_bytes != archive.get("bytes") or digest.hexdigest() != archive.get("sha256") or digest.hexdigest() != expected:
             raise SnapshotError("archive SHA-256 or byte size differs from sidecar")
         with zipfile.ZipFile(assembled_path) as zip_archive:

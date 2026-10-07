@@ -80,6 +80,31 @@ class ResearchSnapshotsTest(unittest.TestCase):
             with self.assertRaisesRegex(snapshots.SnapshotError, "archive part checksum"):
                 snapshots.verify(output / "employees.manifest.json")
 
+    def test_verify_cleans_temporary_archive_when_a_part_is_missing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            assets = root / "_db"
+            dataset = assets / "employees"
+            (dataset / "metadata").mkdir(parents=True)
+            (dataset / "data").mkdir()
+            schema = b'{"tables":[]}\n'
+            rows = b"[]\n"
+            (dataset / "metadata/schema.json").write_bytes(schema)
+            (dataset / "data/employees.json").write_bytes(rows)
+            db = {"id": "employees", "name": "Employees", "sourceRepository": "repo", "sourceCommit": "def",
+                  "source": {"revision": "def"}, "provenance": {}, "licences": {},
+                  "schemaSha256": hashlib.sha256(schema).hexdigest(), "exports": [{"assetPath": "employees.json",
+                  "bytes": len(rows), "sha256": hashlib.sha256(rows).hexdigest()}], "queries": []}
+            output = root / "out"
+            with patch.object(snapshots, "PART_BYTES", 64):
+                snapshots.write_bundle(db, assets, output)
+            manifest = json.loads((output / "employees.manifest.json").read_text())
+            self.assertGreater(len(manifest["archive"]["parts"]), 1)
+            (output / manifest["archive"]["parts"][-1]["file"]).unlink()
+            with self.assertRaisesRegex(snapshots.SnapshotError, "asset path is missing"):
+                snapshots.verify(output / "employees.manifest.json")
+            self.assertEqual(list(output.glob("demodb-snapshot-*.zip")), [], "failed verification must remove the partial archive")
+
 
 if __name__ == "__main__":
     unittest.main()

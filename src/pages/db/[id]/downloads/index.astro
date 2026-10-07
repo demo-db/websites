@@ -32,9 +32,9 @@ const importConfig = {
       <h2>One checked snapshot.</h2>
       <p>The deterministic bundle contains the checked table exports, schema, provider model files, licences, source revision, and example queries. Its manifest lists a SHA-256 checksum for every bundled file and archive part.</p>
       <div class="big-download-list">
-        {snapshotParts.map((part, index) => <a href={`/research-snapshots/${part.file}`} download><span><strong>Research ZIP part {index + 1} of {snapshotParts.length}</strong><small>{part.bytes.toLocaleString()} bytes · SHA-256 {part.sha256}</small></span><b>↓</b></a>)}
-        <a href={`/research-snapshots/${db.id}.manifest.json`}><span><strong>Bundle manifest</strong><small>Contents, source revision, and file checksums</small></span><b>↗</b></a>
-        <a href={`/research-snapshots/${db.id}.zip.sha256`}><span><strong>Archive SHA-256</strong><small>Verify the downloaded ZIP</small></span><b>↗</b></a>
+        {snapshotParts.map((part, index) => <a href={`https://demodb.dev/research-snapshots/${part.file}`} download><span><strong>Research ZIP part {index + 1} of {snapshotParts.length}</strong><small>{part.bytes.toLocaleString()} bytes · SHA-256 {part.sha256}</small></span><b>↓</b></a>)}
+        <a href={`https://demodb.dev/research-snapshots/${db.id}.manifest.json`}><span><strong>Bundle manifest</strong><small>Contents, source revision, and file checksums</small></span><b>↗</b></a>
+        <a href={`https://demodb.dev/research-snapshots/${db.id}.zip.sha256`}><span><strong>Archive SHA-256</strong><small>Verify the downloaded ZIP</small></span><b>↗</b></a>
       </div>
       <p>Download every part, then concatenate them in numbered order to recreate the ZIP. The manifest lists each part checksum and the complete archive checksum.</p>
     </div>

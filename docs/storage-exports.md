@@ -80,28 +80,6 @@ python3 scripts/hosting-tools/research_snapshots.py verify \
   public/research-snapshots/chinook.manifest.json
 ```
 
-The pinned SQLite providers can also produce deterministic full PostgreSQL
-restore bundles for the six approved demo datasets (Chinook, Northwind, Pubs,
-Sakila, AdventureWorks, and Employees). `postgres_seeds.py` reuses the
-PostgreSQL converter, rejects source fixtures with foreign-key violations, and
-records source provenance, complete per-table row counts, SQL checksums, and
-transaction semantics. Bundle generation writes outside the repository; it
-does not publish a database or commit dataset SQL:
-
-```sh
-python3 scripts/hosting-tools/postgres_seeds.py build \
-  /path/to/provider-root --output /private/tmp/demodb-postgres-seeds
-python3 scripts/hosting-tools/postgres_seeds.py verify \
-  /path/to/provider-root /private/tmp/demodb-postgres-seeds
-```
-
-Each `<dataset-id>/seed.sql.gz` decompresses to plain SQL with one `BEGIN` and
-`COMMIT`, without `psql` meta-commands. Its manifest identifies compressed and
-decompressed byte counts and SHA-256 values, plus the pinned SQLite source
-hash. SQL and SQLite byte sizes are not PostgreSQL logical-size measurements;
-the sandbox service must measure the restored database before setting its
-dataset-specific storage quota.
-
 The previously published Python-generated inGitDB editions can still be
 checked with `validate_storage_exports.py`; new DataTug editions use
 `validate_datatug_exports.py` and manifest format `demodb-storage-export/v2`.

@@ -1,6 +1,9 @@
 import generated from './generated/ovdb.json';
 import registry from '../../config/databases.json';
+import bigQueryHosting from '../../config/bigquery-hosting.json';
 import type { OVDBDatabase, OVDBServer } from './types';
+
+export { bigQueryHosting };
 
 export const ovdbServer = generated.server as unknown as OVDBServer;
 export const ovdbDatabases = generated.databases as unknown as OVDBDatabase[];
@@ -8,18 +11,46 @@ export const ovdbDatabaseById = new Map(ovdbDatabases.map((database) => [databas
 
 export type StorageEntry = {
   id: string;
-  engine: 'SQLite' | 'PostgreSQL' | 'inGitDB';
+  engine: 'SQLite' | 'PostgreSQL' | 'inGitDB' | 'BigQuery';
   tags: string[];
-  readiness: 'public-api' | 'hosted-api-pending' | 'hosted-repository';
+  readiness: 'public-api' | 'hosted-api-pending' | 'hosted-repository' | 'public-read-user-project-required';
   repositoryUrl?: string;
   manifestUrl?: string;
   revision?: string;
+  sourceProjectId?: string;
+  datasetId?: string;
+  location?: string;
+  executionProject?: 'user-selected';
+  tableCount?: number;
+  rowCount?: number;
+  sourceRepository?: string;
+  sourceRevision?: string;
+  sourceSqliteSha256?: string;
+  verificationUrl?: string;
 };
 
 const inGitDBRevisions: Record<string, string> = registry.ingitdbRevisions;
 if (Object.keys(inGitDBRevisions).length !== ovdbDatabases.length
   || ovdbDatabases.some((database) => !/^[a-f0-9]{40}$/.test(inGitDBRevisions[database.localId] ?? ''))) {
   throw new Error('inGitDB revisions must pin every registered dataset exactly once');
+}
+
+const bigQueryEditions = bigQueryHosting.datasets;
+if (bigQueryHosting.format !== 'demodb-bigquery-hosting/v1'
+  || bigQueryHosting.projectId !== 'demodb-dev'
+  || bigQueryHosting.location !== 'US'
+  || bigQueryEditions.length !== ovdbDatabases.length
+  || bigQueryEditions.some((edition) => !ovdbDatabaseById.has(edition.id)
+    || edition.datasetId !== edition.id
+    || edition.verified !== true
+    || !/^[a-f0-9]{64}$/.test(edition.sourceSqliteSha256)
+    || !/^[a-f0-9]{40}$/.test(edition.sourceRevision)
+    || !Number.isSafeInteger(edition.tableCount)
+    || !Number.isSafeInteger(edition.rowCount))) {
+  throw new Error('BigQuery hosted editions must verify every registered DemoDB dataset');
+}
+if (new Set(bigQueryEditions.map((edition) => edition.id)).size !== ovdbDatabases.length) {
+  throw new Error('BigQuery hosted editions must identify every registered dataset exactly once');
 }
 
 // Storage IDs identify catalogue entries, while the provider and OVDB manifest
@@ -33,6 +64,17 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
       repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${inGitDBRevisions[database.localId]}/ingitdb`,
       manifestUrl: `https://github.com/demo-db/${database.localId}/blob/${inGitDBRevisions[database.localId]}/ingitdb/export-manifest.json`,
       revision: inGitDBRevisions[database.localId] },
+    { id: `${database.localId}-bigquery`, engine: 'BigQuery', tags: [database.localId, 'bigquery', 'google-cloud'], readiness: 'public-read-user-project-required',
+      sourceProjectId: bigQueryHosting.projectId,
+      datasetId: bigQueryEditions.find((edition) => edition.id === database.localId)!.datasetId,
+      location: bigQueryHosting.location,
+      executionProject: 'user-selected',
+      tableCount: bigQueryEditions.find((edition) => edition.id === database.localId)!.tableCount,
+      rowCount: bigQueryEditions.find((edition) => edition.id === database.localId)!.rowCount,
+      sourceRepository: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceRepository,
+      sourceRevision: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceRevision,
+      sourceSqliteSha256: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceSqliteSha256,
+      verificationUrl: 'https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json' },
   ],
 }));
 export const storageEntryCount = storageGroups.reduce((sum, group) => sum + group.storages.length, 0);

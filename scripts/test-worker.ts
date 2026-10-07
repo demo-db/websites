@@ -8,7 +8,7 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
-import { publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
+import { bigQueryHosting, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
 import registry from '../config/databases.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -437,14 +437,22 @@ assert.equal(serverManifest.databases.find((database) => database.localId === 'p
 assert.ok(serverManifest.databases.every((database) => database.manifestUrl === `${database.serverDbBaseUrl}ovdb-database.json`));
 assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
 const storageCatalogueHtml = await (await fetch('demodb.dev', '/ovdb/')).text();
-assert.match(storageCatalogueHtml, /6 datasets\. 3 storage engines each/);
+assert.match(storageCatalogueHtml, /6 datasets\. 4 storage editions each/);
 assert.match(storageCatalogueHtml, /six SQLite databases with working public APIs/);
+assert.match(storageCatalogueHtml, /authenticated Google accounts/);
 assert.equal(storageGroups.length, 6);
-assert.equal(storageEngineCount, 3);
-assert.equal(storageEntryCount, 18);
+assert.equal(storageEngineCount, 4);
+assert.equal(storageEntryCount, 24);
 assert.equal(publicOvdbApiCount, 6);
+assert.equal(bigQueryHosting.projectId, 'demodb-dev');
+assert.equal(bigQueryHosting.location, 'US');
+assert.equal(bigQueryHosting.queryAccess.permissionPrincipal, 'allAuthenticatedUsers');
+assert.equal(bigQueryHosting.queryAccess.googleAuthenticationRequired, true);
+assert.equal(bigQueryHosting.queryAccess.browserQueryInDataTug, 'not-enabled');
+assert.equal(bigQueryHosting.datasets.reduce((total, edition) => total + edition.tableCount, 0), 128);
+assert.equal(bigQueryHosting.datasets.reduce((total, edition) => total + edition.rowCount, 0), 839264);
 for (const { database, storages } of storageGroups) {
-  assert.equal(storages.length, 3);
+  assert.equal(storages.length, 4);
   for (const storage of storages) {
     const path = `/ovdb/db/${storage.id}/`;
     assert.ok(storageCatalogueHtml.includes(`href="${path}"`), `${storage.id} linked from catalogue`);
@@ -477,6 +485,25 @@ for (const { database, storages } of storageGroups) {
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
       assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404);
+    } else if (storage.readiness === 'public-read-user-project-required') {
+      const edition = bigQueryHosting.datasets.find((candidate) => candidate.id === database.localId);
+      assert.ok(edition, `${database.localId} has a hosted BigQuery receipt`);
+      assert.equal(storage.sourceProjectId, 'demodb-dev');
+      assert.equal(storage.datasetId, database.localId);
+      assert.equal(storage.location, 'US');
+      assert.equal(storage.executionProject, 'user-selected');
+      assert.equal(storage.tableCount, edition.tableCount);
+      assert.equal(storage.rowCount, edition.rowCount);
+      assert.equal(storage.sourceSqliteSha256, edition.sourceSqliteSha256);
+      assert.match(html, /authenticated Google accounts/);
+      assert.match(html, /execution project selected by you/);
+      assert.match(html, /DataTug browser connection is not enabled yet/);
+      assert.match(html, /Unverified primary- and foreign-key declarations are omitted/);
+      assert.match(html, /no BigQuery search or vector indexes were created/);
+      assert.ok(html.includes('https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json'));
+      assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
+      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
+      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'BigQuery storage has no OVDB API route');
     } else {
       assert.match(html, /hosted on Neon/);
       assert.match(html, /Public OpenVaultDB API access is being prepared/);

@@ -62,8 +62,13 @@ BigQuery directories contain NDJSON and table schemas. The manifest maps
 normalized BigQuery field names to source names and records file checksums.
 Declared exact decimals with known precision choose NUMERIC or BIGNUMERIC only
 when their precision/scale fit; unbounded NUMERIC/DECIMAL/MONEY values remain
-decimal strings. BigQuery remains prepared but unhosted until a project,
-location, cost policy, ingestion and query receipts are available.
+decimal strings. The six hosted DemoDB BigQuery editions are listed in the
+checked-in [`config/bigquery-hosting.json`](../config/bigquery-hosting.json)
+receipt. It records source hashes and revisions, independently verified table
+and row counts, the DataTug CLI release, and the authenticated-reader access
+check. This script still only prepares local load bundles and does not provision
+BigQuery. Queries run in a user-selected execution project; neither the website
+nor its Worker proxies query jobs.
 
 Each Downloads page also links a deterministic research snapshot ZIP. During
 the site build, `research_snapshots.py` packages each pinned provider's checked

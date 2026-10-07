@@ -1,0 +1,94 @@
+{
+  "format": "demodb-bigquery-hosting/v1",
+  "verifiedOn": "2026-10-07",
+  "projectId": "demodb-dev",
+  "location": "US",
+  "sourceMethod": "DataTug CLI v0.62.0 direct SQLite to BigQuery copy",
+  "sourceTool": {
+    "name": "DataTug CLI",
+    "version": "v0.62.0",
+    "sourceRepository": "https://github.com/datatug/datatug-cli",
+    "sourceCommit": "c6b98734cb4ac33892453b6112c5d8c004e84426"
+  },
+  "queryAccess": {
+    "permissionPrincipal": "allAuthenticatedUsers",
+    "permissionRole": "READER",
+    "googleAuthenticationRequired": true,
+    "executionProject": "user-selected",
+    "browserQueryInDataTug": "not-enabled"
+  },
+  "schemaNotes": {
+    "primaryKeys": "Unverified primary-key metadata was omitted from BigQuery declarations; BigQuery does not enforce declared keys.",
+    "foreignKeys": "Unverified foreign-key metadata was omitted from BigQuery declarations; BigQuery does not enforce declared keys.",
+    "secondaryIndexes": "Source relational indexes were not migrated; no BigQuery search or vector indexes were created."
+  },
+  "verification": {
+    "method": "Independent BigQuery table and row counts compared with each pinned source SQLite fixture.",
+    "copyReceiptSha256": "2254b330da2e99cc2da3e02797a9c1a561e093c05d6305bc3d504acc5de1ef4c",
+    "independentCountReceiptSha256": "150f921322b22d2a95546b19887d83f6fd8cc7110b217fd47a703dced878e895",
+    "readerAccessReceiptSha256": "c9027e442d212ca827649d783ffabebd8ab1a981ea75d4d96fbeb09295d991d5",
+    "secretsIncluded": false
+  },
+  "datasets": [
+    {
+      "id": "chinook",
+      "datasetId": "chinook",
+      "sourceRepository": "https://github.com/demo-db/chinook",
+      "sourceRevision": "26e852cca00101f53a84ef8ee1f1ae389067f5cf",
+      "sourceSqliteSha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15",
+      "tableCount": 11,
+      "rowCount": 15607,
+      "verified": true
+    },
+    {
+      "id": "northwind",
+      "datasetId": "northwind",
+      "sourceRepository": "https://github.com/demo-db/northwind",
+      "sourceRevision": "e74726515c3833620b54b7a50d1d273276dd23c1",
+      "sourceSqliteSha256": "279b34136771aee75d802094b3329515a2b01da65d2a20a4a9e3b58c29b4fd20",
+      "tableCount": 13,
+      "rowCount": 3310,
+      "verified": true
+    },
+    {
+      "id": "pubs",
+      "datasetId": "pubs",
+      "sourceRepository": "https://github.com/demo-db/pubs",
+      "sourceRevision": "6c06c5c7395b03ff1a02c2b1a21485add3e1b65b",
+      "sourceSqliteSha256": "b45b08b7c06441cc0b138b031ea5bd32bd5866aebf874c89d2ebf7fc6abb3691",
+      "tableCount": 11,
+      "rowCount": 255,
+      "verified": true
+    },
+    {
+      "id": "sakila",
+      "datasetId": "sakila",
+      "sourceRepository": "https://github.com/demo-db/sakila",
+      "sourceRevision": "cb9a81a8cbedcd8831737f281f888d5d584fae85",
+      "sourceSqliteSha256": "9bebeee50fecb1fee115c206a4f380f2f6d1f009e7796b18b8a8cfba7c810454",
+      "tableCount": 16,
+      "rowCount": 47268,
+      "verified": true
+    },
+    {
+      "id": "adventureworks",
+      "datasetId": "adventureworks",
+      "sourceRepository": "https://github.com/demo-db/adventureworks",
+      "sourceRevision": "5028a27189b487d6fd8025fafc1307aada707fd2",
+      "sourceSqliteSha256": "6a105e1982becfe003fc7a307d7cad9d738390cedd79d166c2167fd817168109",
+      "tableCount": 71,
+      "rowCount": 759240,
+      "verified": true
+    },
+    {
+      "id": "employees",
+      "datasetId": "employees",
+      "sourceRepository": "https://github.com/demo-db/employees",
+      "sourceRevision": "2069e26e8fdb60bdb16507f75569a579cf3da7cf",
+      "sourceSqliteSha256": "46b49dd0e141cd8db66d57680a10febfccc15e6f54dc7b8f3c2316b55e11c5f0",
+      "tableCount": 6,
+      "rowCount": 13584,
+      "verified": true
+    }
+  ]
+}

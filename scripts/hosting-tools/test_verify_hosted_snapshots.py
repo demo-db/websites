@@ -248,6 +248,19 @@ class HostedSnapshotVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(pg.ImportError, "BigQuery read access token is missing"):
             verify.verify_run(repo_root, env={})
 
+    def test_dataset_and_stage_are_added_to_sanitized_verification_errors(self) -> None:
+        entries = {dataset: {"id": dataset, "commit": "a" * 40} for dataset in verify.DATASET_IDS}
+        catalogue = {"ingitdbRevisions": {dataset: "b" * 40 for dataset in verify.DATASET_IDS}}
+        hosted = {"projectId": "demodb-dev", "location": "US", "datasets": [],
+                  "_schemaBaseline": {"datasets": []}, "_schemaBaselineSha256": "c" * 64}
+        environment = {"DEMODB_VERIFY_BQ_ACCESS_TOKEN": "bounded-test-token"}
+        environment.update({f"DEMODB_PG_VERIFY_URL_{dataset.upper()}": "redacted-url"
+                            for dataset in verify.DATASET_IDS})
+        with patch.object(verify, "load_pins", return_value=(catalogue, hosted, entries)), \
+             patch.object(verify, "materialize_provider", side_effect=pg.ImportError("source is unavailable")):
+            with self.assertRaisesRegex(pg.ImportError, "chinook: provider materialization: source is unavailable"):
+                verify.verify_run(Path("."), env=environment)
+
     def test_source_type_compatibility_is_conservative_for_exact_values(self) -> None:
         self.assertTrue(verify._field_type_compatible("DECIMAL_TEXT(76,0)", "STRING"))
         self.assertFalse(verify._field_type_compatible("DECIMAL_TEXT(76,0)", "NUMERIC"))

@@ -30,6 +30,12 @@ DATABASE_ID = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
 DECIMAL_TEXT = re.compile(r"^\s*DECIMAL_TEXT\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*$", re.I)
 DECIMAL_TYPED = re.compile(r"^\s*(?:NUMERIC|DECIMAL)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*$", re.I)
 STORAGE_OVERRIDES = {("adventureworks", "Production.Document", "FileExtension"): "BYTEA"}
+# Northwind's hosted PostgreSQL snapshot was produced by a separate, pinned
+# converter artifact, not the generic importer below. The canonical table-map
+# digest is derived from that commit's artifacts/hosting-imports/manifest.json.
+NORTHWIND_IMPORTER_REVISION = "3dc8cd94c0a9859853c4da1187c6f4075535f8d7"
+NORTHWIND_IMPORT_VERSION = 1
+NORTHWIND_IMPORTER_TABLES_SHA256 = "b76d3d90338790078eeadf059f1c8c35bcae868f148a31c2d821f7fabb7e5a03"
 
 
 class ImportError(ValueError):
@@ -718,14 +724,51 @@ def verify_database(connection: Any, root: Path) -> dict[str, Any]:
         snapshot.close()
 
 
+def _verify_northwind_import_manifest(connection: Any, snapshot: Snapshot) -> None:
+    """Validate the known Northwind importer's exact marker and manifest contract."""
+    cursor = connection.cursor()
+    cursor.execute('SELECT version, source_sha256, manifest_json FROM "northwind"."_import_manifest"')
+    rows = cursor.fetchall()
+    if len(rows) != 1:
+        raise ImportError("Northwind import manifest must contain exactly one provenance row")
+    version, source_sha256, manifest = rows[0]
+    if isinstance(manifest, str):
+        try:
+            manifest = json.loads(manifest)
+        except json.JSONDecodeError:
+            raise ImportError("Northwind import manifest JSON is invalid") from None
+    if (version != NORTHWIND_IMPORT_VERSION or source_sha256 != snapshot.source_sha256
+            or not isinstance(manifest, dict)
+            or manifest.get("version") != NORTHWIND_IMPORT_VERSION
+            or manifest.get("sourceSha256") != snapshot.source_sha256):
+        raise ImportError("Northwind SQL and JSON import provenance differs from the pinned source")
+    tables = manifest.get("tables")
+    if not isinstance(tables, dict):
+        raise ImportError("Northwind import manifest table map is missing")
+    table_digest = hashlib.sha256(json.dumps(tables, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    if table_digest != NORTHWIND_IMPORTER_TABLES_SHA256:
+        raise ImportError("Northwind import manifest differs from the pinned converter artifact")
+
+
+def _verify_schema_provenance(connection: Any, snapshot: Snapshot, comment: str | None) -> None:
+    expected = f"demodb-import:v{IMPORT_VERSION}:source-sha256:{snapshot.source_sha256}"
+    if snapshot.database_id == "northwind":
+        northwind = f"northwind-import:v{NORTHWIND_IMPORT_VERSION}:source-sha256:{snapshot.source_sha256}"
+        if comment == northwind:
+            _verify_northwind_import_manifest(connection, snapshot)
+            return
+        raise ImportError("target schema is missing or has different pinned-source provenance")
+    if comment == expected:
+        return
+    raise ImportError("target schema is missing or has different pinned-source provenance")
+
+
 def _verify_snapshot(connection: Any, snapshot: Snapshot) -> dict[str, Any]:
     schema = snapshot.database_id
     cursor = connection.cursor()
     cursor.execute("SELECT obj_description(oid, 'pg_namespace') FROM pg_namespace WHERE nspname = %s", (schema,))
     row = cursor.fetchone()
-    expected_comment = f"demodb-import:v{IMPORT_VERSION}:source-sha256:{snapshot.source_sha256}"
-    if not row or row[0] != expected_comment:
-        raise ImportError("target schema is missing or has different pinned-source provenance")
+    _verify_schema_provenance(connection, snapshot, row[0] if row else None)
     checked = 0
     for table in snapshot.tables:
         names = [column["name"] for column in table["columns"]]

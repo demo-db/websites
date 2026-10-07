@@ -420,21 +420,28 @@ def verify_run(root: Path, *, env: dict[str, str] | None = None) -> dict[str, An
                 native_revision = catalogue["ingitdbRevisions"].get(dataset_id)
                 if not native_revision:
                     raise SnapshotError(f"{dataset_id}: inGitDB revision pin is missing")
-                source_root, native_root = materialize_provider(provider, native_revision, temporary_root)
-                sqlite_native = validate_ingitdb(source_root, native_root, check_data=True)
-                hosted_entry = next(item for item in hosted["datasets"] if item["id"] == dataset_id)
-                if sqlite_native.get("sourceSha256") != hosted_entry.get("sourceSqliteSha256"):
-                    raise SnapshotError(f"{dataset_id}: source SQLite digest differs from hosted source binding")
-                if sqlite_native.get("metadataAndDataMatch") is not True or sqlite_native.get("sourceOrphans") != 0:
-                    raise SnapshotError(f"{dataset_id}: SQLite/inGitDB metadata, rows, or foreign keys differ")
-                source_snapshot = inspect(source_root)
                 try:
-                    bq_result = verify_bigquery_metadata(dataset_id, token, hosted,
-                                                         baseline_entries[dataset_id], source_snapshot)
-                finally:
-                    source_snapshot.close()
-                pg_url = env[f"{PG_SECRET_PREFIX}{dataset_id.upper()}"]
-                pg_result = verify_postgres(pg_url, source_root, dataset_id, temporary_root)
+                    stage = "provider materialization"
+                    source_root, native_root = materialize_provider(provider, native_revision, temporary_root)
+                    stage = "SQLite/inGitDB parity"
+                    sqlite_native = validate_ingitdb(source_root, native_root, check_data=True)
+                    hosted_entry = next(item for item in hosted["datasets"] if item["id"] == dataset_id)
+                    if sqlite_native.get("sourceSha256") != hosted_entry.get("sourceSqliteSha256"):
+                        raise SnapshotError("source SQLite digest differs from hosted source binding")
+                    if sqlite_native.get("metadataAndDataMatch") is not True or sqlite_native.get("sourceOrphans") != 0:
+                        raise SnapshotError("SQLite/inGitDB metadata, rows, or foreign keys differ")
+                    stage = "BigQuery metadata"
+                    source_snapshot = inspect(source_root)
+                    try:
+                        bq_result = verify_bigquery_metadata(dataset_id, token, hosted,
+                                                             baseline_entries[dataset_id], source_snapshot)
+                    finally:
+                        source_snapshot.close()
+                    stage = "PostgreSQL schema and typed-row parity"
+                    pg_url = env[f"{PG_SECRET_PREFIX}{dataset_id.upper()}"]
+                    pg_result = verify_postgres(pg_url, source_root, dataset_id, temporary_root)
+                except (SnapshotError, OSError, ValueError, KeyError) as exc:
+                    raise SnapshotError(f"{dataset_id}: {stage}: {exc}") from None
             report["datasets"].append({"id": dataset_id, "sourceRevision": provider["commit"],
                 "inGitDBRevision": native_revision, "sourceSqliteSha256": sqlite_native["sourceSha256"],
                 "sqliteInGitDB": {"tables": sqlite_native["tables"], "views": sqlite_native["views"],

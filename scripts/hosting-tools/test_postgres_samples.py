@@ -155,6 +155,67 @@ class PostgresSamplesTests(unittest.TestCase):
             self.assertTrue(pg.verify_database(connection, self.root))
         self.assertFalse(connection.active)
 
+    def test_northwind_importer_provenance_is_exact_and_manifest_bound(self) -> None:
+        self.manifest["id"] = "northwind"
+        self.write_manifest()
+        snapshot = pg.inspect(self.root)
+        tables = {"Orders": {"rows": 1, "sha256": "a" * 64}}
+        manifest = {"version": 1, "sourceSha256": snapshot.source_sha256, "tables": tables}
+        digest = hashlib.sha256(json.dumps(tables, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+        class Cursor:
+            def __init__(self, row: tuple[object, ...]) -> None:
+                self.row = row
+                self.query = ""
+
+            def execute(self, query: str) -> None:
+                self.query = query
+
+            def fetchall(self) -> list[tuple[object, ...]]:
+                return [self.row]
+
+        class Connection:
+            def __init__(self, row: tuple[object, ...]) -> None:
+                self.cursor_instance = Cursor(row)
+
+            def cursor(self) -> Cursor:
+                return self.cursor_instance
+
+        try:
+            with patch.object(pg, "NORTHWIND_IMPORTER_TABLES_SHA256", digest):
+                pg._verify_schema_provenance(
+                    Connection((1, snapshot.source_sha256, manifest)), snapshot,
+                    f"northwind-import:v1:source-sha256:{snapshot.source_sha256}")
+                with self.assertRaisesRegex(pg.ImportError, "pinned-source provenance"):
+                    pg._verify_schema_provenance(
+                        Connection((1, snapshot.source_sha256, manifest)), snapshot,
+                        f"other-import:v1:source-sha256:{snapshot.source_sha256}")
+                with self.assertRaisesRegex(pg.ImportError, "SQL and JSON import provenance"):
+                    pg._verify_schema_provenance(
+                        Connection((1, "0" * 64, manifest)), snapshot,
+                        f"northwind-import:v1:source-sha256:{snapshot.source_sha256}")
+                wrong_json = {**manifest, "sourceSha256": "0" * 64}
+                with self.assertRaisesRegex(pg.ImportError, "SQL and JSON import provenance"):
+                    pg._verify_schema_provenance(
+                        Connection((1, snapshot.source_sha256, wrong_json)), snapshot,
+                        f"northwind-import:v1:source-sha256:{snapshot.source_sha256}")
+                with self.assertRaisesRegex(pg.ImportError, "pinned converter artifact"):
+                    pg._verify_schema_provenance(
+                        Connection((1, snapshot.source_sha256, {**manifest, "tables": {}})), snapshot,
+                        f"northwind-import:v1:source-sha256:{snapshot.source_sha256}")
+                with self.assertRaisesRegex(pg.ImportError, "pinned-source provenance"):
+                    pg._verify_schema_provenance(
+                        Connection((1, snapshot.source_sha256, manifest)), snapshot,
+                        f"northwind-import:v2:source-sha256:{snapshot.source_sha256}")
+                with self.assertRaisesRegex(pg.ImportError, "pinned-source provenance"):
+                    pg._verify_schema_provenance(
+                        Connection((1, snapshot.source_sha256, manifest)), snapshot,
+                        f"demodb-import:v{pg.IMPORT_VERSION}:source-sha256:{snapshot.source_sha256}")
+            self.assertEqual(pg.NORTHWIND_IMPORTER_REVISION, "3dc8cd94c0a9859853c4da1187c6f4075535f8d7")
+            self.assertEqual(pg.NORTHWIND_IMPORT_VERSION, 1)
+        finally:
+            snapshot.close()
+
     def test_missing_psycopg_has_actionable_error(self) -> None:
         url_file = self.root / "private-url"
         url_file.write_text("postgresql://user:example@localhost/sample", encoding="utf-8")

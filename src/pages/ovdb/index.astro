@@ -12,7 +12,7 @@ import { ovdbServer, storageEngineCount, storageEntryCount, storageGroups, publi
   </section>
   <section class="shell section">
     <div class="section-heading"><div><p class="eyebrow">Storage catalogue</p><h2>{storageGroups.length} datasets. {storageEngineCount} storage editions each.</h2></div><span class="muted">{publicOvdbApiCount} public OVDB APIs · {storageEntryCount} storage entries</span></div>
-    <p class="storage-intro">The shared server descriptor lists the six SQLite databases with working public APIs. PostgreSQL copies are hosted on Neon, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
+    <p class="storage-intro">The shared server descriptor lists the six SQLite databases with working public APIs. PostgreSQL copies are hosted on Neon{publicOvdbApiCount > 6 ? ' with separate public read-only DTQL endpoints' : ' while their public APIs are being prepared'}, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
     <div class="database-grid">
       {storageGroups.map(({ database, storages }) => (
         <article class="database-card storage-group">

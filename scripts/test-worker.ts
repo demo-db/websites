@@ -8,7 +8,8 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
-import { bigQueryHosting, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
+import { bigQueryHosting, postgresqlStorageEntry, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
+import postgresqlApi from '../config/postgresql-api.json';
 import registry from '../config/databases.json';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -443,7 +444,16 @@ assert.match(storageCatalogueHtml, /authenticated Google accounts/);
 assert.equal(storageGroups.length, 6);
 assert.equal(storageEngineCount, 4);
 assert.equal(storageEntryCount, 24);
-assert.equal(publicOvdbApiCount, 6);
+assert.equal(publicOvdbApiCount, postgresqlApi.publicApiVerified ? 12 : 6);
+for (const { database } of storageGroups) {
+  const pending = postgresqlStorageEntry(database.localId, false);
+  const publicApi = postgresqlStorageEntry(database.localId, true);
+  assert.equal(pending.readiness, 'hosted-api-pending');
+  assert.equal(pending.apiUrl, undefined);
+  assert.equal(publicApi.readiness, 'public-api');
+  assert.equal(publicApi.apiUrl, `https://cloud.openvaultdb.com/v1/databases/${database.localId}-postgresql`);
+  assert.deepEqual(publicApi.tags, pending.tags);
+}
 assert.equal(bigQueryHosting.projectId, 'demodb-dev');
 assert.equal(bigQueryHosting.location, 'US');
 assert.equal(bigQueryHosting.queryAccess.permissionPrincipal, 'allAuthenticatedUsers');
@@ -465,7 +475,16 @@ for (const { database, storages } of storageGroups) {
     assert.equal((await fetch('demodb.dev', path, 'HEAD')).status, 200);
     assert.equal((await fetch('demodb.dev', path, 'POST')).status, 405);
     assert.equal((await fetch('demodb.dev', path.slice(0, -1))).headers.get('Location'), `https://demodb.dev${path}`);
-    if (storage.readiness === 'public-api') {
+    if (storage.readiness === 'public-api' && storage.engine === 'PostgreSQL') {
+      assert.equal(storage.apiUrl, `https://cloud.openvaultdb.com/v1/databases/${database.localId}-postgresql`);
+      assert.ok(html.includes(`href="${storage.apiUrl}"`));
+      assert.match(html, /public read-only DTQL API/);
+      assert.match(html, /does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint/);
+      assert.doesNotMatch(html, new RegExp(`href="${database.apiUrl}"`));
+      assert.doesNotMatch(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
+      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
+      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'PostgreSQL endpoint belongs to cloud.openvaultdb.com');
+    } else if (storage.readiness === 'public-api') {
       assert.match(html, new RegExp(`href="${database.apiUrl}"`));
       assert.match(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
     } else if (storage.readiness === 'hosted-repository') {

@@ -129,6 +129,9 @@ assert.notEqual(stagingImportKey('chinook'), stagingImportKey('northwind'), 'par
 const assets = {
   async fetch(request: Request) {
     const url = new URL(request.url);
+    if (url.hostname === 'demodb.dev' && url.pathname === '/research-snapshots/chinook.manifest.json') {
+      return new Response('{"fixture":"research manifest"}', { headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.pathname.endsWith('/_db/chinook/data/json/chinook.Order%20Details.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
     const chunk = chunkAssets.get(decodeURIComponent(url.pathname));
     if (chunk) return new Response(request.method === 'HEAD' ? null : chunk, { headers: { 'Content-Length': String(chunk.length), 'Accept-Ranges': 'bytes' } });
@@ -156,6 +159,8 @@ assert.equal(resolveHost('pubs.localhost', local).databaseId, 'pubs');
 assert.equal(resolveHost('adventureworks.localhost', local).databaseId, 'adventureworks');
 assert.equal(resolveHost('employees.localhost', local).databaseId, 'employees');
 assert.equal(resolveHost('unknown.demodb.dev').databaseId, undefined);
+assert.equal((await fetch('demodb.dev', '/research-snapshots/chinook.manifest.json')).status, 200, 'research bundles are served from the catalogue asset path');
+assert.equal((await fetch('chinook.demodb.dev', '/research-snapshots/chinook.manifest.json')).status, 404, 'database subdomains do not expose catalogue-scoped research bundles');
 assert.equal(internalAssetPath('northwind', '/tables/Order%20Details/'), '/_db/northwind/tables/Order%20Details/index.html');
 assert.equal(internalAssetPath('northwind', '/theme.js'), '/theme.js', 'shared theme controller is not host-prefixed');
 assert.equal(internalAssetPath('northwind', '/embed/exact-decimal.js'), '/embed/exact-decimal.js', 'the exact comparator module is served from database subdomains');

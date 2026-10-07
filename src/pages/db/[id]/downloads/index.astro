@@ -1,9 +1,13 @@
 ---
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import SiteLayout from '../../../../layouts/SiteLayout.astro';
 import { databases } from '../../../../data/db';
 import type { Database } from '../../../../data/types';
 export function getStaticPaths() { return databases.map((db) => ({ params: { id: db.id }, props: { db } })); }
 const { db } = Astro.props as { db: Database };
+const snapshotManifest = JSON.parse(await readFile(resolve('public/research-snapshots', `${db.id}.manifest.json`), 'utf8'));
+const snapshotParts = snapshotManifest.archive.parts as { file: string; bytes: number; sha256: string }[];
 const fullFiles = db.exports.filter((item) => !item.table && item.format !== 'metadata');
 const tables = db.tables.filter((item) => item.kind === 'table');
 const transferLabel = (item: Database['exports'][number]) => item.compression === 'gzip' && item.decodedBytes != null
@@ -21,6 +25,20 @@ const importConfig = {
 <SiteLayout db={db} title={`Downloads — ${db.name} | DemoDB`} description={`Download ${db.name} in the formats supported by its provider contract.`} canonical="/downloads/">
   <section class="page-intro shell"><p class="eyebrow">Data access</p><h1>Downloads</h1><p>Download the complete database or choose a focused table export. Every link is checked against the provider’s pinned checksum at build time.</p></section>
   <section class="shell section download-layout"><div><div class="section-heading compact"><div><p class="eyebrow">Complete database</p><h2>Files ready to use.</h2></div></div><div class="big-download-list">{fullFiles.map((item) => <a href={`/data/${item.publicPath}`} download><span><strong>{item.format.toUpperCase()}</strong><small>{transferLabel(item) ? `${transferLabel(item)} · ` : ''}Complete {db.name} export</small></span><b>↓</b></a>)}</div><div class="content-card download-note"><p class="eyebrow">Machine-readable schema</p><h2>Use the contract too.</h2><p>Schema JSON describes native table and view names, columns, keys, relationships, sample rows, and row counts.</p><a class="text-link" href="/schema.json">Download schema JSON →</a><p><a class="text-link" href="https://demodb.dev/corpus.json">Open the machine-readable DemoDB corpus index →</a></p></div></div><aside class="download-aside"><div class="content-card"><p class="eyebrow">Table files</p><h2>{tables.length} tables</h2><p>Each table uses its original identifier in the download name. URL encoding keeps names with spaces usable as ordinary links.</p><div class="mini-table-list">{tables.map((table) => <a href={`/tables/${encodeURIComponent(table.name)}/`}><span>{table.name}</span><small>{table.rowCount?.toLocaleString() ?? '—'} rows →</small></a>)}</div></div></aside></section>
+
+  <section class="shell section">
+    <div class="content-card download-note">
+      <p class="eyebrow">Reproducible research</p>
+      <h2>One checked snapshot.</h2>
+      <p>The deterministic bundle contains the checked table exports, schema, provider model files, licences, source revision, and example queries. Its manifest lists a SHA-256 checksum for every bundled file and archive part.</p>
+      <div class="big-download-list">
+        {snapshotParts.map((part, index) => <a href={`https://demodb.dev/research-snapshots/${part.file}`} download><span><strong>Research ZIP part {index + 1} of {snapshotParts.length}</strong><small>{part.bytes.toLocaleString()} bytes · SHA-256 {part.sha256}</small></span><b>↓</b></a>)}
+        <a href={`https://demodb.dev/research-snapshots/${db.id}.manifest.json`}><span><strong>Bundle manifest</strong><small>Contents, source revision, and file checksums</small></span><b>↗</b></a>
+        <a href={`https://demodb.dev/research-snapshots/${db.id}.zip.sha256`}><span><strong>Archive SHA-256</strong><small>Verify the downloaded ZIP</small></span><b>↗</b></a>
+      </div>
+      <p>Download every part, then concatenate them in numbered order to recreate the ZIP. The manifest lists each part checksum and the complete archive checksum.</p>
+    </div>
+  </section>
 
   <section class="shell section">
     <div class="content-card snapshot-import" data-import-root data-config={JSON.stringify(importConfig)}>

@@ -65,6 +65,31 @@ when their precision/scale fit; unbounded NUMERIC/DECIMAL/MONEY values remain
 decimal strings. BigQuery remains prepared but unhosted until a project,
 location, cost policy, ingestion and query receipts are available.
 
+Each Downloads page also links a deterministic research snapshot ZIP. During
+the site build, `research_snapshots.py` packages each pinned provider's checked
+public exports, schema, model and meaning files, licences, provenance, and
+example queries. It writes a sidecar manifest with per-file sizes and SHA-256
+digests, plus a SHA-256 file for the archive. ZIP entry order, timestamps, and
+permissions are normalized so repeated builds from the same pinned inputs
+produce the same archive.
+
+To verify a built research snapshot's split files:
+
+```sh
+python3 scripts/hosting-tools/research_snapshots.py verify \
+  public/research-snapshots/chinook.manifest.json
+```
+
 The previously published Python-generated inGitDB editions can still be
 checked with `validate_storage_exports.py`; new DataTug editions use
 `validate_datatug_exports.py` and manifest format `demodb-storage-export/v2`.
+The Cloudflare Worker assets have a per-file size limit, so each ZIP is split
+into deterministic 20 MiB parts. Download all `<dataset-id>.zip.part-####`
+files and concatenate them in numeric order to recreate the archive. The
+manifest lists every part's hash and byte count, along with the complete ZIP's
+checksum. To verify the downloaded parts before assembly:
+
+```sh
+python3 scripts/hosting-tools/research_snapshots.py verify \
+  public/research-snapshots/chinook.manifest.json
+```

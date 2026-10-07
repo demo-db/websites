@@ -1,0 +1,63 @@
+name: Verify hosted snapshots
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-snapshot-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the protected main-branch manual or scheduled run
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
+        run: |
+          test "$REPOSITORY_ID" = "1404022070"
+          test "$REPOSITORY_OWNER_ID" = "337601529"
+          test "$REF_NAME" = "refs/heads/main"
+          test "$EVENT_NAME" = "schedule" || test "$EVENT_NAME" = "workflow_dispatch"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned verifier dependencies
+        run: python -m pip install --disable-pip-version-check -r scripts/hosting-tools/requirements-hosted-verification.txt
+      # The WIF provider is restricted to repository/owner IDs, refs/heads/main,
+      # this workflow_ref, and schedule/workflow_dispatch events.
+      - id: google-auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.DEMODB_VERIFY_WIF_PROVIDER }}
+          service_account: ${{ vars.DEMODB_VERIFY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/bigquery.readonly
+          access_token_lifetime: 3600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Verify SQLite, inGitDB, PostgreSQL, and BigQuery snapshots
+        env:
+          DEMODB_VERIFY_BQ_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+          DEMODB_PG_VERIFY_URL_CHINOOK: ${{ secrets.DEMODB_PG_VERIFY_URL_CHINOOK }}
+          DEMODB_PG_VERIFY_URL_NORTHWIND: ${{ secrets.DEMODB_PG_VERIFY_URL_NORTHWIND }}
+          DEMODB_PG_VERIFY_URL_PUBS: ${{ secrets.DEMODB_PG_VERIFY_URL_PUBS }}
+          DEMODB_PG_VERIFY_URL_SAKILA: ${{ secrets.DEMODB_PG_VERIFY_URL_SAKILA }}
+          DEMODB_PG_VERIFY_URL_ADVENTUREWORKS: ${{ secrets.DEMODB_PG_VERIFY_URL_ADVENTUREWORKS }}
+          DEMODB_PG_VERIFY_URL_EMPLOYEES: ${{ secrets.DEMODB_PG_VERIFY_URL_EMPLOYEES }}
+        run: python scripts/hosting-tools/verify_hosted_snapshots.py

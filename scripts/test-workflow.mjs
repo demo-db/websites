@@ -60,6 +60,17 @@ test('live smoke separates DTQL limits from OVDB server pagination', () => {
   assert.match(liveSmoke, /await checkedConfiguredDatabaseQueries\(\)/, 'all configured providers receive a live read-only query check');
 });
 
+test('live smoke checks all six hosted BigQuery editions and their source, billing, and API boundaries', () => {
+  assert.match(liveSmoke, /storageIds = requiredQueryableDatabaseIds\.flatMap\(\(id\) => \[`\$\{id\}-sqlite`, `\$\{id\}-postgresql`, `\$\{id\}-ingitdb`, `\$\{id\}-bigquery`\]\)/);
+  assert.match(liveSmoke, /6 datasets\. 4 storage editions each/);
+  assert.match(liveSmoke, /body\.includes\('demodb-dev'\) && body\.includes\('your own execution project'\)/);
+  assert.match(liveSmoke, /your own Google Cloud execution project/);
+  assert.match(liveSmoke, /does not execute or proxy SQL/);
+  assert.match(liveSmoke, /DataTug browser query execution is not enabled yet/);
+  assert.match(liveSmoke, /checkedNotFound\(`https:\/\/demodb\.dev\/ovdb\/v1\/databases\/\$\{id\}`\)/);
+  assert.match(liveSmoke, /!body\.includes\('Open read-only API'\) && !body\.includes\('Database descriptor'\)/);
+});
+
 test('live smoke checks Pubs static pages and includes it in shared query coverage', () => {
   assert.match(liveSmoke, /https:\/\/pubs\.demodb\.dev/);
   assert.match(liveSmoke, /\/data\/pubs\.sqlite/);

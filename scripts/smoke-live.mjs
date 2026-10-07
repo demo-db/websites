@@ -14,7 +14,7 @@ const sites = [
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/data/employees.sqlite', '/.well-known/openvaultdb']],
 ];
-const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`]);
+const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`, `${id}-bigquery`]);
 
 async function checked(url, validate) {
   let last = 'request was not attempted';
@@ -30,6 +30,19 @@ async function checked(url, validate) {
     await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
   }
   throw new Error(`${url}: ${last}`);
+}
+
+async function checkedNotFound(url) {
+  let last = 'request was not attempted';
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
+      if (response.status === 404) return;
+      last = `HTTP ${response.status} from ${url}`;
+    } catch (error) { last = error instanceof Error ? error.message : String(error); }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
+  }
+  throw new Error(`${url}: expected HTTP 404 after retries; ${last}`);
 }
 
 async function checkedReadOnlyQuery(localId, query, pageSize, nativeRecordset) {
@@ -114,9 +127,20 @@ for (const [origin, paths] of sites) {
   for (const path of paths) await checked(`${origin}${path}`, (_body, response) => response.status === 200);
 }
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
-await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) && body.includes('public OVDB access is pending'));
+await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) &&
+  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project'));
 for (const id of storageIds) {
-  await checked(`https://demodb.dev/ovdb/db/${id}/`, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql') ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API') : id.endsWith('-ingitdb') ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API') : body.includes('Open read-only API')));
+  const url = `https://demodb.dev/ovdb/db/${id}/`;
+  await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')
+    ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
+    : id.endsWith('-ingitdb')
+      ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API')
+      : id.endsWith('-bigquery')
+        ? body.includes('demodb-dev') && body.includes('your own Google Cloud execution project') &&
+          body.includes('does not execute or proxy SQL') && body.includes('DataTug browser query execution is not enabled yet') &&
+          !body.includes('Open read-only API') && !body.includes('Database descriptor')
+        : body.includes('Open read-only API')));
+  if (id.endsWith('-bigquery')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
 }
 await checkedConfiguredDatabaseQueries();
 await checkedAdventureWorksSchema();

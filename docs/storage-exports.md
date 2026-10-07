@@ -65,6 +65,53 @@ when their precision/scale fit; unbounded NUMERIC/DECIMAL/MONEY values remain
 decimal strings. BigQuery remains prepared but unhosted until a project,
 location, cost policy, ingestion and query receipts are available.
 
+Each Downloads page also links a deterministic research snapshot ZIP. During
+the site build, `research_snapshots.py` packages each pinned provider's checked
+public exports, schema, model and meaning files, licences, provenance, and
+example queries. It writes a sidecar manifest with per-file sizes and SHA-256
+digests, plus a SHA-256 file for the archive. ZIP entry order, timestamps, and
+permissions are normalized so repeated builds from the same pinned inputs
+produce the same archive.
+
+To verify a built research snapshot's split files:
+
+```sh
+python3 scripts/hosting-tools/research_snapshots.py verify \
+  public/research-snapshots/chinook.manifest.json
+```
+
+The pinned SQLite providers can also produce deterministic full PostgreSQL
+restore bundles for the six approved demo datasets (Chinook, Northwind, Pubs,
+Sakila, AdventureWorks, and Employees). `postgres_seeds.py` reuses the
+PostgreSQL converter, rejects source fixtures with foreign-key violations, and
+records source provenance, complete per-table row counts, SQL checksums, and
+transaction semantics. Bundle generation writes outside the repository; it
+does not publish a database or commit dataset SQL:
+
+```sh
+python3 scripts/hosting-tools/postgres_seeds.py build \
+  /path/to/provider-root --output /private/tmp/demodb-postgres-seeds
+python3 scripts/hosting-tools/postgres_seeds.py verify \
+  /path/to/provider-root /private/tmp/demodb-postgres-seeds
+```
+
+Each `<dataset-id>/seed.sql.gz` decompresses to plain SQL with one `BEGIN` and
+`COMMIT`, without `psql` meta-commands. Its manifest identifies compressed and
+decompressed byte counts and SHA-256 values, plus the pinned SQLite source
+hash. SQL and SQLite byte sizes are not PostgreSQL logical-size measurements;
+the sandbox service must measure the restored database before setting its
+dataset-specific storage quota.
+
 The previously published Python-generated inGitDB editions can still be
 checked with `validate_storage_exports.py`; new DataTug editions use
 `validate_datatug_exports.py` and manifest format `demodb-storage-export/v2`.
+The Cloudflare Worker assets have a per-file size limit, so each ZIP is split
+into deterministic 20 MiB parts. Download all `<dataset-id>.zip.part-####`
+files and concatenate them in numeric order to recreate the archive. The
+manifest lists every part's hash and byte count, along with the complete ZIP's
+checksum. To verify the downloaded parts before assembly:
+
+```sh
+python3 scripts/hosting-tools/research_snapshots.py verify \
+  public/research-snapshots/chinook.manifest.json
+```

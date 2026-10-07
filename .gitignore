@@ -6,6 +6,7 @@ dist/
 .tools/
 src/data/generated/
 public/_db/
+public/research-snapshots/
 public/corpus.json
 public/ovdb/ovdb-server.json
 public/ovdb/db/

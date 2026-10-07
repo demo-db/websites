@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,7 @@ if (!localRoot && registry.databases.some((db) => !isSha(db.commit) || !isHash(d
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
+const researchSnapshots = join(root, 'public/research-snapshots');
 const previousManifestIds = await readFile(join(generatedDir, 'public-manifest-ids.json'), 'utf8')
   .then((value) => JSON.parse(value))
   .catch(() => []);
@@ -31,8 +33,10 @@ await rm(join(root, 'public/ovdb/schemas/ovdb-database-draft-1.schema.json'), { 
 await rm(join(root, 'public/ovdb/schemas/ovdb-server-draft-1.schema.json'), { force: true });
 await rm(generatedDir, { recursive: true, force: true });
 await rm(internalAssets, { recursive: true, force: true });
+await rm(researchSnapshots, { recursive: true, force: true });
 await mkdir(generatedDir, { recursive: true });
 await mkdir(internalAssets, { recursive: true });
+await mkdir(researchSnapshots, { recursive: true });
 
 const databases = [];
 const ovdbDescriptors = [];
@@ -71,6 +75,12 @@ if (hosts.has(registry.catalogueHost)) throw new Error('The catalogue host canno
 for (const host of hosts.keys()) if (aliasHosts.has(host)) throw new Error(`Provider alias collides with a database host: ${host}`);
 
 await writeFile(join(generatedDir, 'index.json'), `${JSON.stringify({ catalogueHost: registry.catalogueHost, databases }, null, 2)}\n`);
+const snapshotBuilder = spawnSync(process.env.PYTHON ?? 'python3', [
+  join(root, 'scripts/hosting-tools/research_snapshots.py'), 'build',
+  '--index', join(generatedDir, 'index.json'), '--assets', internalAssets, '--output', researchSnapshots,
+], { cwd: root, encoding: 'utf8' });
+if (snapshotBuilder.error) throw new Error(`Could not start research snapshot builder: ${snapshotBuilder.error.message}`);
+if (snapshotBuilder.status !== 0) throw new Error(`Research snapshot build failed: ${snapshotBuilder.stderr || snapshotBuilder.stdout}`);
 await writeFile(join(root, 'public/corpus.json'), `${JSON.stringify(buildCorpus(databases), null, 2)}\n`);
 await writeFile(join(generatedDir, 'runtime.json'), `${JSON.stringify({
   catalogueHost: registry.catalogueHost,

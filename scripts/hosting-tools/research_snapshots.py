@@ -184,9 +184,11 @@ def build(index_path: Path, asset_root: Path, output_root: Path) -> list[dict[st
 
 def verify(path: Path, manifest_path: Path | None = None) -> dict[str, Any]:
     """Verify a split archive, or a locally reassembled ZIP and its manifest."""
+    archive_path: Path | None = None
     if path.name.endswith(".manifest.json"):
         manifest_path = path
     else:
+        archive_path = path
         manifest_path = manifest_path or path.with_suffix(".manifest.json")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("format") != FORMAT:
@@ -216,7 +218,12 @@ def verify(path: Path, manifest_path: Path | None = None) -> dict[str, Any]:
                         total_bytes += len(block)
         if total_bytes != archive.get("bytes") or digest.hexdigest() != archive.get("sha256") or digest.hexdigest() != expected:
             raise SnapshotError("archive SHA-256 or byte size differs from sidecar")
-        with zipfile.ZipFile(assembled_path) as zip_archive:
+        checked_archive = assembled_path
+        if archive_path is not None:
+            if archive_path.stat().st_size != archive.get("bytes") or sha256_file(archive_path) != archive.get("sha256") or sha256_file(archive_path) != expected:
+                raise SnapshotError("provided archive SHA-256 or byte size differs from sidecar")
+            checked_archive = archive_path
+        with zipfile.ZipFile(checked_archive) as zip_archive:
             names = set(zip_archive.namelist())
             if len(names) != len(zip_archive.namelist()) or "research-manifest.json" not in names:
                 raise SnapshotError("archive has duplicate entries or no embedded manifest")

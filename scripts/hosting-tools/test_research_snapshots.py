@@ -56,6 +56,10 @@ class ResearchSnapshotsTest(unittest.TestCase):
             self.assertEqual(manifest["archive"]["sha256"], report1["archiveSha256"])
             self.assertEqual({entry["path"] for entry in manifest["files"]}, {
                 "metadata/schema.json", "data/chinook.json", "model/model.hcl", "queries/examples.json"})
+            corrupt_archive = first / "chinook.zip"
+            corrupt_archive.write_bytes(b"not a zip archive")
+            with self.assertRaisesRegex(snapshots.SnapshotError, "provided archive SHA-256"):
+                snapshots.verify(corrupt_archive, first / "chinook.manifest.json")
 
     def test_verify_detects_changed_archive_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:

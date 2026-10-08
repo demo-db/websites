@@ -129,7 +129,10 @@ for (const [origin, paths] of sites) {
 }
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
 await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) &&
-  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project'));
+  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project') &&
+  (postgresqlApi.publicApiVerified
+    ? body.includes('with separate public read-only DTQL endpoints') && !body.includes('while their public APIs are being prepared')
+    : body.includes('while their public APIs are being prepared')));
 for (const id of storageIds) {
   const url = `https://demodb.dev/ovdb/db/${id}/`;
   await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')

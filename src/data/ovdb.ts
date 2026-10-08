@@ -56,8 +56,8 @@ if (new Set(bigQueryEditions.map((edition) => edition.id)).size !== ovdbDatabase
 }
 
 // Storage IDs identify catalogue entries, while the provider and OVDB manifest
-// IDs remain the stable dataset IDs. PostgreSQL stays pending until all six
-// public endpoints and browser reads have been verified.
+// IDs remain the stable dataset IDs. Keep public readiness gated on the
+// all-six endpoint and browser-read verification flag.
 export function postgresqlStorageEntry(id: string, publicApiVerified: boolean): StorageEntry {
   return {
     id: `${id}-postgresql`, engine: 'PostgreSQL', tags: [id, 'postgresql', 'neon'],

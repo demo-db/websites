@@ -440,6 +440,8 @@ assert.equal((await fetch('demodb.dev', '/ovdb/')).status, 200);
 const storageCatalogueHtml = await (await fetch('demodb.dev', '/ovdb/')).text();
 assert.match(storageCatalogueHtml, /6 datasets\. 4 storage editions each/);
 assert.match(storageCatalogueHtml, /six SQLite databases with working public APIs/);
+assert.match(storageCatalogueHtml, /with separate public read-only DTQL endpoints/);
+assert.doesNotMatch(storageCatalogueHtml, /while their public APIs are being prepared/);
 assert.match(storageCatalogueHtml, /authenticated Google accounts/);
 assert.equal(storageGroups.length, 6);
 assert.equal(storageEngineCount, 4);
@@ -480,6 +482,7 @@ for (const { database, storages } of storageGroups) {
       assert.ok(html.includes(`href="${storage.apiUrl}"`));
       assert.match(html, /public read-only DTQL API/);
       assert.match(html, /does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint/);
+      assert.doesNotMatch(html, /Public OpenVaultDB API access is being prepared/);
       assert.doesNotMatch(html, new RegExp(`href="${database.apiUrl}"`));
       assert.doesNotMatch(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);

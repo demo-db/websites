@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { hclProblems, jsonProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
@@ -23,8 +24,10 @@ async function checked(url, validate) {
       const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
       if (response.ok) {
         const body = await response.text();
-        if (validate(body, response)) return;
-        last = `response from ${url} did not match the expected build`;
+        // A validator returns true, false, or a string that says what was wrong.
+        const verdict = validate(body, response);
+        if (verdict && typeof verdict !== 'string') return;
+        last = typeof verdict === 'string' ? `response from ${url} did not match the expected build: ${verdict}` : `response from ${url} did not match the expected build`;
       } else last = `HTTP ${response.status} from ${url}`;
     } catch (error) { last = error instanceof Error ? error.message : String(error); }
     await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
@@ -142,9 +145,35 @@ for (const id of storageIds) {
         : body.includes('Open read-only API')));
   if (id.endsWith('-bigquery')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
 }
+await checkedServedModels();
 await checkedConfiguredDatabaseQueries();
 await checkedAdventureWorksSchema();
 await checkedDecodedSqlite('adventureworks');
+
+// Every dataset's model files and model page, in the current ModelSpec spelling.
+// The Worker serves model files with `Cache-Control: public, max-age=300, must-revalidate`,
+// so a copy fetched just before the deploy can still be the previous model for up to five
+// minutes, and the retries in `checked` (about a minute in all) cannot wait that out. Like
+// the other checks this request uses `cache: 'no-store'`; unlike them it also carries a
+// query string that names this commit, a URL no cache can have seen before. The Worker
+// ignores the query string when it picks the file. The build-info check above has already
+// shown that every host serves this commit, so a mismatch here is a real fault.
+async function checkedServedModels() {
+  assert.deepEqual(Object.keys(servedModels).sort(), [...requiredQueryableDatabaseIds].sort(), 'every dataset has a served-model expectation');
+  const bust = `?smoke=${commit.toLowerCase()}`;
+  for (const id of requiredQueryableDatabaseIds) {
+    const origin = `https://${id}.demodb.dev`;
+    const paths = servedModelPaths(id);
+    for (const [path, problemsOf] of [[paths.hcl, hclProblems], [paths.json, jsonProblems]]) {
+      await checked(`${origin}${path}${bust}`, (body, response) => {
+        if (response.headers.get('Access-Control-Allow-Origin') !== '*') return 'the model file is not served with Access-Control-Allow-Origin: *';
+        const problems = problemsOf(id, body);
+        return problems.length === 0 ? true : problems.join('; ');
+      });
+    }
+    await checked(`${origin}/model/${bust}`, (body) => body.includes(`${servedModels[id].records} record types.`) && !body.includes('entities'));
+  }
+}
 
 async function checkedAdventureWorksSchema() {
   const response = await fetch('https://adventureworks.demodb.dev/schema.json', { cache: 'no-store' });

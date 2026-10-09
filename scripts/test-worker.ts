@@ -10,7 +10,7 @@ import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnap
 import providerIndex from '../src/data/generated/index.json';
 import { bigQueryHosting, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
 import registry from '../config/databases.json';
-import { hclProblems, jsonProblems, servedModelPaths, servedModels } from './served-model.mjs';
+import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -378,17 +378,14 @@ for (const id of Object.keys(servedModels)) {
     assert.equal(model.status, 200, `${id} serves its model ${kind}`);
     assert.equal(model.headers.get('Access-Control-Allow-Origin'), '*');
     assert.deepEqual(problemsOf(id, await model.text()), [], `the served ${id} model ${kind} is in the current spelling`);
-    const busted = await fetch(`${id}.demodb.dev`, `${path}?smoke=${'0'.repeat(40)}`);
-    assert.equal(busted.status, 200, `${id} ${kind} is also served with a cache-busting query string (live smoke relies on it)`);
-    assert.deepEqual(problemsOf(id, await busted.text()), []);
   }
 }
-const modelPage = await fetch('chinook.demodb.dev', '/model/');
-assert.equal(modelPage.status, 200);
-assert.equal(modelPage.headers.get('Access-Control-Allow-Origin'), null);
-const modelPageHtml = await modelPage.text();
-assert.match(modelPageHtml, /<h2[^>]*>11 record types\.<\/h2>/, 'the model page counts record types');
-assert.doesNotMatch(modelPageHtml, /entities/, 'the model page does not use the earlier ModelSpec word');
+for (const id of Object.keys(servedModels)) {
+  const modelPage = await fetch(`${id}.demodb.dev`, '/model/');
+  assert.equal(modelPage.status, 200);
+  assert.equal(modelPage.headers.get('Access-Control-Allow-Origin'), null);
+  assert.deepEqual(modelPageProblems(id, await modelPage.text()), [], `the ${id} model page counts record types`);
+}
 
 for (const database of providerIndex.databases as { id: string; siteHost: string; ovdb: { query: boolean } }[]) {
   const { id, siteHost } = database;

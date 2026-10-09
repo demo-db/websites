@@ -35,14 +35,15 @@ const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // The text of one top-level record block: from its header line to the closing
 // brace in column 0. Null when the file has no such record type.
 export function recordBlock(hcl, name) {
-  const lines = hcl.split('\n');
+  const lines = hcl.replace(/\r\n/g, '\n').split('\n');
   const start = lines.findIndex((line) => line === `record "${name}" {`);
   if (start < 0) return null;
   const end = lines.findIndex((line, index) => index > start && line === '}');
   return end < 0 ? null : lines.slice(start, end + 1).join('\n');
 }
 
-export function hclProblems(id, hcl) {
+export function hclProblems(id, text) {
+  const hcl = text.replace(/\r\n/g, '\n'); // line endings are not part of the spelling
   const expected = servedModels[id];
   if (!expected) return [`${id}: no served-model expectation is defined`];
   const problems = [];
@@ -64,8 +65,8 @@ export function jsonProblems(id, text) {
   let model;
   try { model = JSON.parse(text); } catch { return [`${id} JSON is not valid JSON`]; }
   if (typeof model !== 'object' || model === null || Array.isArray(model)) return [`${id} JSON is not an object`];
-  if (!text.includes(`"modelspec": "${modelspecIdentifier}"`)) problems.push(`${id} JSON does not say "modelspec": "${modelspecIdentifier}"`);
-  if (model.modelspec !== modelspecIdentifier) problems.push(`${id} JSON modelspec is ${JSON.stringify(model.modelspec)}`);
+  // The parsed value, not the text: whitespace is not part of the spelling.
+  if (model.modelspec !== modelspecIdentifier) problems.push(`${id} JSON does not say "modelspec": "${modelspecIdentifier}" (it is ${JSON.stringify(model.modelspec)})`);
   if (typeof model.records !== 'object' || model.records === null || Array.isArray(model.records)) problems.push(`${id} JSON has no records object`);
   else {
     const count = Object.keys(model.records).length;
@@ -74,8 +75,28 @@ export function jsonProblems(id, text) {
     if (typeof fields !== 'object' || fields === null || !(expected.field in fields)) problems.push(`${id} JSON ${expected.record} has no ${expected.field} field`);
     for (const [name, record] of Object.entries(model.records)) {
       if (record && typeof record === 'object' && 'properties' in record) problems.push(`${id} JSON record ${name} still has the earlier "properties" key`);
+      const members = record && typeof record === 'object' ? record.fields : undefined;
+      if (members && typeof members === 'object') {
+        for (const [member, definition] of Object.entries(members)) {
+          if (definition && typeof definition === 'object' && 'entity' in definition) problems.push(`${id} JSON member ${name}.${member} still has the earlier "entity" reference key`);
+        }
+      }
     }
   }
   if ('entities' in model) problems.push(`${id} JSON still has the earlier "entities" key`);
+  return problems;
+}
+
+// The model page (`/model/`): its heading counts the dataset's record types.
+// Only headings are read, so the same letters elsewhere on the page (a word such
+// as "identities", a concept id) are not mistaken for the earlier wording.
+export function modelPageProblems(id, html) {
+  const expected = servedModels[id];
+  if (!expected) return [`${id}: no served-model expectation is defined`];
+  const problems = [];
+  const headings = [...html.matchAll(/<h2(?:\s[^>]*)?>([^<]*)<\/h2>/g)].map((match) => match[1].trim());
+  if (!headings.includes(`${expected.records} record types.`)) problems.push(`${id} model page has no heading "${expected.records} record types."`);
+  const earlier = headings.filter((heading) => /^\d+ entities\.$/.test(heading));
+  if (earlier.length > 0) problems.push(`${id} model page still has the earlier heading "${earlier[0]}"`);
   return problems;
 }

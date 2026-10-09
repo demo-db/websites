@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { hclProblems, jsonProblems, modelspecIdentifier, recordBlock, servedModelPaths, servedModels } from './served-model.mjs';
+import { hclProblems, jsonProblems, modelPageProblems, modelspecIdentifier, recordBlock, servedModelPaths, servedModels } from './served-model.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const ids = Object.keys(servedModels);
 const served = Object.fromEntries(await Promise.all(ids.map(async (id) => {
   const read = (path) => readFile(join(root, 'dist/_db', id, path.replace(/^\//, '')), 'utf8');
-  return [id, { hcl: await read(servedModelPaths(id).hcl), json: await read(servedModelPaths(id).json) }];
+  return [id, { hcl: await read(servedModelPaths(id).hcl), json: await read(servedModelPaths(id).json), page: await read('model/index.html') }];
 })));
 
 // The earlier spelling of the same model, derived from the current one.
@@ -22,6 +22,47 @@ test('every dataset serves a model in the current spelling', () => {
   for (const id of ids) {
     assert.deepEqual(hclProblems(id, served[id].hcl), [], `${id} HCL`);
     assert.deepEqual(jsonProblems(id, served[id].json), [], `${id} JSON`);
+    assert.deepEqual(modelPageProblems(id, served[id].page), [], `${id} model page`);
+  }
+});
+
+test('a correct model is accepted whatever its layout', () => {
+  for (const id of ids) {
+    assert.deepEqual(jsonProblems(id, JSON.stringify(JSON.parse(served[id].json))), [], `${id} JSON without whitespace`);
+    assert.deepEqual(jsonProblems(id, JSON.stringify(JSON.parse(served[id].json), null, '\t')), [], `${id} JSON indented with tabs`);
+    assert.deepEqual(hclProblems(id, served[id].hcl.replace(/\n/g, '\r\n')), [], `${id} HCL with CRLF line endings`);
+  }
+});
+
+test('a member whose reference key is back to the earlier "entity" is refused', () => {
+  for (const id of ids) {
+    const model = JSON.parse(served[id].json);
+    const references = Object.values(model.records).flatMap((record) => Object.values(record.fields)).filter((field) => 'record' in field);
+    assert.ok(references.length > 0, `${id} has members that reference a record type`);
+    const one = JSON.parse(served[id].json);
+    const target = Object.values(one.records).flatMap((record) => Object.values(record.fields)).find((field) => 'record' in field);
+    target.entity = target.record;
+    delete target.record;
+    assert.match(jsonProblems(id, JSON.stringify(one, null, 2)).join('\n'), /earlier "entity" reference key/, `${id} one member`);
+    for (const field of references) { field.entity = field.record; delete field.record; }
+    assert.match(jsonProblems(id, JSON.stringify(model, null, 2)).join('\n'), /earlier "entity" reference key/, `${id} every member`);
+  }
+});
+
+test('the model page is judged by its heading, not by the letters elsewhere on it', () => {
+  for (const id of ids) {
+    const { records } = servedModels[id];
+    const page = served[id].page;
+    assert.match(page, new RegExp(`<h2[^>]*>${records} record types\\.</h2>`), `${id} page has its heading`);
+    assert.deepEqual(modelPageProblems(id, page.replace('</body>', '<p>Identities and the legal-entities concept.</p></body>')), [], `${id} unrelated text containing "entities" is accepted`);
+    assert.match(modelPageProblems(id, page.replace(`${records} record types.`, `${records} entities.`)).join('\n'), /no heading|earlier heading/, `${id} earlier wording`);
+    assert.match(modelPageProblems(id, page.replace(`${records} record types.`, `${records + 10} record types.`)).join('\n'), /no heading/, `${id} wrong count`);
+    assert.match(modelPageProblems(id, page.replace(`>${records} record types.<`, `>${records} record types. (${records} entities.)<`)).join('\n'), /no heading/, `${id} heading with extra text`);
+    assert.match(modelPageProblems(id, page.replace('</body>', `<h2>${records} entities.</h2></body>`)).join('\n'), /earlier heading/, `${id} extra earlier heading beside the right one`);
+    assert.notDeepEqual(modelPageProblems(id, ''), [], `${id} empty page`);
+    for (const other of ids.filter((candidate) => candidate !== id && servedModels[candidate].records !== records)) {
+      assert.notDeepEqual(modelPageProblems(id, served[other].page), [], `${id} given ${other}'s page`);
+    }
   }
 });
 

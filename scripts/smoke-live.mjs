@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { hclProblems, jsonProblems, servedModelPaths, servedModels } from './served-model.mjs';
+import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
@@ -151,27 +151,29 @@ await checkedAdventureWorksSchema();
 await checkedDecodedSqlite('adventureworks');
 
 // Every dataset's model files and model page, in the current ModelSpec spelling.
-// The Worker serves model files with `Cache-Control: public, max-age=300, must-revalidate`,
-// so a copy fetched just before the deploy can still be the previous model for up to five
-// minutes, and the retries in `checked` (about a minute in all) cannot wait that out. Like
-// the other checks this request uses `cache: 'no-store'`; unlike them it also carries a
-// query string that names this commit, a URL no cache can have seen before. The Worker
-// ignores the query string when it picks the file. The build-info check above has already
-// shown that every host serves this commit, so a mismatch here is a real fault.
+// Model files are served with `Cache-Control: public, max-age=300, must-revalidate`, but
+// that only concerns the client that asked: Node's fetch keeps no HTTP cache and the Worker
+// uses no Cache API, so these requests (`cache: 'no-store'` as everywhere in this script)
+// always reach the Worker. The build-info check above has already shown that every host
+// serves this commit, so a mismatch here is a real fault. On the landing that first serves
+// the current spelling, an edge location still running the previous version is covered by
+// the retries in `checked`.
 async function checkedServedModels() {
   assert.deepEqual(Object.keys(servedModels).sort(), [...requiredQueryableDatabaseIds].sort(), 'every dataset has a served-model expectation');
-  const bust = `?smoke=${commit.toLowerCase()}`;
   for (const id of requiredQueryableDatabaseIds) {
     const origin = `https://${id}.demodb.dev`;
     const paths = servedModelPaths(id);
     for (const [path, problemsOf] of [[paths.hcl, hclProblems], [paths.json, jsonProblems]]) {
-      await checked(`${origin}${path}${bust}`, (body, response) => {
+      await checked(`${origin}${path}`, (body, response) => {
         if (response.headers.get('Access-Control-Allow-Origin') !== '*') return 'the model file is not served with Access-Control-Allow-Origin: *';
         const problems = problemsOf(id, body);
         return problems.length === 0 ? true : problems.join('; ');
       });
     }
-    await checked(`${origin}/model/${bust}`, (body) => body.includes(`${servedModels[id].records} record types.`) && !body.includes('entities'));
+    await checked(`${origin}/model/`, (body) => {
+      const problems = modelPageProblems(id, body);
+      return problems.length === 0 ? true : problems.join('; ');
+    });
   }
 }
 

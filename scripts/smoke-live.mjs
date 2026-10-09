@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
 
 const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
@@ -128,11 +129,17 @@ for (const [origin, paths] of sites) {
 }
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
 await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) &&
-  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project'));
+  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project') &&
+  (postgresqlApi.publicApiVerified
+    ? body.includes('with separate public read-only DTQL endpoints') && !body.includes('while their public APIs are being prepared')
+    : body.includes('while their public APIs are being prepared')));
 for (const id of storageIds) {
   const url = `https://demodb.dev/ovdb/db/${id}/`;
   await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')
-    ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
+    ? postgresqlApi.publicApiVerified
+      ? body.includes(`https://cloud.openvaultdb.com/v1/databases/${id}`) && body.includes('Open read-only API') &&
+        body.includes('does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint')
+      : body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
     : id.endsWith('-ingitdb')
       ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API')
       : id.endsWith('-bigquery')

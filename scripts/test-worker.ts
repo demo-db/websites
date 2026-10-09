@@ -373,10 +373,17 @@ assert.ok(schemaJson.tables.some((table) => table.name === 'Order Details'));
 const model = await fetch('chinook.demodb.dev', '/model/chinook.modelspec.hcl');
 assert.equal(model.status, 200);
 assert.equal(model.headers.get('Access-Control-Allow-Origin'), '*');
-assert.match(await model.text(), /entity/);
+const modelHcl = await model.text();
+assert.match(modelHcl, /^record "Artist" \{$/m, 'the served Chinook HCL declares the Artist record type');
+assert.match(modelHcl, /^  field "ArtistId" \{$/m, 'the served Chinook HCL declares the Artist.ArtistId field');
+assert.match(modelHcl, /ModelSpec 1\.0-draft-2/, 'the served Chinook HCL names the current ModelSpec revision');
+assert.doesNotMatch(modelHcl, /^entity "/m, 'the served Chinook HCL no longer uses the earlier entity spelling');
 const modelPage = await fetch('chinook.demodb.dev', '/model/');
 assert.equal(modelPage.status, 200);
 assert.equal(modelPage.headers.get('Access-Control-Allow-Origin'), null);
+const modelPageHtml = await modelPage.text();
+assert.match(modelPageHtml, /<h2[^>]*>11 record types\.<\/h2>/, 'the model page counts record types');
+assert.doesNotMatch(modelPageHtml, /entities/, 'the model page does not use the earlier ModelSpec word');
 
 for (const database of providerIndex.databases as { id: string; siteHost: string; ovdb: { query: boolean } }[]) {
   const { id, siteHost } = database;

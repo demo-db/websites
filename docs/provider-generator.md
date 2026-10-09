@@ -50,11 +50,14 @@ native SQLite name. Optional `columnDescriptions` maps native table names to
 native column names and plain-language descriptions; they stay in schema
 metadata alongside the original DDL.
 
-`modelEntityAliases` and `modelPropertyAliases` are optional. Generated entity
-aliases replace punctuation with underscores; a native entity name starting
-with a digit needs an explicit `modelEntityAliases` entry. Generated property
-aliases replace punctuation with underscores and prefix an underscore when a
-native property starts with a digit. Collisions require an explicit alias.
+`modelEntityAliases` and `modelPropertyAliases` are optional. Their names are
+historical: the first renames the ModelSpec record type generated for a native
+table, the second renames the ModelSpec fields generated for a table's native
+columns. Generated record type names replace punctuation with underscores; a
+native table name starting with a digit needs an explicit `modelEntityAliases`
+entry. Generated field names replace punctuation with underscores and prefix an
+underscore when a native column name starts with a digit. Collisions require an
+explicit alias.
 Meaning bindings name native table and column names; the generator resolves
 those to ModelSpec aliases. Bindings use
 the MeaningGraph roles `entity`, `identifier`, `display-name`, `foreign-key`,
@@ -67,7 +70,7 @@ MeaningGraph draft-1 fields.
 The generator refuses a source hash mismatch, unsafe output path, invalid
 semantic reference, unrepresented foreign-key target, or static export over
 25 MiB. It never invents a primary key: physical tables without one remain
-ModelSpec entities with their native properties and no `key` field. Composite
+ModelSpec record types with their native fields and no `key` field. Composite
 primary and foreign keys retain their declared position.
 Native table/view names, column defaults, generated-column markers, table/view
 SQL, empty tables, and BLOB bytes are preserved in metadata or the unchanged
@@ -96,6 +99,49 @@ MeaningGraph YAML-compatible JSON, the publisher OVDB YAML-compatible JSON,
 the public `ovdb-database.json`, and checksums. Provider CI should call this
 tool from a pinned immutable website-repository commit, verify its published
 script hash, run it, and fail on generated drift.
+
+## ModelSpec spelling
+
+The generated ModelSpec model is written in ModelSpec's current spelling:
+
+| | HCL (`model/<id>.modelspec.hcl`) | JSON (`model/<id>.modelspec.json`) |
+|---|---|---|
+| format identifier | none | `"modelspec": "1.0-draft-2"` |
+| record type | `record "Invoice" { … }` | key `records` |
+| member of a record type | `field "total" { … }` | key `fields` |
+| reference to another record type | `record = "Customer"` | `"record": "Customer"` |
+
+The earlier spelling (`entity`, `property`, `entity =`; `1.0-draft` with
+`entities`, `properties`, `entity`) is no longer written. The two files carry
+the same words, and `modelspec export --check` accepts the pair. Tools that read
+the current spelling are `modelspec` 0.2.0 and `meaninggraph` 0.3.0; earlier
+releases refuse it.
+
+Other formats keep their own words, which this spelling does not change: the
+MeaningGraph file uses the concept kind `entity`, the binding key `property` and
+the roles `entity`, `identifier`, `display-name`, `foreign-key` and `value`; the
+publisher manifest `ovdb.yaml` (`ovdb-manifest/draft-1`) lists the recordsets
+whose record type has another name under `recordset_entities`; the public
+descriptor `ovdb-database.json` and `metadata/schema.json` carry `modelEntity`
+per recordset, and `metadata/schema.json` carries `modelProperty` on a column
+whose field name differs from the native one. The generator reads `records` of
+the model it has just built to fill `recordset_entities`.
+
+### Moving a provider to a newer generator revision
+
+A provider pins the generator by commit and by the SHA-256 of `generate.py` and of
+`schemas/ovdb-database-draft-1.schema.json` (in its CI workflow). The generator
+refuses a provider whose own copy of that schema file differs from the shared one
+("differs from the shared schema pin"), and writes the shared file itself when the
+provider has none. A provider that moves its pin therefore:
+
+1. changes the commit and both SHA-256 values in its workflow to those of the new
+   revision, and either copies `schemas/ovdb-database-draft-1.schema.json` from
+   that revision or deletes its copy before the first run;
+2. moves its `modelspec` pin to 0.2.0 and its `meaninggraph` pin to 0.3.0;
+3. runs the generator and commits the result. Besides the schema copy, the files
+   that change are the two model files and `metadata/checksums.json`, which pins
+   their bytes and the schema's.
 
 The 25 MiB limit applies to every checked-in generated file. An export above
 the limit is deterministic-gzipped at level 9 with a zero timestamp. If the

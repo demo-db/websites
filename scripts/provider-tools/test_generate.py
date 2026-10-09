@@ -203,6 +203,45 @@ class ProviderGeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(generator.GenerationError, "must be a boolean"):
             generator.generate(self.root)
 
+    def test_model_is_written_in_the_current_modelspec_spelling(self) -> None:
+        generator.generate(self.root)
+        model = json.loads((self.root / "model/fixture.modelspec.json").read_text(encoding="utf-8"))
+        self.assertEqual(model["modelspec"], "1.0-draft-2")
+        self.assertEqual(sorted(model), ["modelspec", "module", "records"])
+        for record in model["records"].values():
+            self.assertEqual(sorted(set(record) - {"key"}), ["fields"])
+            for member in record["fields"].values():
+                self.assertFalse({"entity", "property"} & set(member))
+        self.assertEqual(model["records"]["Child"]["fields"]["child_a"], {"record": "Order_Details"})
+        self.assertEqual(model["records"]["Self_Link"]["fields"]["ParentID"], {"record": "Self_Link"})
+        self.assertEqual(model["records"]["Order_Details"]["fields"]["Order_ID"], {"type": "int"})
+
+        hcl = (self.root / "model/fixture.modelspec.hcl").read_text(encoding="utf-8")
+        headers = [line.split()[0] for line in hcl.splitlines() if line.rstrip().endswith("{")]
+        self.assertEqual(set(headers), {"record", "field"})
+        self.assertIn('record "Child" {\n\n  field "child_a" {\n    record = "Order_Details"\n  }', hcl)
+        self.assertIn('  field "ParentID" {\n    record = "Self_Link"\n  }', hcl)
+        for earlier in ("entity", "property"):
+            self.assertNotRegex(hcl, rf"\b{earlier}\b")
+
+        # The generator reads the model it just built to relate recordsets to record types.
+        manifest = json.loads((self.root / "ovdb.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["recordset_entities"]["Order Details"], "Order_Details")
+        self.assertEqual(manifest["recordset_entities"]["dbo.DatabaseLog"], "dbo_DatabaseLog")
+
+    def test_other_formats_keep_their_own_vocabulary(self) -> None:
+        generator.generate(self.root)
+        manifest = json.loads((self.root / "ovdb.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["format"], "ovdb-manifest/draft-1")
+        self.assertIn("recordset_entities", manifest)
+        descriptor = json.loads((self.root / "ovdb-database.json").read_text(encoding="utf-8"))
+        self.assertIn("modelEntity", descriptor["recordsets"][0])
+        meaning = json.loads((self.root / "model/fixture.meaning.yaml").read_text(encoding="utf-8"))
+        self.assertIn("entity", {concept["kind"] for concept in meaning["concepts"]})
+        bindings = [binding for concept in meaning["concepts"] for binding in concept.get("bindings", [])]
+        self.assertIn("property", {key for binding in bindings for key in binding})
+        self.assertIn("entity", {binding["role"] for binding in bindings})
+
     def test_preserves_native_metadata_and_emits_deterministic_contract(self) -> None:
         generator.generate(self.root)
         first = {path.relative_to(self.root).as_posix(): path.read_bytes() for path in self.root.rglob("*") if path.is_file() and path.name != "source.sqlite"}
@@ -234,8 +273,8 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(tables["dbo.DatabaseLog"]["primaryKey"], [])
         self.assertEqual(tables["dbo.DatabaseLog"]["uniqueKeys"], [])
         model = json.loads((self.root / "model/fixture.modelspec.json").read_text())
-        self.assertNotIn("key", model["entities"]["dbo_DatabaseLog"])
-        self.assertEqual(model["entities"]["dbo_DatabaseLog"]["properties"]["DatabaseLogID"]["type"], "int")
+        self.assertNotIn("key", model["records"]["dbo_DatabaseLog"])
+        self.assertEqual(model["records"]["dbo_DatabaseLog"]["fields"]["DatabaseLogID"]["type"], "int")
         self.assertEqual(tables["dbo.DatabaseLog"]["modelEntity"], "dbo_DatabaseLog")
         self.assertIsNone(tables["dbo.DatabaseLog"]["modelRecordset"])
         self.assertEqual(schema["modelingLimitations"], [])
@@ -266,13 +305,13 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertNotIn("rows", source_views[1])
         self.assertNotIn("dbo.Unsupported Summary", {item["name"] for item in schema["tables"]})
         model = json.loads((self.root / "model/fixture.modelspec.json").read_text())
-        self.assertEqual(model["entities"]["Order_Details"]["key"], ["Product_ID", "Order_ID"])
-        self.assertIn("Order_ID", model["entities"]["Order_Details"]["properties"])
+        self.assertEqual(model["records"]["Order_Details"]["key"], ["Product_ID", "Order_ID"])
+        self.assertIn("Order_ID", model["records"]["Order_Details"]["fields"])
         hcl = (self.root / "model/fixture.modelspec.hcl").read_text()
-        self.assertLess(hcl.index('key = ["Product_ID","Order_ID"]'), hcl.index('property "Order_ID"'))
-        keyless_hcl = hcl.split('entity "dbo_DatabaseLog" {', 1)[1].split("}", 1)[0]
+        self.assertLess(hcl.index('key = ["Product_ID","Order_ID"]'), hcl.index('field "Order_ID"'))
+        keyless_hcl = hcl.split('record "dbo_DatabaseLog" {', 1)[1].split("}", 1)[0]
         self.assertNotIn("key =", keyless_hcl)
-        self.assertEqual(model["entities"]["HumanResources_Employee"]["properties"]["Salary"]["type"], "decimal")
+        self.assertEqual(model["records"]["HumanResources_Employee"]["fields"]["Salary"]["type"], "decimal")
         meaning = json.loads((self.root / "model/fixture.meaning.yaml").read_text())
         concepts = {concept["id"]: concept for concept in meaning["concepts"]}
         self.assertEqual(concepts["order-id"]["of"], "order-line")

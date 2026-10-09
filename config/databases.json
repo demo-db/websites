@@ -19,31 +19,31 @@
     {
       "id": "northwind",
       "repository": "https://github.com/demo-db/northwind",
-      "commit": "e74726515c3833620b54b7a50d1d273276dd23c1",
+      "commit": "c07b4666734a3445b2b0c2fbaf84305dcdb1bf45",
       "contractSha256": "88a7e21b1ed16b27c3195c8ee10dc60ebef60fba6c70df6f9325d8e4adaaea22"
     },
     {
       "id": "pubs",
       "repository": "https://github.com/demo-db/pubs",
-      "commit": "6c06c5c7395b03ff1a02c2b1a21485add3e1b65b",
+      "commit": "e99ca33330a043e23b2c5a665356fb8ad8d0b508",
       "contractSha256": "32224efdbecd57962f32a0aad81653bbf5085788df69185be30b2c7c0910d659"
     },
     {
       "id": "sakila",
       "repository": "https://github.com/demo-db/sakila",
-      "commit": "cb9a81a8cbedcd8831737f281f888d5d584fae85",
+      "commit": "113e54ad83c3e003a4fd195c893f2b19a921435c",
       "contractSha256": "54b74e47ad29e4c1d68866e89add885ee833728f04c4d68c46c2486346882655"
     },
     {
       "id": "adventureworks",
       "repository": "https://github.com/demo-db/adventureworks",
-      "commit": "5028a27189b487d6fd8025fafc1307aada707fd2",
+      "commit": "c91e06e9c12380e7709f66ab1e69cf7f858f67c1",
       "contractSha256": "5b2cb733342ac9e848f2674090e0e534082d48111056ff4e6a3b6d4ef4f693e0"
     },
     {
       "id": "employees",
       "repository": "https://github.com/demo-db/employees",
-      "commit": "2069e26e8fdb60bdb16507f75569a579cf3da7cf",
+      "commit": "add7744ddc5cefc535a7cbb09b3dffee41811ade",
       "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443"
     }
   ]

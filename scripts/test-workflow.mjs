@@ -113,3 +113,13 @@ test('live smoke verifies old-host page, download, canonical profile, and POST r
   assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/dbs\/chinook/);
   assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/v1\/databases\/chinook\/dtql/);
 });
+
+test('live smoke checks every dataset\'s served model files and model page', () => {
+  assert.match(liveSmoke, /from '\.\/served-model\.mjs'/, 'the live check and the Worker test share one definition of a correct served model');
+  assert.match(liveSmoke, /await checkedServedModels\(\)/);
+  assert.match(liveSmoke, /for \(const id of requiredQueryableDatabaseIds\)[\s\S]*servedModelPaths\(id\)/, 'one HCL and one JSON path per dataset');
+  assert.match(liveSmoke, /\[\[paths\.hcl, hclProblems\], \[paths\.json, jsonProblems\]\]/);
+  assert.match(liveSmoke, /modelPageProblems\(id, body\)/, 'the model page heading is checked, not the whole page text');
+  assert.doesNotMatch(liveSmoke, /includes\('entities'\)/);
+  assert.match(liveSmoke, /cache: 'no-store'/);
+});

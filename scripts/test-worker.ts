@@ -150,6 +150,11 @@ const assets = {
     }
     if (url.pathname.endsWith('/_db/chinook/data/json/chinook.Order%20Details.json.gz')) return new Response(gzipPayloadBytes, { headers: { 'Content-Type': 'application/gzip', 'Content-Length': String(gzipPayloadBytes.length), 'Accept-Ranges': 'bytes' } });
     const chunk = chunkAssets.get(decodeURIComponent(url.pathname));
+    if (url.pathname === comparisonFixtureAssetPath && chunk) {
+      return new Response(request.method === 'HEAD' ? null : chunk, {
+        headers: { 'Content-Type': 'application/vnd.sqlite3', ...(request.method === 'HEAD' ? {} : { 'Content-Length': String(chunk.length) }) },
+      });
+    }
     if (chunk) return new Response(request.method === 'HEAD' ? null : chunk, { headers: { 'Content-Length': String(chunk.length), 'Accept-Ranges': 'bytes' } });
     if (url.pathname.endsWith('/redirect-test/index.html')) return new Response(null, { status: 302, headers: { Location: '/_db/northwind/index.html' } });
     const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
@@ -381,7 +386,8 @@ const comparisonHead = await fetch('chinook.demodb.dev', `/data/${comparisonFixt
 assert.equal(comparisonHead.status, 200);
 assert.equal(comparisonHead.headers.get('Access-Control-Allow-Origin'), '*');
 assert.equal(comparisonHead.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
-assert.equal(comparisonHead.headers.get('Content-Length'), String(comparisonFixtureBytes.length));
+assert.equal(comparisonHead.headers.get('Content-Type'), 'application/vnd.sqlite3');
+assert.equal(comparisonHead.headers.get('Content-Length'), null, 'the Worker asset mock mirrors production HEAD responses that omit Content-Length');
 assert.equal(await comparisonHead.text(), '');
 const comparisonOptions = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`, 'OPTIONS');
 assert.equal(comparisonOptions.status, 204);

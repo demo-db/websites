@@ -266,7 +266,8 @@ async function checkedComparisonFixture() {
   }
 
   const head = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store', signal });
-  if (head.status !== 200 || head.headers.get('Content-Length') !== String(comparisonFixture.bytes) ||
+  const headLength = head.headers.get('Content-Length');
+  if (head.status !== 200 || (headLength !== null && headLength !== String(comparisonFixture.bytes)) ||
       head.headers.get('Content-Type') !== 'application/vnd.sqlite3' ||
       head.headers.get('Access-Control-Allow-Origin') !== '*' ||
       head.headers.get('Cache-Control') !== 'public, max-age=31536000, immutable') {

@@ -8,6 +8,7 @@ const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
 const wrangler = JSON.parse(await readFile(join(root, 'wrangler.jsonc'), 'utf8'));
 const liveSmoke = await readFile(join(root, 'scripts/smoke-live.mjs'), 'utf8');
+const comparisonHistoryCheck = await readFile(join(root, 'scripts/check-comparison-fixture-history.mjs'), 'utf8');
 
 test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push']);
@@ -29,6 +30,19 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
     assert.ok(!JSON.stringify(step).includes('secrets.CLOUDFLARE_API_TOKEN'), 'Cloudflare token is limited to the deploy step');
   }
   assert.ok(job.steps.some((step) => step.name === 'Verify the deployed commit and public routes' && /github\.event_name == 'push'/.test(step.if)));
+});
+
+test('workflow checks pins against the exact PR base or previous push commit', () => {
+  const checkout = workflow.jobs.deploy.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with['fetch-depth'], 0, 'the immutable base commit must be available locally');
+  const historyCheck = workflow.jobs.deploy.steps.find((step) => step.name === 'Verify comparison fixture pins preserve commit history');
+  assert.ok(historyCheck, 'history protection runs in CI');
+  assert.equal(historyCheck.run, 'node scripts/check-comparison-fixture-history.mjs');
+  assert.match(historyCheck.env.COMPARISON_BASE_SHA, /pull_request\.base\.sha/);
+  assert.match(historyCheck.env.COMPARISON_BASE_SHA, /github\.event\.before/);
+  assert.match(comparisonHistoryCheck, /cat-file', '-e'/, 'an unavailable historical commit fails closed');
+  assert.match(comparisonHistoryCheck, /baseRegistry\.comparisonFixtures/, 'before the separate ledger existed, the base registry pins are retained');
+  assert.match(comparisonHistoryCheck, /assertRetainsComparisonFixturePins\(registry\.comparisonFixtures/);
 });
 
 test('binds the transferred Chinook hostname to the verified legacy redirects', () => {
@@ -95,6 +109,22 @@ test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL S
   assert.match(liveSmoke, /checkedDecodedSqlite\('adventureworks'\)/);
   assert.match(liveSmoke, /126820352/);
   assert.match(liveSmoke, /checkedConfiguredDatabaseQueries\(\)/);
+});
+
+test('live smoke verifies the content-addressed Chinook comparison fixture end to end', () => {
+  assert.match(liveSmoke, /sha256: '3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f'/);
+  assert.match(liveSmoke, /bytes: 1007616/);
+  assert.match(liveSmoke, /\/data\/compare\/\$\{comparisonFixture\.sha256\}\.sqlite/);
+  assert.match(liveSmoke, /await checkedComparisonFixture\(\)/);
+  assert.match(liveSmoke, /async function checkedComparisonFixture\(\)/);
+  assert.match(liveSmoke, /actualSha256 !== comparisonFixture\.sha256/);
+  assert.match(liveSmoke, /head\.headers\.get\('Content-Length'\)/);
+  assert.match(liveSmoke, /method: 'OPTIONS'/);
+  assert.match(liveSmoke, /public, max-age=31536000, immutable/);
+  assert.match(liveSmoke, /Access-Control-Allow-Origin/);
+  assert.match(liveSmoke, /AbortSignal\.timeout\(45_000\)/, 'the full-byte check has a bounded request deadline');
+  assert.match(liveSmoke, /bytes > comparisonFixture\.bytes/, 'the stream is rejected as soon as it exceeds its pinned size');
+  assert.match(liveSmoke, /response\.body\.cancel\(\)/, 'an oversized declared body is canceled before reading');
 });
 
 test('live smoke verifies Employees native tables and shared query capability coverage', () => {

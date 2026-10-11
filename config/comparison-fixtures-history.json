@@ -1,0 +1,18 @@
+{
+  "format": "demodb-comparison-fixture-history/v1",
+  "fixtures": [
+    {
+      "databaseId": "chinook",
+      "repository": "https://github.com/demo-db/chinook",
+      "commit": "95d14a11256f8db512d5ecd7ea5be56e01d51781",
+      "manifestPath": "fixtures/compare/manifest.json",
+      "manifestSha256": "aa80280419d5e0e8bd99ae97574b5d91cbf4df6e560e536f8699f42ec175c887",
+      "fixtureId": "chinook-synthetic-3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f",
+      "baselineSha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15",
+      "baselineBytes": 1007616,
+      "candidatePath": "fixtures/compare/chinook-candidate-3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f.sqlite",
+      "candidateSha256": "3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f",
+      "candidateBytes": 1007616
+    }
+  ]
+}

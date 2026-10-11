@@ -28,12 +28,27 @@ const chunkMetadata = chunkBoundaries.slice(0, -1).map((start, index) => {
   chunkAssets.set(`/_db/chinook/data/${chunkAssetPaths[index]}`, bytes);
   return { assetPath: chunkAssetPaths[index], bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
 });
-const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as { exports: { publicPath: string; assetPath: string; compression?: string; bytes?: number; sha256?: string; chunks?: { assetPath: string; bytes: number; sha256: string }[] }[] };
+const chinookGenerated = providerIndex.databases.find((database) => database.id === 'chinook') as unknown as {
+  exports: { publicPath: string; assetPath: string; compression?: string; bytes?: number; sha256?: string; chunks?: { assetPath: string; bytes: number; sha256: string }[] }[];
+  comparisonFixtures?: { id: string; publicPath: string; assetPath: string; bytes: number; sha256: string }[];
+};
 chinookGenerated.exports.push({ publicPath: 'json/chinook.Order Details.json', assetPath: 'json/chinook.Order Details.json.gz', compression: 'gzip' });
 chinookGenerated.exports.push({
   publicPath: 'chinook.sqlite', assetPath: 'chinook.sqlite', compression: 'gzip', bytes: chunkedEncoded.length,
   sha256: createHash('sha256').update(chunkedEncoded).digest('hex'), chunks: chunkMetadata,
 });
+const comparisonFixtureBytes = Buffer.from('verified synthetic sqlite fixture bytes');
+const comparisonFixtureSha256 = createHash('sha256').update(comparisonFixtureBytes).digest('hex');
+const comparisonFixturePath = `compare/${comparisonFixtureSha256}.sqlite`;
+const comparisonFixtureAssetPath = `/_db/chinook/data/${comparisonFixturePath}`;
+chunkAssets.set(comparisonFixtureAssetPath, comparisonFixtureBytes);
+chinookGenerated.comparisonFixtures = [{
+  id: `fixture-${comparisonFixtureSha256}`,
+  publicPath: comparisonFixturePath,
+  assetPath: comparisonFixturePath,
+  bytes: comparisonFixtureBytes.length,
+  sha256: comparisonFixtureSha256,
+}];
 
 for (const value of ['', 'abc', 'unicode ✓ and a longer value'.repeat(80)]) {
   const bytes = new TextEncoder().encode(value);
@@ -354,6 +369,32 @@ const metadata = await fetch('chinook.demodb.dev', '/data/metadata/checksums.jso
 assert.equal(metadata.status, 200, 'legacy data metadata URL remains available');
 assert.equal((await fetch('chinook.demodb.dev', '/data/metadata/source.json')).status, 200);
 assert.equal((await fetch('chinook.demodb.dev', '/data/chinook.sqlite', 'HEAD')).status, 200);
+const comparisonDownload = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`);
+assert.equal(comparisonDownload.status, 200);
+assert.equal(comparisonDownload.headers.get('Content-Type'), 'application/vnd.sqlite3');
+assert.equal(comparisonDownload.headers.get('Access-Control-Allow-Origin'), '*');
+assert.equal(comparisonDownload.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+const comparisonBody = new Uint8Array(await comparisonDownload.arrayBuffer());
+assert.equal(comparisonBody.length, comparisonFixtureBytes.length);
+assert.equal(createHash('sha256').update(comparisonBody).digest('hex'), comparisonFixtureSha256);
+const comparisonHead = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`, 'HEAD');
+assert.equal(comparisonHead.status, 200);
+assert.equal(comparisonHead.headers.get('Access-Control-Allow-Origin'), '*');
+assert.equal(comparisonHead.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+assert.equal(comparisonHead.headers.get('Content-Length'), String(comparisonFixtureBytes.length));
+assert.equal(await comparisonHead.text(), '');
+const comparisonOptions = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`, 'OPTIONS');
+assert.equal(comparisonOptions.status, 204);
+assert.equal(comparisonOptions.headers.get('Access-Control-Allow-Origin'), '*');
+assert.match(comparisonOptions.headers.get('Access-Control-Allow-Methods') ?? '', /GET/);
+assert.match(comparisonOptions.headers.get('Access-Control-Allow-Methods') ?? '', /HEAD/);
+chunkAssets.delete(comparisonFixtureAssetPath);
+const missingComparisonAsset = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`);
+assert.equal(missingComparisonAsset.status, 404, 'a registered fixture with a missing build asset fails closed');
+assert.notEqual(missingComparisonAsset.headers.get('Cache-Control'), 'public, max-age=31536000, immutable', 'missing assets never receive immutable success caching');
+chunkAssets.set(comparisonFixtureAssetPath, comparisonFixtureBytes);
+assert.equal((await fetch('chinook.demodb.dev', `/data/compare/${'0'.repeat(64)}.sqlite`)).status, 404, 'unregistered content-addressed fixtures are not served');
+assert.equal((await fetch('demodb.dev', `/data/${comparisonFixturePath}`)).status, 404, 'comparison fixture remains scoped to its database host');
 for (const path of ['/data/chinook.json', '/data/chinook.yaml', '/data/chinook.postgresql.sql', '/data/chinook.mysql.sql', '/data/chinook.sqlserver.sql', '/data/json/chinook.Album.json', '/data/yaml/chinook.Album.yaml', '/data/sql/chinook.Album.sql']) {
   assert.equal((await fetch('chinook.demodb.dev', path)).status, 200, `legacy Chinook export remains available at ${path}`);
 }

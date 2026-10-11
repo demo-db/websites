@@ -17,6 +17,7 @@ type Database = {
   siteHost: string;
   tables: { name: string }[];
   exports?: { publicPath: string; assetPath: string; compression?: string | null; bytes?: number | null; sha256?: string | null; chunks?: { assetPath: string; bytes: number; sha256: string }[] }[];
+  comparisonFixtures?: { id: string; publicPath: string; assetPath: string; bytes: number; sha256: string }[];
   ovdb: { url: string; deploymentUrl: string; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 type Env = {
@@ -121,23 +122,27 @@ export default {
     if (!db) return notFound();
     if (url.pathname === '/.well-known/openvaultdb') return discovery(request, db);
     if (url.pathname === '/ovdb' || url.pathname === '/ovdb/' || url.pathname.startsWith('/ovdb/')) return redirectOvdb(request, url, db);
+    const exportPath = decodedDataExportPath(url.pathname);
+    const comparisonFixture = exportPath == null ? undefined : db.comparisonFixtures?.find((item) => item.publicPath === exportPath);
+    if (exportPath?.startsWith('compare/') && !comparisonFixture) return notFound();
     const isPublicData = isDataPath(url.pathname);
     if (request.method === 'OPTIONS' && isPublicData) return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
     if (isPublicData && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
 
-    const exportPath = decodedDataExportPath(url.pathname);
     const exportFile = exportPath == null ? undefined : db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
     if (exportFile && exportFile.compression === 'gzip' && exportFile.chunks && exportFile.chunks.length > 0) {
       const response = await serveChunkedGzip(request, env, url, db.id, exportFile);
       return isPublicData ? withDataHeaders(response, request.method, true) : response;
     }
-    const target = exportFile
-      ? internalAssetPath(db.id, `/data/${exportFile.assetPath.split('/').map(encodeURIComponent).join('/')}`)
+    const target = comparisonFixture
+      ? internalAssetPath(db.id, `/data/${comparisonFixture.assetPath.split('/').map(encodeURIComponent).join('/')}`)
+      : exportFile
+        ? internalAssetPath(db.id, `/data/${exportFile.assetPath.split('/').map(encodeURIComponent).join('/')}`)
       : internalAssetPath(db.id, url.pathname);
     const response = await serveAsset(request, env, url, target, exportFile?.compression === 'gzip');
     if (isPublicData) {
-      return withDataHeaders(response, request.method, exportFile?.compression === 'gzip');
+      return withDataHeaders(response, request.method, exportFile?.compression === 'gzip', Boolean(comparisonFixture));
     }
     return response;
   },
@@ -329,10 +334,10 @@ function dataExtension(pathname: string): string {
   return logicalName.slice(logicalName.lastIndexOf('.'));
 }
 
-function withDataHeaders(response: Response, method: string, gzip = false): Response {
+function withDataHeaders(response: Response, method: string, gzip = false, immutable = false): Response {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(readonlyCorsHeaders())) headers.set(name, value);
-  headers.set('Cache-Control', 'public, max-age=300, must-revalidate');
+  headers.set('Cache-Control', immutable && response.ok ? 'public, max-age=31536000, immutable' : 'public, max-age=300, must-revalidate');
   headers.set('X-Content-Type-Options', 'nosniff');
   if (gzip && response.ok) {
     headers.set('Content-Encoding', 'gzip');

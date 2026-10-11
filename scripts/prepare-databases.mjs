@@ -4,12 +4,16 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { assertAppendOnlyFixturePins, materializeComparisonFixtures } from './comparison-fixtures.mjs';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 import { materializeProviderExports } from './provider-exports.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
+const comparisonHistory = JSON.parse(await readFile(join(root, 'config/comparison-fixtures-history.json'), 'utf8'));
+if (comparisonHistory.format !== 'demodb-comparison-fixture-history/v1') throw new Error('Unsupported comparison fixture history format');
+assertAppendOnlyFixturePins(registry.comparisonFixtures ?? [], comparisonHistory.fixtures);
 const localRoot = process.env.DEMODB_CONTRACTS_DIR ? resolve(process.env.DEMODB_CONTRACTS_DIR) : null;
 const isRelease = Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.DEPLOY_ENV || process.env.CF_PAGES);
 if (localRoot && isRelease) throw new Error('DEMODB_CONTRACTS_DIR is development-only and cannot be used in CI/deploy builds');
@@ -56,6 +60,41 @@ for (const entry of registry.databases) {
   const schemaPath = join(internalAssets, db.id, 'metadata/schema.json');
   await mkdir(dirname(schemaPath), { recursive: true });
   await writeFile(schemaPath, `${JSON.stringify(db.schema, null, 2)}\n`);
+}
+
+const databaseEntries = new Map(registry.databases.map((entry) => [entry.id, entry]));
+const comparisonAssets = await materializeComparisonFixtures(
+  registry.comparisonFixtures ?? [],
+  internalAssets,
+  async (pin, path) => {
+    safeRelative(path);
+    if (pin.repository !== databaseEntries.get(pin.databaseId)?.repository) {
+      throw new Error(`${pin.fixtureId}: comparison fixture repository does not match its provider entry`);
+    }
+    return localRoot
+      ? readFile(join(localRoot, pin.databaseId, path))
+      : fetchPinnedRevision(pin.repository, pin.commit, path);
+  },
+  (pin) => {
+    const db = databases.find((database) => database.id === pin.databaseId);
+    const exportFile = db?.exports.find((item) => item.publicPath === `${pin.databaseId}.sqlite` && item.format === 'sqlite' && item.table == null);
+    return exportFile ? {
+      bytes: exportFile.decodedBytes ?? exportFile.bytes,
+      sha256: exportFile.decodedSha256 ?? exportFile.sha256,
+    } : null;
+  },
+);
+for (const asset of comparisonAssets) {
+  const db = databases.find((database) => database.id === asset.databaseId);
+  if (!db) throw new Error(`${asset.id}: comparison fixture references an unknown database ${asset.databaseId}`);
+  db.comparisonFixtures ??= [];
+  db.comparisonFixtures.push({
+    id: asset.id,
+    publicPath: asset.publicPath,
+    assetPath: asset.assetPath,
+    sha256: asset.sha256,
+    bytes: asset.bytes,
+  });
 }
 
 const ids = new Set();
@@ -154,9 +193,13 @@ async function loadProvider(entry) {
 }
 
 async function fetchPinned(entry, path) {
-  const url = `https://raw.githubusercontent.com/${repoSlug(entry.repository)}/${entry.commit}/${path.split('/').map(encodeURIComponent).join('/')}`;
+  return fetchPinnedRevision(entry.repository, entry.commit, path);
+}
+
+async function fetchPinnedRevision(repository, commit, path) {
+  const url = `https://raw.githubusercontent.com/${repoSlug(repository)}/${commit}/${path.split('/').map(encodeURIComponent).join('/')}`;
   const response = await fetch(url, { headers: { 'User-Agent': 'DemoDB-provider-contract/1' } });
-  if (!response.ok) throw new Error(`${entry.id}: GET ${url} failed with ${response.status}`);
+  if (!response.ok) throw new Error(`GET ${url} failed with ${response.status}`);
   return Buffer.from(await response.arrayBuffer());
 }
 

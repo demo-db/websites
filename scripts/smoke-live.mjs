@@ -6,6 +6,11 @@ const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
 
 const requiredQueryableDatabaseIds = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
+const comparisonFixture = {
+  sha256: '3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f',
+  bytes: 1007616,
+};
+const comparisonFixturePath = `/data/compare/${comparisonFixture.sha256}.sqlite`;
 const sites = [
   ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json', '/adventureworks/', '/adventureworks/ovdb-database.json', '/ovdb/db/adventureworks/ovdb-database.json', '/employees/', '/employees/ovdb-database.json', '/ovdb/db/employees/ovdb-database.json']],
   ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/data/chinook.sqlite', '/.well-known/openvaultdb']],
@@ -147,6 +152,7 @@ for (const id of storageIds) {
 }
 await checkedServedModels();
 await checkedConfiguredDatabaseQueries();
+await checkedComparisonFixture();
 await checkedAdventureWorksSchema();
 await checkedDecodedSqlite('adventureworks');
 
@@ -220,6 +226,59 @@ async function checkedDecodedSqlite(localId) {
   const actualSha256 = hash.digest('hex');
   if (bytes !== expected.decodedBytes || actualSha256 !== expected.decodedSha256) {
     throw new Error(`${localId}: full decoded SQLite download failed verification (bytes=${bytes}, sha256=${actualSha256})`);
+  }
+}
+
+async function checkedComparisonFixture() {
+  const url = `https://chinook.demodb.dev${comparisonFixturePath}`;
+  const signal = AbortSignal.timeout(45_000);
+  const response = await fetch(url, { redirect: 'manual', cache: 'no-store', signal });
+  if (response.status !== 200) throw new Error(`Chinook comparison fixture returned HTTP ${response.status}`);
+  if (response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error('Chinook comparison fixture has the wrong content type');
+  if (response.headers.get('Access-Control-Allow-Origin') !== '*') throw new Error('Chinook comparison fixture is missing read-only CORS');
+  if (response.headers.get('Cache-Control') !== 'public, max-age=31536000, immutable') throw new Error('Chinook comparison fixture is not served with immutable caching');
+  if (!response.body) throw new Error('Chinook comparison fixture has no response body');
+  const declaredBytes = Number(response.headers.get('Content-Length'));
+  if (Number.isSafeInteger(declaredBytes) && declaredBytes > comparisonFixture.bytes) {
+    await response.body.cancel();
+    throw new Error(`Chinook comparison fixture declares ${declaredBytes} bytes, above the ${comparisonFixture.bytes}-byte bound`);
+  }
+  const hash = createHash('sha256');
+  let bytes = 0;
+  const reader = response.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > comparisonFixture.bytes) {
+        await reader.cancel();
+        throw new Error(`Chinook comparison fixture exceeded the ${comparisonFixture.bytes}-byte bound`);
+      }
+      hash.update(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const actualSha256 = hash.digest('hex');
+  if (bytes !== comparisonFixture.bytes || actualSha256 !== comparisonFixture.sha256) {
+    throw new Error(`Chinook comparison fixture failed full-byte verification (bytes=${bytes}, sha256=${actualSha256})`);
+  }
+
+  const head = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store', signal });
+  if (head.status !== 200 || head.headers.get('Content-Length') !== String(comparisonFixture.bytes) ||
+      head.headers.get('Content-Type') !== 'application/vnd.sqlite3' ||
+      head.headers.get('Access-Control-Allow-Origin') !== '*' ||
+      head.headers.get('Cache-Control') !== 'public, max-age=31536000, immutable') {
+    throw new Error('Chinook comparison fixture HEAD response did not preserve byte metadata and immutable CORS headers');
+  }
+  if (await head.text() !== '') throw new Error('Chinook comparison fixture HEAD response included a body');
+
+  const options = await fetch(url, { method: 'OPTIONS', redirect: 'manual', cache: 'no-store', signal });
+  if (options.status !== 204 || options.headers.get('Access-Control-Allow-Origin') !== '*' ||
+      !/\bGET\b/.test(options.headers.get('Access-Control-Allow-Methods') ?? '') ||
+      !/\bHEAD\b/.test(options.headers.get('Access-Control-Allow-Methods') ?? '')) {
+    throw new Error('Chinook comparison fixture OPTIONS response did not allow read-only CORS');
   }
 }
 

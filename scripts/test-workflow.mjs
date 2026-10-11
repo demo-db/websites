@@ -118,7 +118,7 @@ test('live smoke verifies the content-addressed Chinook comparison fixture end t
   assert.match(liveSmoke, /await checkedComparisonFixture\(\)/);
   assert.match(liveSmoke, /async function checkedComparisonFixture\(\)/);
   assert.match(liveSmoke, /actualSha256 !== comparisonFixture\.sha256/);
-  assert.match(liveSmoke, /head\.headers\.get\('Content-Length'\)/);
+  assert.match(liveSmoke, /headLength !== null && headLength !== String\(comparisonFixture\.bytes\)/, 'HEAD length is optional, but a supplied value must match the pinned GET size');
   assert.match(liveSmoke, /method: 'OPTIONS'/);
   assert.match(liveSmoke, /public, max-age=31536000, immutable/);
   assert.match(liveSmoke, /Access-Control-Allow-Origin/);

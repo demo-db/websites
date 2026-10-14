@@ -1,6 +1,6 @@
 {
   "format": "demodb-postgresql-api/v1",
   "publicApiVerified": false,
-  "copies": "All six PostgreSQL copies exist in one private Neon project. Their public read-only OVDB exposure is pending.",
+  "copies": "The founder confirmed that all six PostgreSQL copies exist in one private Neon project. Public read-only OVDB exposure is pending.",
   "activation": "docs/postgresql-activation.md"
 }

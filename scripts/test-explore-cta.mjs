@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
+const postgresqlApi = JSON.parse(await readFile(join(new URL('..', import.meta.url).pathname, 'config/postgresql-api.json'), 'utf8'));
+
 const root = new URL('..', import.meta.url).pathname;
 const ids = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
 const pages = [
@@ -30,7 +32,9 @@ async function* htmlFiles(dir) {
   }
 }
 
-test('no built page names Neon while PostgreSQL readiness is hosted-api-pending', async () => {
+// Neon is named only in the verified state. This check runs while the committed flag is false.
+const pendingTest = postgresqlApi.publicApiVerified ? test.skip : test;
+pendingTest('no built page names Neon while PostgreSQL readiness is hosted-api-pending', async () => {
   // Precondition: every PostgreSQL copy is still pending. If one becomes public,
   // this test must be revisited rather than silently allowing the host name.
   for (const id of ids) {

@@ -15,6 +15,7 @@ export type StorageEntry = {
   engine: 'SQLite' | 'PostgreSQL' | 'inGitDB' | 'BigQuery';
   tags: string[];
   readiness: 'public-api' | 'hosted-api-pending' | 'hosted-repository' | 'public-read-user-project-required';
+  apiUrl?: string;
   repositoryUrl?: string;
   manifestUrl?: string;
   revision?: string;
@@ -30,16 +31,13 @@ export type StorageEntry = {
   verificationUrl?: string;
 };
 
-// PostgreSQL copies are shown as public only when config/postgresql-api.json says so.
-// The website does not yet route OVDB requests for PostgreSQL storage IDs, so a
-// verified flag is refused rather than linking to a route that does not exist.
+// PostgreSQL copies are public only when config/postgresql-api.json says so. The
+// flag is validated here and passed to postgresqlStorageEntry, so both states are
+// testable without editing the committed config.
 if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.publicApiVerified !== 'boolean') {
   throw new Error('config/postgresql-api.json must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
 }
-if (postgresqlApi.publicApiVerified) {
-  throw new Error('PostgreSQL public API cannot be shown until the website routes OVDB requests for PostgreSQL storage IDs; see docs/postgresql-activation.md');
-}
-export const postgresqlReadiness: StorageEntry['readiness'] = postgresqlApi.publicApiVerified ? 'public-api' : 'hosted-api-pending';
+export const postgresqlPublicApiVerified: boolean = postgresqlApi.publicApiVerified;
 
 const inGitDBRevisions: Record<string, string> = registry.ingitdbRevisions;
 if (Object.keys(inGitDBRevisions).length !== ovdbDatabases.length
@@ -66,12 +64,23 @@ if (new Set(bigQueryEditions.map((edition) => edition.id)).size !== ovdbDatabase
 }
 
 // Storage IDs identify catalogue entries, while the provider and OVDB manifest
-// IDs remain the stable dataset IDs. Only SQLite has a published OVDB API.
+// IDs remain the stable dataset IDs. Only SQLite is public unless the PostgreSQL
+// flag is verified; the verified copy is served from the cloud OpenVaultDB API.
+export function postgresqlStorageEntry(id: string, publicApiVerified: boolean): StorageEntry {
+  return {
+    id: `${id}-postgresql`,
+    engine: 'PostgreSQL',
+    tags: publicApiVerified ? [id, 'postgresql', 'neon'] : [id, 'postgresql'],
+    readiness: publicApiVerified ? 'public-api' : 'hosted-api-pending',
+    ...(publicApiVerified ? { apiUrl: `https://cloud.openvaultdb.com/v1/databases/${id}-postgresql` } : {}),
+  };
+}
+
 export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }[] = ovdbDatabases.map((database) => ({
   database,
   storages: [
     { id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'], readiness: 'public-api' },
-    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql'], readiness: postgresqlReadiness },
+    postgresqlStorageEntry(database.localId, postgresqlPublicApiVerified),
     { id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
       repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${inGitDBRevisions[database.localId]}/ingitdb`,
       manifestUrl: `https://github.com/demo-db/${database.localId}/blob/${inGitDBRevisions[database.localId]}/ingitdb/export-manifest.json`,

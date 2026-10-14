@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { databases } from '../src/data/db';
 import { exploreActions } from '../src/data/explore';
-import { postgresqlReadiness, storageGroups } from '../src/data/ovdb';
+import { postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
 import postgresqlApi from '../config/postgresql-api.json';
 
 const sqlite = { format: 'sqlite', table: null };
@@ -30,13 +30,29 @@ test('every registered dataset gets a SQLite primary action and no user-facing W
   }
 });
 
-test('PostgreSQL copies stay pending until config/postgresql-api.json is verified', () => {
+test('the committed PostgreSQL flag is a valid boolean and matches every storage entry', () => {
   assert.equal(postgresqlApi.format, 'demodb-postgresql-api/v1');
-  assert.equal(postgresqlApi.publicApiVerified, false, 'the website cannot route PostgreSQL OVDB requests yet');
-  assert.equal(postgresqlReadiness, 'hosted-api-pending');
+  assert.equal(typeof postgresqlApi.publicApiVerified, 'boolean');
+  assert.equal(postgresqlPublicApiVerified, postgresqlApi.publicApiVerified);
   const postgres = storageGroups.flatMap((group) => group.storages).filter((storage) => storage.engine === 'PostgreSQL');
   assert.equal(postgres.length, databases.length, 'every dataset has one PostgreSQL copy entry');
   for (const storage of postgres) {
-    assert.equal(storage.readiness, 'hosted-api-pending', `${storage.id} is not presented as public`);
+    assert.deepEqual(storage, postgresqlStorageEntry(storage.id.replace(/-postgresql$/, ''), postgresqlPublicApiVerified));
   }
+});
+
+test('pending PostgreSQL copies make no hosting or API claim', () => {
+  const pending = postgresqlStorageEntry('chinook', false);
+  assert.equal(pending.readiness, 'hosted-api-pending');
+  assert.equal(pending.apiUrl, undefined);
+  assert.deepEqual(pending.tags, ['chinook', 'postgresql']);
+  assert.doesNotMatch(JSON.stringify(pending), /neon/i);
+});
+
+test('verified PostgreSQL copies link to the cloud OpenVaultDB endpoint', () => {
+  const publicApi = postgresqlStorageEntry('chinook', true);
+  assert.equal(publicApi.readiness, 'public-api');
+  assert.equal(publicApi.apiUrl, 'https://cloud.openvaultdb.com/v1/databases/chinook-postgresql');
+  assert.equal(publicApi.id, 'chinook-postgresql');
+  assert.equal(publicApi.engine, 'PostgreSQL');
 });

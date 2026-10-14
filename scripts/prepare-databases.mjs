@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { assertAppendOnlyFixturePins, materializeComparisonFixtures } from './comparison-fixtures.mjs';
@@ -160,13 +160,19 @@ for (const { descriptor, bytes } of ovdbDescriptors) {
 }
 await writeFile(join(generatedDir, 'public-manifest-ids.json'), `${JSON.stringify(ovdbDescriptors.map(({ descriptor }) => descriptor.localId))}\n`);
 // PostgreSQL public readiness. DEMODB_POSTGRESQL_API_CONFIG selects a fixture so CI can build the verified
-// state without committing the flip. Deploys never set it.
-const postgresqlApiPath = process.env.DEMODB_POSTGRESQL_API_CONFIG ? resolve(process.env.DEMODB_POSTGRESQL_API_CONFIG) : join(root, 'config/postgresql-api.json');
-const postgresqlApi = JSON.parse(await readFile(postgresqlApiPath, 'utf8'));
+// state without committing the flip. Such a build is NOT deployable: the generated file records which source
+// and hash were used, and scripts/assert-deployable-build.mjs refuses anything but the committed config.
+const defaultPostgresqlApiSource = 'config/postgresql-api.json';
+const postgresqlApiPath = process.env.DEMODB_POSTGRESQL_API_CONFIG ? resolve(process.env.DEMODB_POSTGRESQL_API_CONFIG) : join(root, defaultPostgresqlApiSource);
+const postgresqlApiBytes = await readFile(postgresqlApiPath);
+const postgresqlApi = JSON.parse(postgresqlApiBytes.toString('utf8'));
 if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.publicApiVerified !== 'boolean') {
   throw new Error('The PostgreSQL API config must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
 }
-await writeFile(join(generatedDir, 'postgresql-api.json'), `${JSON.stringify(postgresqlApi, null, 2)}\n`);
+const postgresqlApiSource = relative(root, postgresqlApiPath).split(sep).join('/');
+const postgresqlApiProvenance = { source: postgresqlApiSource, sha256: createHash('sha256').update(postgresqlApiBytes).digest('hex'), default: postgresqlApiSource === defaultPostgresqlApiSource };
+if (!postgresqlApiProvenance.default) console.warn(`WARNING: PostgreSQL API config comes from ${postgresqlApiSource}; this build is not deployable.`);
+await writeFile(join(generatedDir, 'postgresql-api.json'), `${JSON.stringify({ ...postgresqlApi, provenance: postgresqlApiProvenance }, null, 2)}\n`);
 await writeFile(join(generatedDir, 'ovdb.json'), `${JSON.stringify({ server: ovdbServer, databases: ovdbDescriptors.map(({ descriptor }) => descriptor) }, null, 2)}\n`);
 console.log(`Prepared ${databases.length} provider contracts: ${databases.map((db) => db.id).join(', ')}`);
 

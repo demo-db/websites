@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -9,6 +9,7 @@ const sha = 'a'.repeat(40);
 
 test('build marker only accepts local builds or complete Git SHAs', () => {
   assert.deepEqual(buildInfo(sha.toUpperCase()), { format: 'demodb-build/1', commit: sha });
+  assert.deepEqual(buildInfo(sha, { source: 'config/postgresql-api.json', sha256: 'c'.repeat(64) }).postgresqlApiConfig, { source: 'config/postgresql-api.json', sha256: 'c'.repeat(64) });
   assert.equal(buildInfo(undefined).commit, 'local');
   for (const invalid of ['', 'main', 'g'.repeat(40), `${sha}0`]) assert.throws(() => buildInfo(invalid));
 });
@@ -18,8 +19,12 @@ test('build marker is written to the root static assets after build', async () =
   try {
     await assert.rejects(writeBuildInfo(root, sha), /build the static site first/);
     await mkdir(join(root, 'dist'));
+    await assert.rejects(writeBuildInfo(root, sha), /ENOENT|provenance/, 'a build without generated PostgreSQL provenance cannot be marked');
+    await mkdir(join(root, 'src/data/generated'), { recursive: true });
+    const provenance = { source: 'config/postgresql-api.json', sha256: 'd'.repeat(64), default: true };
+    await writeFile(join(root, 'src/data/generated/postgresql-api.json'), JSON.stringify({ provenance }));
     const result = await writeBuildInfo(root, sha);
-    assert.deepEqual(JSON.parse(await readFile(result.file, 'utf8')), { format: 'demodb-build/1', commit: sha });
+    assert.deepEqual(JSON.parse(await readFile(result.file, 'utf8')), { format: 'demodb-build/1', commit: sha, postgresqlApiConfig: { source: provenance.source, sha256: provenance.sha256 } });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

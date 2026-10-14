@@ -24,3 +24,29 @@ test('landing table cards stay inside a one-column phone grid', () => {
   assert.match(rule(demodb, '.table-card'), /min-width:\s*0/);
   assert.match(rule(demodb, '.table-card strong'), /overflow-wrap:\s*anywhere/);
 });
+
+// Measured at 320px on adventureworks.localhost (scrollWidth 366 to 996 before): single-column grids declared
+// as `1fr` cannot shrink below the min-content of long identifiers such as HumanResources.EmployeeDepartmentHistory.
+const globalCss = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
+const schemaPage = await readFile(new URL('../src/pages/db/[id]/schema/index.astro', import.meta.url), 'utf8');
+const phoneRules = globalCss.slice(globalCss.indexOf('@media (max-width:800px)'));
+
+test('phone single-column grids use minmax(0, 1fr) so long identifiers wrap', () => {
+  assert.match(phoneRules, /\.hero\{grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(phoneRules, /\.about-grid,\.url-contract\{grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(phoneRules, /\.table-layout\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(globalCss, /\.source-details\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(globalCss, /h1,h2,\.prose p,\.schema-card strong,\.mini-table-list a,\.big-download-list a span\{overflow-wrap:anywhere\}/);
+});
+
+test('the schema page styles its foreign-key rows and lets source views shrink', () => {
+  assert.match(schemaPage, /\.relationship-row \{ display: grid;/, 'the schema page renders .relationship-row, so it carries the grid styles');
+  assert.match(schemaPage, /@media \(max-width:540px\) \{ \.relationship-row \{ grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(schemaPage, /\.source-view-list \{ display:grid; grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(schemaPage, /\.source-view-card \{ min-width:0;/);
+});
+
+test('related-recordset chips wrap inside the table page aside', () => {
+  assert.match(globalCss, /\.related-list a\{max-width:100%;overflow-wrap:anywhere\}/);
+  assert.match(globalCss, /\.table-aside\{min-width:0\}/);
+});

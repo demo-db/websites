@@ -39,6 +39,14 @@ if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.
   throw new Error('The PostgreSQL API config must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
 }
 export const postgresqlPublicApiVerified: boolean = postgresqlApi.publicApiVerified;
+// Which config produced this build (written by prepare:databases). Only the committed
+// config/postgresql-api.json may be deployed; see scripts/assert-deployable-build.mjs.
+export type PostgresqlApiProvenance = { source: string; sha256: string; default: boolean };
+const provenance = (postgresqlApi as { provenance?: Partial<PostgresqlApiProvenance> }).provenance;
+if (!provenance || typeof provenance.source !== 'string' || !/^[a-f0-9]{64}$/.test(provenance.sha256 ?? '') || typeof provenance.default !== 'boolean') {
+  throw new Error('The generated PostgreSQL API config must record its provenance (source, sha256, default); run prepare:databases');
+}
+export const postgresqlApiProvenance: PostgresqlApiProvenance = provenance as PostgresqlApiProvenance;
 
 const inGitDBRevisions: Record<string, string> = registry.ingitdbRevisions;
 if (Object.keys(inGitDBRevisions).length !== ovdbDatabases.length

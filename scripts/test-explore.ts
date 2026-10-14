@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { databases } from '../src/data/db';
 import { exploreActions } from '../src/data/explore';
-import { postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
+import { postgresqlApiProvenance, postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
 import postgresqlApi from '../src/data/generated/postgresql-api.json';
 import committedPostgresqlApi from '../config/postgresql-api.json';
 
@@ -42,6 +42,9 @@ test('the selected PostgreSQL flag is a valid boolean and matches every storage 
   assert.equal(postgresqlApi.format, 'demodb-postgresql-api/v1');
   assert.equal(typeof postgresqlApi.publicApiVerified, 'boolean');
   assert.equal(postgresqlPublicApiVerified, postgresqlApi.publicApiVerified);
+  assert.match(postgresqlApi.provenance.sha256, /^[a-f0-9]{64}$/, 'the generated config records the hash of its source');
+  assert.equal(postgresqlApi.provenance.default, postgresqlApi.provenance.source === 'config/postgresql-api.json');
+  assert.deepEqual(postgresqlApiProvenance, postgresqlApi.provenance);
   const postgres = storageGroups.flatMap((group) => group.storages).filter((storage) => storage.engine === 'PostgreSQL');
   assert.equal(postgres.length, databases.length, 'every dataset has one PostgreSQL copy entry');
   for (const storage of postgres) {

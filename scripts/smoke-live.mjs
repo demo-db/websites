@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
@@ -140,7 +141,9 @@ await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => bod
 for (const id of storageIds) {
   const url = `https://demodb.dev/ovdb/db/${id}/`;
   await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')
-    ? body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
+    ? postgresqlApi.publicApiVerified
+      ? body.includes(`https://cloud.openvaultdb.com/v1/databases/${id}`) && body.includes('Open read-only API')
+      : body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
     : id.endsWith('-ingitdb')
       ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API')
       : id.endsWith('-bigquery')
@@ -155,6 +158,17 @@ await checkedConfiguredDatabaseQueries();
 await checkedComparisonFixture();
 await checkedAdventureWorksSchema();
 await checkedDecodedSqlite('adventureworks');
+// A pre-gzipped SQL asset must be served once: its decoded length matches the corpus, and it is not still gzip.
+{
+  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
+  const sqlExport = corpus.databases?.find((item) => item.localId === 'adventureworks')?.exports?.find((item) => item.publicPath === 'adventureworks.sql');
+  if (!sqlExport?.decodedBytes) throw new Error('adventureworks: corpus metadata lacks the decoded SQL export size');
+  const response = await fetch('https://adventureworks.demodb.dev/data/adventureworks.sql', { redirect: 'manual', cache: 'no-store' });
+  if (response.status !== 200) throw new Error(`adventureworks: SQL download returned HTTP ${response.status}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length !== sqlExport.decodedBytes) throw new Error(`adventureworks: SQL download decoded to ${bytes.length} bytes, expected ${sqlExport.decodedBytes}`);
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error('adventureworks: SQL download is still gzip after decoding');
+}
 
 // Every dataset's model files and model page, in the current ModelSpec spelling.
 // Model files are served with `Cache-Control: public, max-age=300, must-revalidate`, but
@@ -215,6 +229,7 @@ async function checkedDecodedSqlite(localId) {
   if (response.headers.get('Content-Encoding') !== 'gzip') throw new Error(`${localId}: chunked SQLite route did not retain its gzip transfer encoding`);
   if (response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error(`${localId}: SQLite download has the wrong content type`);
   if (!/accept-encoding/i.test(response.headers.get('Vary') ?? '')) throw new Error(`${localId}: gzip transfer does not vary on Accept-Encoding`);
+  if (response.headers.get('Cross-Origin-Resource-Policy') !== 'cross-origin') throw new Error(`${localId}: SQLite download lacks the cross-origin resource policy`);
   if (!response.body) throw new Error(`${localId}: SQLite download has no response body`);
   const hash = createHash('sha256');
   let bytes = 0;

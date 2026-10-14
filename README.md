@@ -8,6 +8,8 @@ AdventureWorks source conversion and OVDB fixture preparation currently use Pyth
 
 ## PostgreSQL sample imports
 
+Status: the founder confirmed that all six PostgreSQL copies exist in one private Neon project. This repository has not verified that project. Public read-only OVDB access is pending and not enabled, so the site lists these copies as pending until `config/postgresql-api.json` is verified. See [`docs/postgresql-activation.md`](docs/postgresql-activation.md) for the activation checklist.
+
 The standard-library tool under [`scripts/hosting-tools/`](scripts/hosting-tools/) validates a provider's pinned SQLite SHA-256 and generates a transactional PostgreSQL script without replacing an existing database schema. Inputs may be a provider root with its `manifest.json` and declared SQLite or gzip source, concatenated gzip chunks, or a staged `decoded.sqlite`. Generated SQL belongs in a private temporary directory, not the repository:
 
 ```sh

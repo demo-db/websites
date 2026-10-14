@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -23,8 +24,11 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.match(deploy.if, /github\.event_name == 'push'/);
   assert.match(deploy.if, /env\.HAS_CREDENTIALS == 'true'/);
   assert.equal(deploy.env.CLOUDFLARE_API_TOKEN, '${{ secrets.CLOUDFLARE_API_TOKEN }}');
-  assert.ok(job.steps.some((step) => step.name === 'Validate Worker and static asset configuration' && step.run.includes('--dry-run')));
-  assert.match(deploy.run, /--env=""/);
+  assert.ok(job.steps.some((step) => step.name === 'Validate Worker and static asset configuration' && step.run === 'pnpm run deploy:dry-run'));
+  assert.equal(deploy.run, 'pnpm run deploy:worker');
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  assert.match(scripts['deploy:dry-run'], /--dry-run/);
+  assert.match(scripts['deploy:worker'], /--env=""/);
   for (const step of job.steps) {
     if (step === deploy) continue;
     assert.ok(!JSON.stringify(step).includes('secrets.CLOUDFLARE_API_TOKEN'), 'Cloudflare token is limited to the deploy step');
@@ -160,6 +164,20 @@ test('the verified PostgreSQL state is tested in CI from a fixture and never dep
   assert.ok(job.steps.some((step) => step.run === 'pnpm test'));
   assert.ok(!JSON.stringify(job).includes('secrets.') && !JSON.stringify(job).includes('wrangler deploy'), 'the fixture build has no credentials and no deploy step');
   assert.equal(workflow.jobs.deploy.env.DEMODB_POSTGRESQL_API_CONFIG, undefined, 'deploys use the committed config');
+  assert.ok(!job.steps.some((step) => /deploy/.test(step.run ?? '')), 'the fixture job runs no deploy script');
+  assert.equal(job.needs, undefined);
+  assert.ok(!Object.values(workflow.jobs).some((other) => [].concat(other.needs ?? []).includes('verified-postgresql-state')), 'nothing consumes the fixture job output');
+});
+
+test('every deploy path runs the deployable-build guard after the build and before wrangler deploys', async () => {
+  const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  for (const name of ['deploy:worker', 'deploy:dry-run']) assert.match(pkg.scripts[name], /^node scripts\/assert-deployable-build\.mjs && wrangler deploy /, `${name} runs the guard first`);
+  const steps = workflow.jobs.deploy.steps;
+  const index = (pattern) => steps.findIndex((step) => pattern.test(step.run ?? ''));
+  assert.ok(index(/^pnpm build$/) >= 0 && index(/^pnpm run deploy:dry-run$/) > index(/^pnpm build$/));
+  assert.ok(index(/^pnpm run deploy:worker$/) > index(/^pnpm build$/));
+  assert.ok(!steps.some((step) => /wrangler deploy/.test(step.run ?? '')), 'CI only deploys through the guarded package scripts');
+  assert.ok(!/wrangler deploy/.test(Object.entries(pkg.scripts).filter(([name]) => !name.startsWith('deploy:')).map(([, value]) => value).join(' ')), 'no other package script deploys');
 });
 
 test('the verified-state fixture matches the committed config format', async () => {

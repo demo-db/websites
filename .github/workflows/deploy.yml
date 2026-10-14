@@ -76,7 +76,7 @@ jobs:
       - name: TypeScript check
         run: pnpm typecheck
       - name: Validate Worker and static asset configuration
-        run: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc --env=""
+        run: pnpm run deploy:dry-run
       - name: Deploy skipped because credentials are unavailable
         if: github.event_name == 'push' && env.HAS_CREDENTIALS != 'true'
         run: echo "::notice::Build passed; Cloudflare deploy skipped because CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unavailable."
@@ -85,7 +85,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec wrangler deploy --config wrangler.jsonc --env=""
+        run: pnpm run deploy:worker
       - name: Verify the deployed commit and public routes
         if: github.event_name == 'push' && env.HAS_CREDENTIALS == 'true'
         env:

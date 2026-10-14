@@ -21,5 +21,6 @@ const connected = (name: string) => new Set([...db.tables.find((table) => table.
   .relationship-table { font-weight:700; color:var(--ink); overflow-wrap:anywhere; }
   .relationship-row code { font-size:10px; color:var(--cyan); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .relationship-arrow { color:var(--lime); text-align:center; }
-  @media (max-width:800px) { .relationship-list { grid-template-columns:1fr; } .relationship-row:nth-child(odd) { border-right:0; } }
+  @media (max-width:800px) { .relationship-list { grid-template-columns:minmax(0,1fr); } .relationship-row:nth-child(odd) { border-right:0; } }
+  @media (max-width:540px) { .relationship-row { grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 16px minmax(0,1fr) minmax(0,1.2fr); gap:5px; } }
 </style>

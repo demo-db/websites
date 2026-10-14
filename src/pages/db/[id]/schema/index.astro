@@ -19,12 +19,23 @@ const relations = db.tables.flatMap((table) => table.foreignKeys.map((fk) => ({ 
 </SiteLayout>
 <style>
   .source-view-note { max-width:760px; }
-  .source-view-list { display:grid; gap:10px; }
-  .source-view-card { padding:14px 16px; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
+  .source-view-list { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+  .source-view-card { min-width:0; overflow-wrap:anywhere; padding:14px 16px; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
   .source-view-card > summary { display:flex; justify-content:space-between; gap:16px; cursor:pointer; }
   .source-view-card > summary span { color:var(--muted); font-size:12px; }
   .source-view-card > summary .available { color:var(--lime); }
   .source-view-card > p { color:var(--muted); font-size:13px; line-height:1.6; }
   .source-sql { margin-top:12px; }
   .source-sql > summary { color:var(--lime); font-size:12px; cursor:pointer; }
+</style>
+<style>
+  .relationship-section { border-top: 1px solid var(--line); margin-top: 74px; padding-top: 64px; }
+  .relationship-list { border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; }
+  .relationship-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(90px,1.2fr) 24px minmax(100px,1fr) minmax(90px,1.2fr); align-items:center; gap:10px; padding:13px 10px; border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+  .relationship-row:nth-child(odd) { border-right:1px solid var(--line); }
+  .relationship-table { font-weight:700; color:var(--ink); overflow-wrap:anywhere; }
+  .relationship-row code { font-size:10px; color:var(--cyan); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .relationship-arrow { color:var(--lime); text-align:center; }
+  @media (max-width:800px) { .relationship-list { grid-template-columns:minmax(0,1fr); } .relationship-row:nth-child(odd) { border-right:0; } }
+  @media (max-width:540px) { .relationship-row { grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 16px minmax(0,1fr) minmax(0,1.2fr); gap:5px; } }
 </style>

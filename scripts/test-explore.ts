@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { databases } from '../src/data/db';
 import { exploreActions } from '../src/data/explore';
 import { postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
-import postgresqlApi from '../config/postgresql-api.json';
+import postgresqlApi from '../src/data/generated/postgresql-api.json';
+import committedPostgresqlApi from '../config/postgresql-api.json';
 
 const sqlite = { format: 'sqlite', table: null };
 
@@ -30,7 +31,14 @@ test('every registered dataset gets a SQLite primary action and no user-facing W
   }
 });
 
-test('the committed PostgreSQL flag is a valid boolean and matches every storage entry', () => {
+test('the committed PostgreSQL flag is a valid boolean', () => {
+  assert.equal(committedPostgresqlApi.format, 'demodb-postgresql-api/v1');
+  // The activation owner flips this; CI covers the verified state with a fixture
+  // through DEMODB_POSTGRESQL_API_CONFIG, so no test depends on the committed value.
+  assert.equal(typeof committedPostgresqlApi.publicApiVerified, 'boolean');
+});
+
+test('the selected PostgreSQL flag is a valid boolean and matches every storage entry', () => {
   assert.equal(postgresqlApi.format, 'demodb-postgresql-api/v1');
   assert.equal(typeof postgresqlApi.publicApiVerified, 'boolean');
   assert.equal(postgresqlPublicApiVerified, postgresqlApi.publicApiVerified);

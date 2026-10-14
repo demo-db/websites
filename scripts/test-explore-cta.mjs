@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-const postgresqlApi = JSON.parse(await readFile(join(new URL('..', import.meta.url).pathname, 'config/postgresql-api.json'), 'utf8'));
+const postgresqlApi = JSON.parse(await readFile(join(new URL('..', import.meta.url).pathname, 'src/data/generated/postgresql-api.json'), 'utf8'));
 
 const root = new URL('..', import.meta.url).pathname;
 const ids = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
@@ -32,18 +32,20 @@ async function* htmlFiles(dir) {
   }
 }
 
-// Neon is named only in the verified state. This check runs while the committed flag is false.
-const pendingTest = postgresqlApi.publicApiVerified ? test.skip : test;
-pendingTest('no built page names Neon while PostgreSQL readiness is hosted-api-pending', async () => {
-  // Precondition: every PostgreSQL copy is still pending. If one becomes public,
-  // this test must be revisited rather than silently allowing the host name.
+const neonPages = (file) => file.startsWith('/dist/ovdb/db/') && file.endsWith('-postgresql/index.html') || file === '/dist/ovdb/index.html' || file.startsWith('/dist/_db/') && file.endsWith('-postgresql/index.html');
+
+// Pending: no built page names Neon. Verified: only the PostgreSQL storage pages and the
+// catalogue may, and only when the selected config's `copies` text backs the hosting claim.
+test(postgresqlApi.publicApiVerified ? 'Neon is named only on verified PostgreSQL pages, backed by the config' : 'no built page names Neon while PostgreSQL readiness is hosted-api-pending', async () => {
   for (const id of ids) {
     const page = await readFile(join(root, 'dist/ovdb/db', `${id}-postgresql`, 'index.html'), 'utf8');
-    assert.ok(page.includes('Public OpenVaultDB API access is being prepared'), `${id} PostgreSQL copy is still pending`);
+    assert.equal(page.includes('Public OpenVaultDB API access is being prepared'), !postgresqlApi.publicApiVerified, `${id} PostgreSQL readiness matches the selected config`);
   }
   const offenders = [];
   for await (const file of htmlFiles(join(root, 'dist'))) {
-    if (/neon/i.test(await readFile(file, 'utf8'))) offenders.push(file.replace(root, ''));
+    const relative = file.replace(root, '/');
+    if (/neon/i.test(await readFile(file, 'utf8')) && !(postgresqlApi.publicApiVerified && neonPages(relative.replace('//', '/')))) offenders.push(relative);
   }
   assert.deepEqual(offenders, []);
+  if (postgresqlApi.publicApiVerified) assert.match(postgresqlApi.copies, /Neon/, 'a Neon claim needs the verified config to say so');
 });

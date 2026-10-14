@@ -159,6 +159,14 @@ for (const { descriptor, bytes } of ovdbDescriptors) {
   }
 }
 await writeFile(join(generatedDir, 'public-manifest-ids.json'), `${JSON.stringify(ovdbDescriptors.map(({ descriptor }) => descriptor.localId))}\n`);
+// PostgreSQL public readiness. DEMODB_POSTGRESQL_API_CONFIG selects a fixture so CI can build the verified
+// state without committing the flip. Deploys never set it.
+const postgresqlApiPath = process.env.DEMODB_POSTGRESQL_API_CONFIG ? resolve(process.env.DEMODB_POSTGRESQL_API_CONFIG) : join(root, 'config/postgresql-api.json');
+const postgresqlApi = JSON.parse(await readFile(postgresqlApiPath, 'utf8'));
+if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.publicApiVerified !== 'boolean') {
+  throw new Error('The PostgreSQL API config must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
+}
+await writeFile(join(generatedDir, 'postgresql-api.json'), `${JSON.stringify(postgresqlApi, null, 2)}\n`);
 await writeFile(join(generatedDir, 'ovdb.json'), `${JSON.stringify({ server: ovdbServer, databases: ovdbDescriptors.map(({ descriptor }) => descriptor) }, null, 2)}\n`);
 console.log(`Prepared ${databases.length} provider contracts: ${databases.map((db) => db.id).join(', ')}`);
 

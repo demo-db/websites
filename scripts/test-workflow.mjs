@@ -153,3 +153,19 @@ test('live smoke checks every dataset\'s served model files and model page', () 
   assert.doesNotMatch(liveSmoke, /includes\('entities'\)/);
   assert.match(liveSmoke, /cache: 'no-store'/);
 });
+
+test('the verified PostgreSQL state is tested in CI from a fixture and never deployed', () => {
+  const job = workflow.jobs['verified-postgresql-state'];
+  assert.equal(job.env.DEMODB_POSTGRESQL_API_CONFIG, 'scripts/fixtures/postgresql-api-verified.json');
+  assert.ok(job.steps.some((step) => step.run === 'pnpm test'));
+  assert.ok(!JSON.stringify(job).includes('secrets.') && !JSON.stringify(job).includes('wrangler deploy'), 'the fixture build has no credentials and no deploy step');
+  assert.equal(workflow.jobs.deploy.env.DEMODB_POSTGRESQL_API_CONFIG, undefined, 'deploys use the committed config');
+});
+
+test('the verified-state fixture matches the committed config format', async () => {
+  const committed = JSON.parse(await readFile(join(root, 'config/postgresql-api.json'), 'utf8'));
+  const fixture = JSON.parse(await readFile(join(root, 'scripts/fixtures/postgresql-api-verified.json'), 'utf8'));
+  assert.equal(typeof committed.publicApiVerified, 'boolean');
+  assert.equal(fixture.publicApiVerified, true);
+  assert.equal(fixture.format, committed.format);
+});

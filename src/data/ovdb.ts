@@ -1,7 +1,7 @@
 import generated from './generated/ovdb.json';
 import registry from '../../config/databases.json';
 import bigQueryHosting from '../../config/bigquery-hosting.json';
-import postgresqlApi from '../../config/postgresql-api.json';
+import postgresqlApi from './generated/postgresql-api.json';
 import type { OVDBDatabase, OVDBServer } from './types';
 
 export { bigQueryHosting };
@@ -31,11 +31,12 @@ export type StorageEntry = {
   verificationUrl?: string;
 };
 
-// PostgreSQL copies are public only when config/postgresql-api.json says so. The
+// PostgreSQL copies are public only when config/postgresql-api.json says so (copied to
+// generated/ by prepare:databases, or taken from DEMODB_POSTGRESQL_API_CONFIG in CI). The
 // flag is validated here and passed to postgresqlStorageEntry, so both states are
 // testable without editing the committed config.
 if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.publicApiVerified !== 'boolean') {
-  throw new Error('config/postgresql-api.json must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
+  throw new Error('The PostgreSQL API config must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
 }
 export const postgresqlPublicApiVerified: boolean = postgresqlApi.publicApiVerified;
 

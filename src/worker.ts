@@ -133,7 +133,7 @@ export default {
     const exportFile = exportPath == null ? undefined : db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
     if (exportFile && exportFile.compression === 'gzip' && exportFile.chunks && exportFile.chunks.length > 0) {
       const response = await serveChunkedGzip(request, env, url, db.id, exportFile);
-      return isPublicData ? withCrossOriginResource(withDataHeaders(response, request.method, true)) : response;
+      return isPublicData ? withDataHeaders(response, request.method, true, false, true) : response;
     }
     const target = comparisonFixture
       ? internalAssetPath(db.id, `/data/${comparisonFixture.assetPath.split('/').map(encodeURIComponent).join('/')}`)
@@ -142,7 +142,7 @@ export default {
       : internalAssetPath(db.id, url.pathname);
     const response = await serveAsset(request, env, url, target, exportFile?.compression === 'gzip');
     if (isPublicData) {
-      return withCrossOriginResource(withDataHeaders(response, request.method, exportFile?.compression === 'gzip', Boolean(comparisonFixture)));
+      return withDataHeaders(response, request.method, exportFile?.compression === 'gzip', Boolean(comparisonFixture), true);
     }
     return response;
   },
@@ -334,16 +334,13 @@ function dataExtension(pathname: string): string {
   return logicalName.slice(logicalName.lastIndexOf('.'));
 }
 
-// Per-dataset /data/* files are public downloads that other sites may embed or fetch.
-function withCrossOriginResource(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-function withDataHeaders(response: Response, method: string, gzip = false, immutable = false): Response {
+// crossOrigin marks per-dataset /data/* downloads that other sites may embed.
+// It is set on successful responses only, in the same Response construction, so
+// encodeBody: 'manual' for pre-gzipped assets is never dropped by a re-wrap.
+function withDataHeaders(response: Response, method: string, gzip = false, immutable = false, crossOrigin = false): Response {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(readonlyCorsHeaders())) headers.set(name, value);
+  if (crossOrigin && response.ok) headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
   headers.set('Cache-Control', immutable && response.ok ? 'public, max-age=31536000, immutable' : 'public, max-age=300, must-revalidate');
   headers.set('X-Content-Type-Options', 'nosniff');
   if (gzip && response.ok) {

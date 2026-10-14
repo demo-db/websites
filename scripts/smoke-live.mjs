@@ -137,12 +137,17 @@ for (const [origin, paths] of sites) {
 }
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
 await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) &&
-  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project'));
+  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project') &&
+  body.includes('six SQLite databases with working public APIs') && body.includes(`${postgresqlApi.publicApiVerified ? 12 : 6} public OVDB APIs`) &&
+  (postgresqlApi.publicApiVerified
+    ? body.includes('with separate public read-only DTQL endpoints') && !body.includes('public API access pending')
+    : body.includes('PostgreSQL copies have public API access pending') && !body.includes('Neon')));
 for (const id of storageIds) {
   const url = `https://demodb.dev/ovdb/db/${id}/`;
   await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')
     ? postgresqlApi.publicApiVerified
-      ? body.includes(`https://cloud.openvaultdb.com/v1/databases/${id}`) && body.includes('Open read-only API')
+      ? body.includes(`https://cloud.openvaultdb.com/v1/databases/${id}`) && body.includes('Open read-only API') &&
+        body.includes('does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint')
       : body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
     : id.endsWith('-ingitdb')
       ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API')
@@ -151,7 +156,7 @@ for (const id of storageIds) {
           body.includes('does not execute or proxy SQL') && body.includes('DataTug browser query execution is not enabled yet') &&
           !body.includes('Open read-only API') && !body.includes('Database descriptor')
         : body.includes('Open read-only API')));
-  if (id.endsWith('-bigquery')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
+  if (id.endsWith('-bigquery') || id.endsWith('-postgresql')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
 }
 await checkedServedModels();
 await checkedConfiguredDatabaseQueries();

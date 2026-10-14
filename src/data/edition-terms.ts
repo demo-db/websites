@@ -5,10 +5,11 @@ export type EditionTerm = { term: string; value: string };
 const engineLabels: Record<string, string> = { sqlite: 'SQLite' };
 const engineLabel = (engine: string) => engineLabels[engine.toLowerCase()] ?? engine;
 
-// Terms for a PostgreSQL copy whose public access is still pending. Shown only in
-// that state, so it makes no hosting claim and does not describe the SQLite file.
-// The dataset contents come from the site metadata, which also lists views.
-export function editionTerms(database: OVDBDatabase, source: Database | undefined): EditionTerm[] {
+// Terms for a PostgreSQL copy. The dataset contents describe the data, so they are
+// the same whether access is pending or public; only the access line depends on the
+// copy's public OVDB API URL. Neither line makes a hosting claim. The dataset contents
+// come from the site metadata, which also lists views.
+export function editionTerms(database: OVDBDatabase, source: Database | undefined, postgresqlApiUrl?: string): EditionTerm[] {
   const recordsets = source?.tables ?? database.recordsets;
   const tables = recordsets.filter((recordset) => recordset.kind === 'table');
   const views = recordsets.filter((recordset) => recordset.kind === 'view');
@@ -20,7 +21,9 @@ export function editionTerms(database: OVDBDatabase, source: Database | undefine
     },
     {
       term: 'Access layer (OVDB)',
-      value: `The read-only OVDB API at ${database.apiUrl} serves the ${engineLabel(database.deployment.engine)} edition. The PostgreSQL copy is not yet available through OVDB.`,
+      value: postgresqlApiUrl
+        ? `The read-only OVDB API at ${postgresqlApiUrl} serves the PostgreSQL copy.`
+        : `The read-only OVDB API at ${database.apiUrl} serves the ${engineLabel(database.deployment.engine)} edition. The PostgreSQL copy is not yet available through OVDB.`,
     },
   ];
 }

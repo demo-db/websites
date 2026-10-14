@@ -13,6 +13,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Builds and tests the site as if config/postgresql-api.json said publicApiVerified: true,
+  # using a fixture, so the flip in docs/postgresql-activation.md step f needs no test edits.
+  # Its build output is never deployed.
+  verified-postgresql-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BUILD_COMMIT: ${{ github.sha }}
+      DEMODB_POSTGRESQL_API_CONFIG: scripts/fixtures/postgresql-api-verified.json
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build and test with PostgreSQL public API verified (fixture)
+        run: pnpm test
+      - name: Confirm the fixture selected the verified state
+        run: |
+          node -e "process.exit(JSON.parse(require('fs').readFileSync('src/data/generated/postgresql-api.json', 'utf8')).publicApiVerified === true ? 0 : 1)"
+      - name: TypeScript check
+        run: pnpm typecheck
+
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -1,0 +1,6 @@
+{
+  "format": "demodb-postgresql-api/v1",
+  "publicApiVerified": true,
+  "copies": "Test fixture for the verified state. All six PostgreSQL copies are hosted on Neon and served read-only through the public OpenVaultDB API. Never deployed.",
+  "activation": "docs/postgresql-activation.md"
+}

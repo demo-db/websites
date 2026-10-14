@@ -8,8 +8,9 @@ import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import worker, { internalAssetPath, resolveHost, serveChunkedGzip } from '../src/worker';
 import { activeSnapshot, clearActiveSnapshot, followNativeForeignKey, importSnapshot, IncrementalSha256, isVerifiedTableCheckpoint, parseJsonArray, stagingImportKey } from '../src/scripts/indexeddb-snapshot';
 import providerIndex from '../src/data/generated/index.json';
-import { bigQueryHosting, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
+import { bigQueryHosting, postgresqlPublicApiVerified, postgresqlStorageEntry, publicOvdbApiCount, storageEngineCount, storageEntryCount, storageGroups } from '../src/data/ovdb';
 import registry from '../config/databases.json';
+import postgresqlApiConfig from '../src/data/generated/postgresql-api.json';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -501,10 +502,26 @@ const storageCatalogueHtml = await (await fetch('demodb.dev', '/ovdb/')).text();
 assert.match(storageCatalogueHtml, /6 datasets\. 4 storage editions each/);
 assert.match(storageCatalogueHtml, /six SQLite databases with working public APIs/);
 assert.match(storageCatalogueHtml, /authenticated Google accounts/);
+if (postgresqlPublicApiVerified) {
+  assert.match(storageCatalogueHtml, /with separate public read-only DTQL endpoints/);
+  assert.doesNotMatch(storageCatalogueHtml, /public API access pending/);
+} else {
+  assert.match(storageCatalogueHtml, /PostgreSQL copies have public API access pending/);
+  assert.doesNotMatch(storageCatalogueHtml, /Neon|separate public read-only DTQL endpoints/, 'pending catalogue makes no hosting claim');
+}
+assert.match(storageCatalogueHtml, new RegExp(`${postgresqlPublicApiVerified ? 12 : 6} public OVDB APIs`));
 assert.equal(storageGroups.length, 6);
 assert.equal(storageEngineCount, 4);
 assert.equal(storageEntryCount, 24);
-assert.equal(publicOvdbApiCount, 6);
+assert.equal(publicOvdbApiCount, postgresqlPublicApiVerified ? 12 : 6);
+for (const { database } of storageGroups) {
+  const pending = postgresqlStorageEntry(database.localId, false);
+  const verified = postgresqlStorageEntry(database.localId, true);
+  assert.equal(pending.readiness, 'hosted-api-pending');
+  assert.equal(pending.apiUrl, undefined);
+  assert.equal(verified.readiness, 'public-api');
+  assert.equal(verified.apiUrl, `https://cloud.openvaultdb.com/v1/databases/${database.localId}-postgresql`);
+}
 assert.equal(bigQueryHosting.projectId, 'demodb-dev');
 assert.equal(bigQueryHosting.location, 'US');
 assert.equal(bigQueryHosting.queryAccess.permissionPrincipal, 'allAuthenticatedUsers');
@@ -512,6 +529,8 @@ assert.equal(bigQueryHosting.queryAccess.googleAuthenticationRequired, true);
 assert.equal(bigQueryHosting.queryAccess.browserQueryInDataTug, 'not-enabled');
 assert.equal(bigQueryHosting.datasets.reduce((total, edition) => total + edition.tableCount, 0), 128);
 assert.equal(bigQueryHosting.datasets.reduce((total, edition) => total + edition.rowCount, 0), 839264);
+let publicPostgresPages = 0;
+let pendingPostgresPages = 0;
 for (const { database, storages } of storageGroups) {
   assert.equal(storages.length, 4);
   for (const storage of storages) {
@@ -526,7 +545,35 @@ for (const { database, storages } of storageGroups) {
     assert.equal((await fetch('demodb.dev', path, 'HEAD')).status, 200);
     assert.equal((await fetch('demodb.dev', path, 'POST')).status, 405);
     assert.equal((await fetch('demodb.dev', path.slice(0, -1))).headers.get('Location'), `https://demodb.dev${path}`);
-    if (storage.readiness === 'public-api') {
+    if (storage.engine === 'PostgreSQL') {
+      // Both states: the data notes, no SQLite API link, and no local descriptor or API route.
+      assert.match(html, /Dataset contents/);
+      assert.doesNotMatch(html, new RegExp(`href="${database.apiUrl}"`), 'PostgreSQL pages never link the SQLite API');
+      assert.doesNotMatch(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
+      assert.doesNotMatch(html, /Database descriptor/);
+      assert.equal(/<code>Production\.Document\.FileExtension<\/code> as <code>BYTEA<\/code>/.test(html), database.localId === 'adventureworks', `${storage.id} BYTEA note only on AdventureWorks`);
+      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404, 'PostgreSQL has no local descriptor');
+      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'PostgreSQL storage has no route on demodb.dev');
+      if (storage.readiness === 'public-api') {
+        assert.ok(postgresqlPublicApiVerified);
+        assert.equal(storage.apiUrl, `https://cloud.openvaultdb.com/v1/databases/${database.localId}-postgresql`);
+        assert.ok(html.includes(`href="${storage.apiUrl}"`));
+        assert.match(html, /Open read-only API/);
+        assert.match(html, /public read-only DTQL API/);
+        assert.match(html, /does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint/);
+        assert.doesNotMatch(html, /Public OpenVaultDB API access is being prepared|not yet available through OVDB/);
+        if (/Neon/.test(html)) assert.match(JSON.stringify(postgresqlApiConfig.copies), /Neon/, 'a Neon claim must be backed by the verified config');
+        publicPostgresPages += 1;
+      } else {
+        assert.ok(!postgresqlPublicApiVerified);
+        assert.doesNotMatch(html, /Neon/, 'pending PostgreSQL pages never name the host');
+        assert.match(html, /Public OpenVaultDB API access is being prepared/);
+        assert.match(html, /not yet available through OVDB/);
+        assert.doesNotMatch(html, /served from a pinned copy of the upstream SQLite fixture|The pinned SQLite build is read-only/);
+        assert.doesNotMatch(html, /Open read-only API/);
+        pendingPostgresPages += 1;
+      }
+    } else if (storage.readiness === 'public-api') {
       assert.match(html, new RegExp(`href="${database.apiUrl}"`));
       assert.match(html, new RegExp(`href="/ovdb/db/${database.localId}/ovdb-database.json"`));
     } else if (storage.readiness === 'hosted-repository') {
@@ -565,16 +612,11 @@ for (const { database, storages } of storageGroups) {
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
       assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'BigQuery storage has no OVDB API route');
-    } else {
-      assert.doesNotMatch(html, /Neon/, 'pending PostgreSQL pages never name the host');
-      assert.match(html, /Public OpenVaultDB API access is being prepared/);
-      assert.doesNotMatch(html, /served from a pinned copy of the upstream SQLite fixture|The pinned SQLite build is read-only/);
-      assert.doesNotMatch(html, /Open read-only API|Database descriptor/);
-      assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
-      assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'pending PostgreSQL storage has no public API route');
     }
   }
 }
+assert.equal(publicPostgresPages, postgresqlPublicApiVerified ? 6 : 0);
+assert.equal(pendingPostgresPages, postgresqlPublicApiVerified ? 0 : 6);
 assert.equal((await fetch('demodb.dev', '/ovdb/db/missing-postgresql/')).status, 404);
 assert.equal((await fetch('demodb.dev', '/ovdb/v1')).status, 200, 'declared API root returns the server descriptor');
 assert.equal((await fetch('demodb.dev', '/ovdb/schemas/ovdb-database-draft-1.schema.json')).status, 200);

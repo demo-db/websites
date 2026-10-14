@@ -78,8 +78,8 @@ python3 scripts/hosting-tools/postgres_samples.py verify /path/to/provider-root 
 
 Run it for all six providers. Every run must pass before step f.
 
-**f. Mark the API verified.** Set `publicApiVerified` to `true` in `config/postgresql-api.json` and deploy the website. The site then shows each PostgreSQL copy as public, with its read-only API link pointing at `https://cloud.openvaultdb.com/v1/databases/<db>-postgresql`. The SQLite pages keep their own API links.
+**f. Mark the API verified.** Set `publicApiVerified` to `true` in `config/postgresql-api.json` and deploy the website. The site then shows each PostgreSQL copy as public, with its read-only API link pointing at `https://cloud.openvaultdb.com/v1/databases/<db>-postgresql`. The SQLite pages keep their own API links. No test edit is needed: CI builds and tests both states (see below).
 
 ## After activation
 
-Run `pnpm test` and the live smoke check. `scripts/test-explore.ts` checks both states of the flag, and `scripts/smoke-live.mjs` checks the PostgreSQL pages against the committed value. Update any test that still assumes the pending state.
+CI already covers both states. The `deploy` job tests the committed flag, and the `verified-postgresql-state` job builds and tests with `scripts/fixtures/postgresql-api-verified.json` selected through `DEMODB_POSTGRESQL_API_CONFIG` (run it locally with `pnpm test:verified-postgresql`). That run asserts the six PostgreSQL pages link to `https://cloud.openvaultdb.com/v1/databases/<db>-postgresql`, the public OVDB API count is 12, no PostgreSQL page links the SQLite API, and `demodb.dev` has no local descriptor or `/ovdb/v1/databases/<db>-postgresql` route. After the flip deploys, `scripts/smoke-live.mjs` checks the live pages against the committed value.

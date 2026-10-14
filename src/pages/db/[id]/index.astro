@@ -1,7 +1,9 @@
 ---
 import SiteLayout from '../../../layouts/SiteLayout.astro';
+import ExploreActions from '../../../components/ExploreActions.astro';
 import RecordsetCard from '../../../components/RecordsetCard.astro';
 import { catalogueHost, databases } from '../../../data/db';
+import { exploreActions } from '../../../data/explore';
 import { ovdbDatabaseById } from '../../../data/ovdb';
 import { relatedRecordsets } from '../../../data/similarity';
 import type { Database } from '../../../data/types';
@@ -15,11 +17,12 @@ const totalRows = tables.reduce((sum, table) => sum + (table.rowCount ?? 0), 0);
 const query = db.queries[0];
 const primaryFile = db.exports.find((file) => file.table === null && file.format !== 'metadata');
 const sourceLabel = primaryFile?.publicPath.split('/').at(-1) ?? db.name;
+const explore = exploreActions(db);
 const databaseMatches = tables.reduce((sum, table) => sum + relatedRecordsets(db, table, databases).length, 0);
 ---
 <SiteLayout db={db} title={`${db.name} sample database | DemoDB`} description={db.description} canonical="/">
   <section class="hero shell db-hero">
-    <div class="hero-copy"><a class="back-link" href={`https://${catalogueHost}/`}>All sample databases</a><p class="eyebrow"><span class="eyebrow-dot"></span>{db.domain} · {db.siteHost}</p><h1>{db.name}<br /><em>sample database.</em></h1><p class="hero-lede">{db.description}</p><div class="hero-actions"><a class="button button-primary" href="/downloads/">Download {db.name} <span aria-hidden="true">↓</span></a><a class="button button-quiet" href="/tables/">Browse tables <span aria-hidden="true">→</span></a></div></div>
+    <div class="hero-copy"><a class="back-link" href={`https://${catalogueHost}/`}>All sample databases</a><p class="eyebrow"><span class="eyebrow-dot"></span>{db.domain} · {db.siteHost}</p><h1>{db.name}<br /><em>sample database.</em></h1><p class="hero-lede">{db.description}</p><div class="hero-actions"><ExploreActions actions={explore} /><a class={explore.primary ? 'button button-quiet' : 'button button-primary'} href="/downloads/">Download {db.name} <span aria-hidden="true">↓</span></a><a class="button button-quiet" href="/tables/">Browse tables <span aria-hidden="true">→</span></a></div></div>
     <div class="hero-console"><div class="console-bar"><span></span><span></span><span></span><code>{sourceLabel}</code></div><div class="console-content"><p class="console-comment">-- {query?.title ?? 'Explore the schema'}</p>{query ? <><p><span class="syntax-key">{query.sql.split(/\s+/)[0]}</span> {query.sql.split(/\s+/).slice(1, 5).join(' ')}</p><p class="console-result">{tables.length} tables · {views.length} views · {totalRows.toLocaleString()} rows</p></> : <p>{tables.length} tables · {views.length} views</p>}<div class="console-rule"></div><p class="console-comment">-- {databaseMatches} high-confidence cross-database table matches</p></div></div>
   </section>
   <section class="shell section db-summary"><div class="summary-stat"><strong>{tables.length}</strong><span>tables</span></div><div class="summary-stat"><strong>{views.length}</strong><span>views</span></div><div class="summary-stat"><strong>{totalRows.toLocaleString()}</strong><span>table rows</span></div><div class="summary-links"><a href="/schema/">Schema and relationships →</a><a href="/queries/">Sample queries →</a><a href="/about/">Source and licence →</a>{db.ovdb.available && ovdbDatabase && <a href={ovdbDatabase.id}>Explore in OpenVaultDB →</a>}</div></section>

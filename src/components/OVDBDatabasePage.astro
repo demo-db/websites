@@ -1,8 +1,12 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
+import ExploreActions from './ExploreActions.astro';
+import { databaseById } from '../data/db';
+import { exploreActions } from '../data/explore';
 import type { OVDBDatabase } from '../data/types';
 
 const { database } = Astro.props as { database: OVDBDatabase };
+const explore = exploreActions(databaseById.get(database.localId));
 const keyCount = database.recordsets.reduce((sum, recordset) => sum + recordset.foreignKeys.length, 0);
 ---
 
@@ -12,7 +16,8 @@ const keyCount = database.recordsets.reduce((sum, recordset) => sum + recordset.
     <h1>{database.title}</h1>
     <p class="hero-lede">{database.description}</p>
     <div class="hero-actions">
-      <a class="button button-primary" href={database.homepage}>Explore the database site <span aria-hidden="true">→</span></a>
+      <ExploreActions actions={explore} />
+      <a class={explore.primary ? 'button button-quiet' : 'button button-primary'} href={database.homepage}>Explore the database site <span aria-hidden="true">→</span></a>
       <a class="button button-quiet" href={database.apiUrl}>Read-only API</a>
       <a class="button button-quiet" href="/ovdb/">Server directory</a>
     </div>

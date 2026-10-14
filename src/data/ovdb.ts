@@ -21,6 +21,7 @@ export type StorageEntry = {
   datasetId?: string;
   location?: string;
   executionProject?: 'user-selected';
+  host?: string;
   tableCount?: number;
   rowCount?: number;
   sourceRepository?: string;
@@ -59,7 +60,7 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
   database,
   storages: [
     { id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'], readiness: 'public-api' },
-    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql', 'neon'], readiness: 'hosted-api-pending' },
+    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql', 'neon'], readiness: 'hosted-api-pending', host: 'Neon' },
     { id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
       repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${inGitDBRevisions[database.localId]}/ingitdb`,
       manifestUrl: `https://github.com/demo-db/${database.localId}/blob/${inGitDBRevisions[database.localId]}/ingitdb/export-manifest.json`,

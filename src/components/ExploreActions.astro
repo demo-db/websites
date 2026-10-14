@@ -1,0 +1,7 @@
+---
+import type { ExploreActions } from '../data/explore';
+
+const { actions } = Astro.props as { actions: ExploreActions };
+---
+{actions.primary && <a class="button button-primary" href={actions.primary.href}>{actions.primary.label}</a>}
+{actions.secondary.map((action) => <a class="button button-quiet" href={action.href}>{action.label}</a>)}

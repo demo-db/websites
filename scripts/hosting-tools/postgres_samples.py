@@ -506,7 +506,12 @@ def _base_statements(snapshot: Snapshot) -> list[str]:
 
 
 def _tail_statements(snapshot: Snapshot) -> list[str]:
-    out: list[str] = []
+    # Foreign keys are DEFERRABLE INITIALLY DEFERRED so rows may load in any
+    # order, which leaves pending trigger events on every referencing table.
+    # PostgreSQL refuses CREATE INDEX on a table with pending trigger events
+    # (SQLSTATE 55006), so validate all deferred constraints once, after the
+    # bulk load and before any index DDL. This also checks every FK in one pass.
+    out: list[str] = ["SET CONSTRAINTS ALL IMMEDIATE;"]
     for table in snapshot.tables:
         out.extend(_index_ddl(table))
     for view in _view_dependencies(snapshot.views):

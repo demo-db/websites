@@ -24,6 +24,8 @@ python3 scripts/hosting-tools/postgres_samples.py verify /path/to/provider-root 
   --url-file /private/tmp/provider-owner-url
 ```
 
+A live test (`scripts/hosting-tools/test_postgres_live.py`, CI job `postgres-live`) loads every dataset into a throwaway PostgreSQL and runs `verify`; see [`docs/postgresql-fidelity.md`](docs/postgresql-fidelity.md) for load order and type-fidelity notes.
+
 The Python API exposes `import_database(connection, provider_root)` and `verify_database(connection, provider_root)` for existing psycopg 3 connections, including autocommit connections. AdventureWorks `Production.Document.FileExtension` is the sole storage override: the SQLite `TEXT` values include NUL characters, which PostgreSQL `TEXT` cannot store. The importer maps this column to `BYTEA` and preserves each source string's UTF-8 bytes exactly. The import manifest records the override.
 
 ## Local development

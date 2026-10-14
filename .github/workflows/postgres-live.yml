@@ -1,0 +1,69 @@
+name: Live PostgreSQL load
+
+# Loads every pinned dataset into a real throwaway PostgreSQL 17 (service
+# container on loopback) through both the generated-SQL and COPY import paths,
+# then runs `verify`. Path-selective: only runs when the generator, its test, or
+# the provider pins change.
+on:
+  pull_request:
+    paths:
+      - scripts/hosting-tools/**
+      - config/databases.json
+      - .github/workflows/postgres-live.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/hosting-tools/**
+      - config/databases.json
+      - .github/workflows/postgres-live.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-live-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: throwaway
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out provider repositories at their pinned revisions
+        run: |
+          mkdir -p "$RUNNER_TEMP/providers"
+          python3 - <<'PY' > "$RUNNER_TEMP/pins.tsv"
+          import json
+          for d in json.load(open("config/databases.json"))["databases"]:
+              print(d["id"], d["repository"], d["commit"], sep="\t")
+          PY
+          while IFS=$'\t' read -r id repo commit; do
+            dir="$RUNNER_TEMP/providers/$id"
+            git init -q "$dir"
+            git -C "$dir" fetch -q --depth 1 "$repo" "$commit"
+            git -C "$dir" checkout -q FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
+          done < "$RUNNER_TEMP/pins.tsv"
+      - name: Load and verify all datasets
+        env:
+          DEMODB_LIVE_POSTGRES_URL: postgresql://postgres:throwaway@127.0.0.1:5432/postgres
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -r scripts/hosting-tools/requirements-live.txt
+          DEMODB_PROVIDER_ROOTS="$RUNNER_TEMP/providers" \
+            "$RUNNER_TEMP/venv/bin/python" -m unittest scripts/hosting-tools/test_postgres_live.py -v

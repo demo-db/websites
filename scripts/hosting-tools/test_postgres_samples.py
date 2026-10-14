@@ -86,6 +86,19 @@ class PostgresSamplesTests(unittest.TestCase):
         self.assertEqual(sql.count("COMMIT;"), 1)
         self.assertNotIn("DROP SCHEMA", sql)
 
+    def test_deferred_constraints_are_settled_before_any_create_index(self) -> None:
+        snapshot = pg.inspect(self.root)
+        try:
+            sql = pg.postgres_sql(snapshot)
+            tail = pg._tail_statements(snapshot)
+        finally:
+            snapshot.close()
+        # PostgreSQL rejects CREATE INDEX on tables with pending deferred FK
+        # trigger events (SQLSTATE 55006), so the settle must precede it.
+        self.assertEqual(tail[0], "SET CONSTRAINTS ALL IMMEDIATE;")
+        self.assertLess(sql.index("SET CONSTRAINTS ALL IMMEDIATE;"), sql.index("CREATE UNIQUE INDEX"))
+        self.assertGreater(sql.index("SET CONSTRAINTS ALL IMMEDIATE;"), sql.rindex('INSERT INTO "Keyless"'))
+
     def test_type_mapping_preserves_decimal_text_precision_and_sqlite_time_text(self) -> None:
         self.assertEqual(pg.pg_type("DECIMAL_TEXT(38, 6)"), "NUMERIC(38,6)")
         self.assertEqual(pg.pg_type("NUMERIC(10,2)"), "NUMERIC(10,2)")

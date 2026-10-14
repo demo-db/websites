@@ -1,5 +1,6 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const BUILD_INFO_FORMAT = 'demodb-build/1';
 
@@ -27,9 +28,11 @@ export async function writeBuildInfo(root, commit) {
   return { file, info };
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+// Compare real paths so spaces or a symlinked directory cannot silently skip writing the marker.
+const entry = process.argv[1] ? await realpath(process.argv[1]).catch(() => process.argv[1]) : '';
+if (entry === await realpath(fileURLToPath(import.meta.url))) {
   try {
-    const root = new URL('..', import.meta.url).pathname;
+    const root = fileURLToPath(new URL('..', import.meta.url));
     const { file, info } = await writeBuildInfo(root, process.env.BUILD_COMMIT);
     console.log(`Wrote ${file} (commit ${info.commit}).`);
   } catch (error) {

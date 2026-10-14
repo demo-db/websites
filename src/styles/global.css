@@ -6,3 +6,5 @@
 h1,h2,.prose p,.schema-card strong,.mini-table-list a,.big-download-list a span{overflow-wrap:anywhere}
 .mini-table-list a>*,.big-download-list a>span{min-width:0}
 .big-download-list b{flex-shrink:0}
+.related-list a{max-width:100%;overflow-wrap:anywhere}
+.table-aside{min-width:0}

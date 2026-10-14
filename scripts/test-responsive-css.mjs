@@ -45,3 +45,8 @@ test('the schema page styles its foreign-key rows and lets source views shrink',
   assert.match(schemaPage, /\.source-view-list \{ display:grid; grid-template-columns:minmax\(0,1fr\)/);
   assert.match(schemaPage, /\.source-view-card \{ min-width:0;/);
 });
+
+test('related-recordset chips wrap inside the table page aside', () => {
+  assert.match(globalCss, /\.related-list a\{max-width:100%;overflow-wrap:anywhere\}/);
+  assert.match(globalCss, /\.table-aside\{min-width:0\}/);
+});

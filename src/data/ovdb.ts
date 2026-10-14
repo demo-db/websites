@@ -1,6 +1,7 @@
 import generated from './generated/ovdb.json';
 import registry from '../../config/databases.json';
 import bigQueryHosting from '../../config/bigquery-hosting.json';
+import postgresqlApi from '../../config/postgresql-api.json';
 import type { OVDBDatabase, OVDBServer } from './types';
 
 export { bigQueryHosting };
@@ -28,6 +29,17 @@ export type StorageEntry = {
   sourceSqliteSha256?: string;
   verificationUrl?: string;
 };
+
+// PostgreSQL copies are shown as public only when config/postgresql-api.json says so.
+// The website does not yet route OVDB requests for PostgreSQL storage IDs, so a
+// verified flag is refused rather than linking to a route that does not exist.
+if (postgresqlApi.format !== 'demodb-postgresql-api/v1' || typeof postgresqlApi.publicApiVerified !== 'boolean') {
+  throw new Error('config/postgresql-api.json must declare demodb-postgresql-api/v1 with a boolean publicApiVerified');
+}
+if (postgresqlApi.publicApiVerified) {
+  throw new Error('PostgreSQL public API cannot be shown until the website routes OVDB requests for PostgreSQL storage IDs; see docs/postgresql-activation.md');
+}
+export const postgresqlReadiness: StorageEntry['readiness'] = postgresqlApi.publicApiVerified ? 'public-api' : 'hosted-api-pending';
 
 const inGitDBRevisions: Record<string, string> = registry.ingitdbRevisions;
 if (Object.keys(inGitDBRevisions).length !== ovdbDatabases.length
@@ -59,7 +71,7 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
   database,
   storages: [
     { id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'], readiness: 'public-api' },
-    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql'], readiness: 'hosted-api-pending' },
+    { id: `${database.localId}-postgresql`, engine: 'PostgreSQL', tags: [database.localId, 'postgresql'], readiness: postgresqlReadiness },
     { id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
       repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${inGitDBRevisions[database.localId]}/ingitdb`,
       manifestUrl: `https://github.com/demo-db/${database.localId}/blob/${inGitDBRevisions[database.localId]}/ingitdb/export-manifest.json`,

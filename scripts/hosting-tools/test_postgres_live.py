@@ -1,7 +1,8 @@
 """Live PostgreSQL load + verify test for every pinned provider dataset.
 
 Skipped unless DEMODB_LIVE_POSTGRES_URL points at a THROWAWAY server on a
-loopback host (never a hosted database) and DEMODB_PROVIDER_ROOTS names a
+loopback host (never a hosted database), DEMODB_LIVE_POSTGRES_ALLOW_DROP=1
+acknowledges that schemas named after the datasets are DROPped, and DEMODB_PROVIDER_ROOTS names a
 directory holding one checkout per dataset id at the revision pinned in
 config/databases.json (<root>/<id>/manifest.json).
 
@@ -16,7 +17,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).parent))
 import postgres_samples as pg  # noqa: E402
@@ -30,15 +30,76 @@ CONFIG = Path(__file__).resolve().parents[2] / "config" / "databases.json"
 # claim northwind, so that artifact is loaded as-is and compared table by table.
 OWN_ARTIFACT = {"northwind"}
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+ALLOW_DROP = os.environ.get("DEMODB_LIVE_POSTGRES_ALLOW_DROP") == "1"
 
 
-@unittest.skipUnless(URL and ROOTS, "set DEMODB_LIVE_POSTGRES_URL and DEMODB_PROVIDER_ROOTS to run live PostgreSQL tests")
+def assert_loopback(url: str) -> None:
+    """Refuse any connection string libpq could route to a non-loopback server.
+
+    Uses libpq's own parser so `?host=` / `?hostaddr=` overrides and multi-host
+    lists cannot hide behind a loopback URL authority. A missing host is
+    rejected because PGHOST (or a service file) would then decide the target.
+    """
+    from psycopg.conninfo import conninfo_to_dict
+    info = conninfo_to_dict(url)
+    if info.get("service"):
+        raise RuntimeError("refusing live test: connection service files are not allowed")
+    for key in ("host", "hostaddr"):
+        value = info.get(key)
+        if key == "host" and not value:
+            raise RuntimeError("refusing live test: an explicit loopback host is required")
+        if value is None:
+            continue
+        for part in str(value).split(","):
+            if part.strip().lower() not in LOOPBACK:
+                raise RuntimeError(f"refusing live test against non-loopback {key} {part!r}")
+
+
+try:
+    import psycopg as _psycopg  # noqa: F401
+except ImportError:  # pragma: no cover
+    _psycopg = None
+
+
+@unittest.skipIf(_psycopg is None, "psycopg is not installed")
+class LoopbackGuardTests(unittest.TestCase):
+    def test_rejects_hosts_libpq_could_route_elsewhere(self) -> None:
+        for url in (
+            "postgresql://u:p@127.0.0.1/db?host=evil.example",
+            "postgresql://u:p@127.0.0.1/db?hostaddr=8.8.8.8",
+            "postgresql://u:p@localhost/db?host=ep-x.neon.tech",
+            "postgresql://u:p@127.0.0.1,evil.example/db",
+            "postgresql://u:p@localhost.evil.example/db",
+            "postgresql://u:p@[::ffff:8.8.8.8]/db",
+            "postgresql://u:p@/db",
+            "postgresql:///db",
+            "host=127.0.0.1,evil.example dbname=db",
+            "dbname=db",
+            "service=prod",
+            "postgresql://u:p@127.0.0.1/db?service=prod",
+        ):
+            with self.subTest(url=url), self.assertRaises(RuntimeError):
+                assert_loopback(url)
+
+    def test_accepts_loopback_forms(self) -> None:
+        for url in (
+            "postgresql://u@[::1]:5432/db",
+            "postgresql://u@LOCALHOST/db",
+            "postgresql://u@127.0.0.1/db",
+            "postgresql://u@127.0.0.1/db?hostaddr=127.0.0.1",
+            "host=127.0.0.1 dbname=db",
+        ):
+            with self.subTest(url=url):
+                assert_loopback(url)
+
+
+@unittest.skipUnless(URL and ROOTS, "set DEMODB_LIVE_POSTGRES_URL and DEMODB_PROVIDER_ROOTS (plus DEMODB_LIVE_POSTGRES_ALLOW_DROP=1) to run live PostgreSQL tests")
 class LivePostgresTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        host = urlsplit(URL).hostname
-        if host not in LOOPBACK:
-            raise RuntimeError(f"refusing live test against non-loopback host {host!r}")
+        assert_loopback(URL)
+        if not ALLOW_DROP:
+            raise RuntimeError("refusing live test: it DROPs schemas named after the datasets; set DEMODB_LIVE_POSTGRES_ALLOW_DROP=1 against a throwaway server")
         import psycopg
         cls.psycopg = psycopg
         cls.ids = [d["id"] for d in json.loads(CONFIG.read_text(encoding="utf-8"))["databases"]]

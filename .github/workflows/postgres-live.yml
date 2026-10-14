@@ -36,6 +36,7 @@ jobs:
         ports:
           - 127.0.0.1:5432:5432
         options: >-
+          --shm-size=512m
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
@@ -62,6 +63,7 @@ jobs:
       - name: Load and verify all datasets
         env:
           DEMODB_LIVE_POSTGRES_URL: postgresql://postgres:throwaway@127.0.0.1:5432/postgres
+          DEMODB_LIVE_POSTGRES_ALLOW_DROP: "1"
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -r scripts/hosting-tools/requirements-live.txt

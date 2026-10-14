@@ -15,7 +15,7 @@ python3 scripts/hosting-tools/postgres_samples.py generate /path/to/provider-roo
   --output /private/tmp/chinook-postgres.sql
 ```
 
-For large fixtures, install `psycopg[binary]==3.2.12` in a private Python environment and stream rows with `COPY`. Put a PostgreSQL URL in a private `0600` file. The import creates only the provider's own schema, refuses to overwrite it, and rolls back on failure. The verifier checks source provenance, table columns, keys, indexes, foreign keys, exact typed table row multisets, and view columns and results:
+For large fixtures, install `psycopg[binary]==3.3.6` in a private Python environment and stream rows with `COPY`. Put a PostgreSQL URL in a private `0600` file. The import creates only the provider's own schema, refuses to overwrite it, and rolls back on failure. The verifier checks source provenance, table columns, keys, indexes, foreign keys, exact typed table row multisets, and view columns and results:
 
 ```sh
 python3 scripts/hosting-tools/postgres_samples.py import /path/to/provider-root \

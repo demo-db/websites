@@ -15,7 +15,7 @@ PostgreSQL refuses `CREATE INDEX` on such a table (`55006`, "cannot CREATE INDEX
 2. bulk rows (`INSERT` batches, or `COPY` for `import`)
 3. identity sequence seeding
 4. `SET CONSTRAINTS ALL IMMEDIATE;` (validates every foreign key once, in bulk)
-5. indexes, views, `_import_manifest`
+5. indexes, views, per-table `ANALYZE` (deterministic, planner statistics), `_import_manifest`
 
 Indexes stay after the load (index-free bulk load is faster than maintaining
 indexes per row), and the single constraint settle keeps full FK enforcement.
@@ -28,8 +28,8 @@ hit the same error if indexes were added there without the same settle step.
 
 `scripts/hosting-tools/test_postgres_live.py` loads each dataset's generated SQL,
 runs `verify`, drops the schema, then repeats with `import` and `verify`. It is
-skipped unless `DEMODB_LIVE_POSTGRES_URL` (loopback hosts only; never a hosted
-database) and `DEMODB_PROVIDER_ROOTS` (a directory of `<id>/` checkouts at the
+skipped unless `DEMODB_LIVE_POSTGRES_URL` (every `host`/`hostaddr` libpq would use must be loopback; never a hosted
+database), `DEMODB_LIVE_POSTGRES_ALLOW_DROP=1` (the test DROPs schemas named after the datasets) and `DEMODB_PROVIDER_ROOTS` (a directory of `<id>/` checkouts at the
 pinned revisions) are set. Northwind is loaded from its own artifact and compared
 table by table against SQLite, because the shared generator does not adapt its
 SQL Server-style views (for example `Discontinued = 0` against a `TEXT` column,
@@ -42,6 +42,7 @@ of the npm `@embedded-postgres/*` packages:
 ```sh
 python3 -m venv venv && venv/bin/pip install -r scripts/hosting-tools/requirements-live.txt
 DEMODB_LIVE_POSTGRES_URL=postgresql://postgres@127.0.0.1:55432/postgres \
+DEMODB_LIVE_POSTGRES_ALLOW_DROP=1 \
 DEMODB_PROVIDER_ROOTS=/path/to/pinned/checkouts \
   venv/bin/python -m unittest scripts/hosting-tools/test_postgres_live.py -v
 ```

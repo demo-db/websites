@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
@@ -21,3 +21,25 @@ for (const { id, file } of pages) {
     assert.doesNotMatch(anchors[0], /wasm/i, 'CTA text never mentions WASM');
   });
 }
+
+async function* htmlFiles(dir) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield* htmlFiles(path);
+    else if (entry.name.endsWith('.html')) yield path;
+  }
+}
+
+test('no built page names Neon while PostgreSQL readiness is hosted-api-pending', async () => {
+  // Precondition: every PostgreSQL copy is still pending. If one becomes public,
+  // this test must be revisited rather than silently allowing the host name.
+  for (const id of ids) {
+    const page = await readFile(join(root, 'dist/ovdb/db', `${id}-postgresql`, 'index.html'), 'utf8');
+    assert.ok(page.includes('Public OpenVaultDB API access is being prepared'), `${id} PostgreSQL copy is still pending`);
+  }
+  const offenders = [];
+  for await (const file of htmlFiles(join(root, 'dist'))) {
+    if (/neon/i.test(await readFile(file, 'utf8'))) offenders.push(file.replace(root, ''));
+  }
+  assert.deepEqual(offenders, []);
+});

@@ -369,11 +369,16 @@ chunkedExport.bytes = joinedBytes;
 const csv = await fetch('chinook.demodb.dev', '/data/csv/chinook.Artist.csv');
 assert.equal(csv.status, 200);
 assert.equal(csv.headers.get('Access-Control-Allow-Origin'), '*');
+assert.equal(csv.headers.get('Cross-Origin-Resource-Policy'), 'cross-origin', 'per-dataset data files allow cross-origin embedding');
+assert.equal(json.headers.get('Cross-Origin-Resource-Policy'), 'cross-origin', 'JSON data files allow cross-origin embedding');
+assert.equal((await fetch('chinook.demodb.dev', '/tables/')).headers.get('Cross-Origin-Resource-Policy'), null, 'non-data pages keep their headers unchanged');
 assert.match(await csv.text(), /ArtistId,Name/);
 const metadata = await fetch('chinook.demodb.dev', '/data/metadata/checksums.json');
 assert.equal(metadata.status, 200, 'legacy data metadata URL remains available');
 assert.equal((await fetch('chinook.demodb.dev', '/data/metadata/source.json')).status, 200);
-assert.equal((await fetch('chinook.demodb.dev', '/data/chinook.sqlite', 'HEAD')).status, 200);
+const sqliteHead = await fetch('chinook.demodb.dev', '/data/chinook.sqlite', 'HEAD');
+assert.equal(sqliteHead.status, 200);
+assert.equal(sqliteHead.headers.get('Cross-Origin-Resource-Policy'), 'cross-origin', 'chunked SQLite downloads allow cross-origin embedding');
 const comparisonDownload = await fetch('chinook.demodb.dev', `/data/${comparisonFixturePath}`);
 assert.equal(comparisonDownload.status, 200);
 assert.equal(comparisonDownload.headers.get('Content-Type'), 'application/vnd.sqlite3');
@@ -561,7 +566,7 @@ for (const { database, storages } of storageGroups) {
       assert.equal((await fetch('demodb.dev', `${path}ovdb-database.json`)).status, 404);
       assert.equal((await fetch('demodb.dev', `/ovdb/v1/databases/${storage.id}`)).status, 404, 'BigQuery storage has no OVDB API route');
     } else {
-      assert.match(html, /hosted on Neon/);
+      assert.doesNotMatch(html, /Neon/, 'pending PostgreSQL pages never name the host');
       assert.match(html, /Public OpenVaultDB API access is being prepared/);
       assert.doesNotMatch(html, /served from a pinned copy of the upstream SQLite fixture|The pinned SQLite build is read-only/);
       assert.doesNotMatch(html, /Open read-only API|Database descriptor/);

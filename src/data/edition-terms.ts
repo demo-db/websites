@@ -6,9 +6,10 @@ export type EditionTerm = { term: string; value: string };
 const engineLabels: Record<string, string> = { sqlite: 'SQLite', postgresql: 'PostgreSQL' };
 const engineLabel = (engine: string) => engineLabels[engine.toLowerCase()] ?? engine;
 
-// Separates what is distributed, where the copy runs, and how OVDB exposes it.
-// Every value comes from the dataset's generated metadata or its storage entry.
-// The site metadata is preferred for contents because it also lists views.
+// Describes only what is published today. The distribution file and the OVDB
+// access layer come from generated metadata. A storage entry's copy is shown as
+// available only once its readiness reaches public-api, so no hosting claim is
+// made for a copy whose access is still pending.
 export function editionTerms(database: OVDBDatabase, storage: StorageEntry, source: Database | undefined): EditionTerm[] {
   const sqliteFile = source?.exports.find((file) => file.format === 'sqlite' && file.table === null);
   const recordsets = source?.tables ?? database.recordsets;
@@ -17,7 +18,7 @@ export function editionTerms(database: OVDBDatabase, storage: StorageEntry, sour
   const rows = tables.reduce((sum, recordset) => sum + (recordset.rowCount ?? 0), 0);
   const access = storage.readiness === 'public-api'
     ? `Public read-only OVDB API at ${database.apiUrl}.`
-    : `The read-only OVDB API at ${database.apiUrl} serves the ${engineLabel(database.deployment.engine)} edition. This ${storage.engine} copy has no public OVDB endpoint yet.`;
+    : `The read-only OVDB API at ${database.apiUrl} serves the ${engineLabel(database.deployment.engine)} edition. The ${engineLabel(storage.engine)} copy is not yet available through OVDB.`;
   return [
     {
       term: 'Distribution format',
@@ -26,10 +27,6 @@ export function editionTerms(database: OVDBDatabase, storage: StorageEntry, sour
     {
       term: 'Dataset contents',
       value: `${tables.length} tables and ${views.length} views with ${rows.toLocaleString()} rows in total.`,
-    },
-    {
-      term: 'Runtime and storage',
-      value: `${storage.engine}${storage.host ? `, hosted on ${storage.host}` : ''}.`,
     },
     { term: 'Access layer (OVDB)', value: access },
   ];

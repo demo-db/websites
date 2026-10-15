@@ -1,6 +1,6 @@
 # Turning on public PostgreSQL access
 
-Status: activated (config flipped 2026-10-15). All six PostgreSQL copies live in one private Neon project and are served read-only through https://cloud.openvaultdb.com. Evidence for steps a to e is recorded in the pull request that set `publicApiVerified` to `true` in `config/postgresql-api.json`. The steps below stay as the procedure to repeat or re-verify. Hostnames, project identifiers, and secret values are deliberately not recorded here.
+Status: activated (config flipped 2026-10-15). All six PostgreSQL copies live in one private Neon project and are served read-only through https://cloud.openvaultdb.com. Activation rests on the 2026-10-05 Neon verification receipt (kept outside this repository), an independent 2026-10-15 validation of the hosted data, and live read-only checks of all six public APIs; step e was not re-run at activation and the Northwind Worker bindings of step c were not exercised. The pull request that set `publicApiVerified` to `true` in `config/postgresql-api.json` records what was and was not checked. The steps below stay as the procedure to repeat or re-verify. Hostnames, project identifiers, and secret values are deliberately not recorded here.
 
 Complete these steps in order. Use the private Neon and Cloud Run consoles or Secret Manager for every value. Do not paste secret values into shell history, chat, issues, or commits.
 

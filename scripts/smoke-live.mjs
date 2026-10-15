@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
+import { decodedExportBytes } from './corpus-exports.mjs';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
@@ -166,12 +167,11 @@ await checkedDecodedSqlite('adventureworks');
 // A pre-gzipped SQL asset must be served once: its decoded length matches the corpus, and it is not still gzip.
 {
   const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
-  const sqlExport = corpus.databases?.find((item) => item.localId === 'adventureworks')?.exports?.find((item) => item.publicPath === 'adventureworks.sql');
-  if (!sqlExport?.decodedBytes) throw new Error('adventureworks: corpus metadata lacks the decoded SQL export size');
+  const expectedSqlBytes = decodedExportBytes(corpus, 'adventureworks', 'sql');
   const response = await fetch('https://adventureworks.demodb.dev/data/adventureworks.sql', { redirect: 'manual', cache: 'no-store' });
   if (response.status !== 200) throw new Error(`adventureworks: SQL download returned HTTP ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length !== sqlExport.decodedBytes) throw new Error(`adventureworks: SQL download decoded to ${bytes.length} bytes, expected ${sqlExport.decodedBytes}`);
+  if (bytes.length !== expectedSqlBytes) throw new Error(`adventureworks: SQL download decoded to ${bytes.length} bytes, expected ${expectedSqlBytes}`);
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error('adventureworks: SQL download is still gzip after decoding');
 }
 

@@ -8,8 +8,13 @@
 //    SQLite URL, SHA-256 and size as this registry. A mismatch fails and names the dataset and the field.
 //
 // Needs the built site (`pnpm build`). The DataTug catalog is read from DATATUG_SQLITE_CATALOG (a file path)
-// or, by default, from datatug-apps main on GitHub; when neither can be read the catalog test is skipped, not
-// passed.
+// or, by default, from datatug-apps main on GitHub. Locally an unreadable catalog skips that one test; with CI set
+// (any value) a fetch, read, parse or import failure FAILS it, so the drift check can never be silently off in CI.
+//
+// Merge order: the catalog is read from datatug-apps main on purpose, so a change to the DataTug catalog
+// (a new dataset, a new pin) must merge in datatug-apps BEFORE the matching registry change in this repository,
+// and a registry change that is not yet in the catalog fails here until it is. Set DATATUG_SQLITE_CATALOG to a
+// local copy to check both sides before either merges.
 import assert from 'node:assert/strict';
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -111,7 +116,10 @@ async function loadCatalog() {
 
 test('the DataTug catalog and this registry list the same datasets with the same SQLite file, SHA-256 and size', async (t) => {
   let catalog;
-  try { catalog = await loadCatalog(); } catch (error) { return t.skip(`DataTug catalog unavailable: ${error.message}`); }
+  try { catalog = await loadCatalog(); } catch (error) {
+    if (process.env.CI) throw new Error(`DataTug catalog unavailable (a failure in CI, never a skip): ${error.message}`);
+    return t.skip(`DataTug catalog unavailable: ${error.message}`);
+  }
   assert.deepEqual([...catalog.demoSqliteDatasetIds].sort(), [...ids].sort(), 'datasets: DataTug catalog vs DemoDB registry');
   for (const id of ids) {
     const file = completeDownloads(providerOf(id)).find((candidate) => candidate.format === 'sqlite');

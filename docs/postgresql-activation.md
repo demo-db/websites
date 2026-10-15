@@ -1,6 +1,6 @@
 # Turning on public PostgreSQL access
 
-Status: pending. The founder confirmed that all six PostgreSQL copies exist in one private Neon project. This repository has not verified that project, its roles, or its grants. Public read-only OVDB access is not enabled. `config/postgresql-api.json` keeps `publicApiVerified` set to `false`, so the site shows the PostgreSQL copies as pending. Hostnames, project identifiers, and secret values are deliberately not recorded here.
+Status: activated (config flipped 2026-10-15). All six PostgreSQL copies live in one private Neon project and are served read-only through https://cloud.openvaultdb.com. Evidence for steps a to e is recorded in the pull request that set `publicApiVerified` to `true` in `config/postgresql-api.json`. The steps below stay as the procedure to repeat or re-verify. Hostnames, project identifiers, and secret values are deliberately not recorded here.
 
 Complete these steps in order. Use the private Neon and Cloud Run consoles or Secret Manager for every value. Do not paste secret values into shell history, chat, issues, or commits.
 

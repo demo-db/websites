@@ -96,6 +96,13 @@ jobs:
           done < "$RUNNER_TEMP/pins.tsv"
       - name: Generate and verify the derived downloads against their lock
         run: pnpm prepare:databases
+      - name: Check the MySQL scripts against the provider manifests and the pinned inputs (no Docker, no datatug binary)
+        run: node scripts/dialect-scripts.mjs check --providers "$RUNNER_TEMP/providers"
+      - name: Check that every pinned provider commit is on that provider's main (strict on a push to main; a pull request may pin an unlanded head)
+        env:
+          DEMODB_PIN_MODE: ${{ github.event_name == 'pull_request' && 'warn-ahead' || 'strict' }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/dialect-scripts.mjs check-pins
       - name: Load every served PostgreSQL script, parse the YAML with PyYAML, and check every inGitDB archive against its fixture
         env:
           DEMODB_LIVE_POSTGRES_URL: postgresql://postgres:throwaway@127.0.0.1:5432/postgres

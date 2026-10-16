@@ -22,6 +22,8 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+// Formats that are one SQL script of an engine, served as <id>.<format>.sql.
+export const SQL_SCRIPT_FORMATS = ['postgresql', 'mysql', 'sqlserver', 'oracle'];
 
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -122,7 +124,7 @@ export function generatePostgresqlScript({ python, script, manifest, decodedSqli
 // Writes one derived file under the dataset's internal asset directory (plain, gzip, or gzip chunks, by the
 // same size rule as the provider contract) and returns its registry entry.
 export async function placeDerivedExport({ id, format, bytes, destination }) {
-  const publicPath = format === 'postgresql' ? `${id}.postgresql.sql` : format === 'ingitdb' ? `${id}.ingitdb.zip` : `${id}.${format}`;
+  const publicPath = SQL_SCRIPT_FORMATS.includes(format) ? `${id}.${format}.sql` : format === 'ingitdb' ? `${id}.ingitdb.zip` : `${id}.${format}`;
   const entry = {
     path: `derived/${publicPath}`, encodedPath: null, publicPath, assetPath: publicPath, chunks: [], format, table: null,
     bytes: bytes.length, sha256: sha256(bytes), compression: null, decodedBytes: null, decodedSha256: null, dbWide: true, derived: true,
@@ -196,6 +198,7 @@ async function readExportBytes(dataDir, item) {
 }
 
 const hostingTools = fileURLToPath(new URL('./hosting-tools/', import.meta.url));
+const loadDialectConfig = async () => (await import('./dialect-scripts.mjs')).loadConfig();
 
 // Produces every download that the matrix declares as derived, a provider artifact or an archive for this
 // dataset, writes it into the dataset's internal asset directory and returns the registry entries.
@@ -233,6 +236,19 @@ export async function deriveDatasetExports({ db, row, source, collector, assetsR
     const entry = source.checksums.files?.[path];
     if (!entry || entry.sha256 !== sha256(bytes) || (entry.bytes != null && entry.bytes !== bytes.length)) throw new Error(`${db.id}: ${path} is not covered by the provider checksums`);
     await place('postgresql', bytes);
+  }
+
+  // Dialect scripts written by the DataTug exporter and checked into the provider repository: verified here (inputs hash,
+  // stored bytes, header, marker table, licence) and then pinned by the lock like every other derived file.
+  if (Object.values((await loadDialectConfig()).dialects).some((spec) => wants(spec.format, 'provider-script'))) {
+    const scripts = await import('./dialect-scripts.mjs');
+    const config = await scripts.loadConfig();
+    for (const [dialect, spec] of Object.entries(config.dialects)) {
+      if (!wants(spec.format, 'provider-script')) continue;
+      const result = await scripts.verifyDialectScript({ id: db.id, manifest: source.manifest, dialect, config, read: source.read });
+      if (result.problems.length) throw new Error(`${db.id}: the ${dialect} script of the provider is not valid:\n  ${result.problems.join('\n  ')}`);
+      await place(spec.format, result.bytes);
+    }
   }
 
   if (wants('ingitdb', 'archive')) {

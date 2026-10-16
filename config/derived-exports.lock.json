@@ -11,6 +11,10 @@
         "bytes": 218424194,
         "sha256": "7cd705ed4bd2ff5501e90feaf4fbecdf5ad863cb623b76de7a87dd28051099c4"
       },
+      "mysql": {
+        "bytes": 102992959,
+        "sha256": "1560bc9a1d1244955eef14a84d90fd2e844a2038dbb35c2472231aa3dca2eda6"
+      },
       "postgresql": {
         "bytes": 110241326,
         "sha256": "55e4f0ec587a2c8e3d500b10491c3e067a2358ea4d46558efcfa1849f9902207"
@@ -25,6 +29,10 @@
         "contentSha256": "dd2b959dd0bdf04a535d90a89c27859d039ea6713c5fc1236d4beeb562597688",
         "fileCount": 29,
         "rowCount": 15607
+      },
+      "mysql": {
+        "bytes": 485388,
+        "sha256": "e0780ba21f7868507c58e6da930e8bca2b73aeb472555baa7e5e5d5c4bf9b189"
       }
     },
     "employees": {
@@ -36,6 +44,10 @@
       "json": {
         "bytes": 1242925,
         "sha256": "54eb530f9a8fbc9985e3b11ecf181333df4e80095cac5f28a1e89573a844d955"
+      },
+      "mysql": {
+        "bytes": 597346,
+        "sha256": "ab50b052f3f5e59ff7a0a9e050925e52dc74cc9f13687eb88579e2894ab49352"
       },
       "postgresql": {
         "bytes": 639087,
@@ -56,6 +68,10 @@
         "bytes": 941894,
         "sha256": "020dbc276c06072ce35eff54f438acd6ab7a9f33392d0f7d856d9f77326dd6b1"
       },
+      "mysql": {
+        "bytes": 630119,
+        "sha256": "030039f4a9448f996ce6da25ad98173f5b9ba4ea4b64bf0f616f9ce2fa3c24cc"
+      },
       "postgresql": {
         "bytes": 1089450,
         "sha256": "b6efe271401eba9d4738a2bbea294cc205dd6e02f47864bd3f21e195310afbee"
@@ -75,6 +91,10 @@
         "bytes": 123980,
         "sha256": "2fca9cfec10cd841ebfaf1c417e3bc69914e5d262a731e0e570fa7fb92b7f568"
       },
+      "mysql": {
+        "bytes": 206217,
+        "sha256": "a56d1ce7eaf2dd2f5e5ef77f4a7e18700097e7072964ba7263167c465dc2a686"
+      },
       "postgresql": {
         "bytes": 203921,
         "sha256": "f1673837062391afce66a032cc1d570020f3cef780a048f96aa0fca905759242"
@@ -93,6 +113,10 @@
       "json": {
         "bytes": 7546797,
         "sha256": "e08d311d0cd7b5587abc7ea054b1da6146acae1074b73f900e45be538e7a87b4"
+      },
+      "mysql": {
+        "bytes": 3455549,
+        "sha256": "5a3d1edde07ad4ec1f5771870bce94bd2ac51669598a5f13cab7e94980b5eef8"
       },
       "postgresql": {
         "bytes": 3723568,

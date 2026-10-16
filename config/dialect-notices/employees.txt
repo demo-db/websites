@@ -1,0 +1,26 @@
+Sample employee database (https://github.com/datacharmer/test_db, revision e324b56193ca506ab7cc1ab143a9153d8c4535d7). Notice verbatim from the header of employees.sql:
+
+ Sample employee database
+ See changelog table for details
+ Copyright (C) 2007,2008, MySQL AB
+
+ Original data created by Fusheng Wang and Carlo Zaniolo
+ http://www.cs.aau.dk/TimeCenter/software.htm
+ http://www.cs.aau.dk/TimeCenter/Data/employeeTemporalDataSet.zip
+
+ Current schema by Giuseppe Maxia
+ Data conversion from XML to relational by Patrick Crews
+
+This work is licensed under the
+Creative Commons Attribution-Share Alike 3.0 Unported License.
+To view a copy of this license, visit
+http://creativecommons.org/licenses/by-sa/3.0/ or send a letter to
+Creative Commons, 171 Second Street, Suite 300, San Francisco,
+California, 94105, USA.
+
+ DISCLAIMER
+ To the best of our knowledge, this data is fabricated, and
+ it does not correspond to real people.
+ Any similarity to existing people is purely coincidental.
+
+Adaptation: this is a reduced subset of the database (the 1,024 employees with emp_no 10001 to 11000 plus every distinct manager, with all their department, title and salary rows), converted to SQLite by the DemoDB provider (https://github.com/demo-db/employees) and from SQLite to this MySQL script by DataTug. It is shared under the same licence, Creative Commons Attribution-ShareAlike 3.0 Unported, https://creativecommons.org/licenses/by-sa/3.0/legalcode

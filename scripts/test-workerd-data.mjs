@@ -71,11 +71,11 @@ test('single gzip SQL asset decodes to its source bytes', async () => {
   assert.match(headers, /^cross-origin-resource-policy: cross-origin$/im);
 });
 
-// Every complete-database download of the largest dataset, including the generated JSON, YAML, PostgreSQL script and
-// inGitDB archive, is served once-decoded with exactly the size and SHA-256 that corpus.json declares.
+// Every complete-database download of the largest dataset, including the generated JSON, YAML, PostgreSQL script, MySQL script
+// and inGitDB archive, is served once-decoded with exactly the size and SHA-256 that corpus.json declares.
 test('every complete AdventureWorks download is served with its declared decoded size and SHA-256', async () => {
   const complete = adventureworks.exports.filter((file) => file.table === null && file.format !== 'metadata');
-  assert.deepEqual(complete.map((file) => file.format).sort(), ['ingitdb', 'json', 'postgresql', 'sql', 'sqlite', 'yaml']);
+  assert.deepEqual(complete.map((file) => file.format).sort(), ['ingitdb', 'json', 'mysql', 'postgresql', 'sql', 'sqlite', 'yaml']);
   for (const file of complete) {
     const [body, headers] = await fetchDecoded(`all-${file.format}`, `/data/${file.publicPath}`);
     assert.equal(body.length, file.decodedBytes ?? file.bytes, `${file.publicPath}: decoded length`);

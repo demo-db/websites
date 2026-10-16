@@ -63,11 +63,15 @@ async function checked(url, validate) {
 }
 
 // One GET of a binary file, streamed and hashed without buffering it twice.
+// Kept by URL so a later check (the upstream MySQL script) reuses the export loop's request.
+const downloads = new Map();
 async function download(url) {
   once('GET', url);
   const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
   if (response.status !== 200) throw new Error(`${url}: HTTP ${response.status}`);
-  return { response, bytes: Buffer.from(await response.arrayBuffer()) };
+  const result = { response, bytes: Buffer.from(await response.arrayBuffer()) };
+  downloads.set(url, result);
+  return result;
 }
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -262,7 +266,11 @@ async function checkedMysqlScripts() {
     if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') throw new Error(`${database.localId}: does not end with the completion comment`);
     checkedScripts += 1;
   }
-  const { response: upstream, body: upstreamText } = await get('https://chinook.demodb.dev/data/upstream/chinook.mysql.sql');
+  const upstreamUrl = 'https://chinook.demodb.dev/data/upstream/chinook.mysql.sql';
+  const downloaded = downloads.get(upstreamUrl);
+  const { response: upstream, body: upstreamText } = downloaded
+    ? { response: downloaded.response, body: downloaded.bytes.toString('utf8') }
+    : await get(upstreamUrl);
   if (upstream.status !== 200) throw new Error(`chinook: the upstream MySQL script is not served at /data/upstream/chinook.mysql.sql (HTTP ${upstream.status})`);
   if (!upstreamText.includes('Chinook_MySql.sql') || !upstreamText.includes('DROP DATABASE IF EXISTS')) throw new Error('chinook: /data/upstream/chinook.mysql.sql is not the upstream script');
   return checkedScripts;
@@ -293,8 +301,11 @@ async function checkedComparisonFixture() {
 async function checkedRedirect(url, init, expectedLocation) {
   once(init.method, url);
   const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
-  if (response.status !== 308 || response.headers.get('Location') !== expectedLocation) {
-    throw new Error(`redirect from ${url}: HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}, expected 308 to ${expectedLocation}`);
+  // The static router may answer with a relative Location; browsers resolve it against the request URL.
+  const location = response.headers.get('Location');
+  const resolved = location === null ? null : new URL(location, url).href;
+  if (response.status !== 308 || resolved !== new URL(expectedLocation).href) {
+    throw new Error(`redirect from ${url}: HTTP ${response.status} to ${location ?? 'no location'}, expected 308 to ${expectedLocation}`);
   }
 }
 

@@ -60,6 +60,17 @@ export type ExportFile = {
   compression?: 'gzip' | null;
   decodedBytes?: number | null;
   decodedSha256?: string | null;
+  derived?: boolean;
+};
+
+export type FormatAvailability = {
+  format: string;
+  label: string;
+  state: 'download' | 'unavailable';
+  origin?: 'provider' | 'provider-artifact' | 'derived' | 'archive';
+  publicPath?: string | null;
+  reason?: string;
+  followUp?: string;
 };
 
 export type Database = {
@@ -78,6 +89,7 @@ export type Database = {
   queries: { title: string; description?: string; sql: string }[];
   schema: { contractVersion: number; database: { id: string; name: string }; source: Record<string, unknown>; tables: Recordset[]; sourceViews?: SourceView[] };
   schemaSha256: string;
+  formatAvailability: FormatAvailability[];
   tables: Recordset[];
   exports: ExportFile[];
   exportByPublicPath: Record<string, ExportFile>;

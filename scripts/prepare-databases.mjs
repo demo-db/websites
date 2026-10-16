@@ -7,6 +7,8 @@ import { parse as parseYaml } from 'yaml';
 import { assertAppendOnlyFixturePins, materializeComparisonFixtures } from './comparison-fixtures.mjs';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 import { materializeProviderExports } from './provider-exports.mjs';
+import { LOCK_FORMAT, LOCK_PATH, deriveDatasetExports, serializeLock } from './derived-exports.mjs';
+import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,6 +22,15 @@ if (localRoot && isRelease) throw new Error('DEMODB_CONTRACTS_DIR is development
 if (!localRoot && registry.databases.some((db) => !isSha(db.commit) || !isHash(db.contractSha256))) {
   throw new Error('Registry pins are not complete. Use DEMODB_CONTRACTS_DIR for a local build or land and pin each provider commit and contract SHA.');
 }
+
+const formatMatrix = validateMatrix(JSON.parse(await readFile(join(root, 'config/format-matrix.json'), 'utf8')), registry.databases.map((entry) => entry.id));
+const updateDerivedLock = process.env.DEMODB_UPDATE_DERIVED_LOCK === '1';
+if (updateDerivedLock && isRelease) throw new Error('DEMODB_UPDATE_DERIVED_LOCK is development-only and cannot be used in CI/deploy builds');
+const derivedLock = updateDerivedLock ? null : JSON.parse(await readFile(join(root, LOCK_PATH), 'utf8'));
+if (derivedLock && derivedLock.format !== LOCK_FORMAT) throw new Error(`${LOCK_PATH} must declare ${LOCK_FORMAT}`);
+const lockCollector = updateDerivedLock ? { update: true, collected: {} } : { lock: derivedLock };
+const python = process.env.PYTHON ?? 'python3';
+const derivedByDatabase = new Map();
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
@@ -60,6 +71,10 @@ for (const entry of registry.databases) {
   applyPresentationText(displayDescriptor, entry, ['title', 'description', 'provenance', 'model', 'meaning']);
   ovdbDescriptors.push({ descriptor, displayDescriptor, bytes: source.ovdbDescriptorBytes });
   await materializeExports(db, source);
+  derivedByDatabase.set(db.id, await deriveDatasetExports({
+    db, row: formatMatrix.datasets[db.id], source, collector: lockCollector, assetsRoot: internalAssets, python,
+    registryEntry: entry, ingitdbRevision: registry.ingitdbRevisions?.[db.id], localRoot,
+  }));
   await materializeModels(db, source);
   const schemaPath = join(internalAssets, db.id, 'metadata/schema.json');
   await mkdir(dirname(schemaPath), { recursive: true });
@@ -125,6 +140,18 @@ const snapshotBuilder = spawnSync(process.env.PYTHON ?? 'python3', [
 ], { cwd: root, encoding: 'utf8' });
 if (snapshotBuilder.error) throw new Error(`Could not start research snapshot builder: ${snapshotBuilder.error.message}`);
 if (snapshotBuilder.status !== 0) throw new Error(`Research snapshot build failed: ${snapshotBuilder.stderr || snapshotBuilder.stdout}`);
+// Derived downloads join the registry only now: the research snapshots above package the provider's own pinned
+// files and stay byte-identical whatever the matrix adds. The matrix must describe exactly what is produced.
+for (const db of databases) {
+  db.exports.push(...derivedByDatabase.get(db.id));
+  db.exportByPublicPath = Object.fromEntries(db.exports.map((item) => [item.publicPath, item]));
+  db.formatAvailability = formatAvailability(formatMatrix, db.id, db.exports);
+}
+if (updateDerivedLock) {
+  await writeFile(join(root, LOCK_PATH), serializeLock(lockCollector.collected));
+  console.warn(`Rewrote ${LOCK_PATH}; review the diff before committing.`);
+}
+await writeFile(join(generatedDir, 'index.json'), `${JSON.stringify({ catalogueHost: registry.catalogueHost, databases }, null, 2)}\n`);
 await writeFile(join(root, 'public/corpus.json'), `${JSON.stringify(buildCorpus(databases), null, 2)}\n`);
 await writeFile(join(generatedDir, 'runtime.json'), `${JSON.stringify({
   catalogueHost: registry.catalogueHost,
@@ -468,6 +495,7 @@ function buildCorpus(databases) {
           : null,
       })),
       sourceViews: db.schema.sourceViews ?? [],
+      formatAvailability: db.formatAvailability,
       exports: db.exports.filter((file) => !file.table && file.format !== 'metadata').map((file) => ({
         format: file.format,
         url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,

@@ -31,6 +31,8 @@ const CATALOG_URL = 'https://raw.githubusercontent.com/datatug/datatug-apps/main
 
 const exists = (path) => access(path).then(() => true, () => false);
 const providerOf = (id) => generated.find((database) => database.id === id);
+// The label a download carries: the matrix's name for its format, or an explicit one for the SQLite-dialect dump.
+const labelOf = (database, format) => (format === 'sql' ? 'SQL (SQLite dialect)' : database.formatAvailability.find((item) => item.format === format)?.label);
 const completeDownloads = (database) => database.exports.filter((file) => !file.table && file.format !== 'metadata');
 const decodedSha = (file) => file.decodedSha256 ?? file.sha256;
 const decodedBytes = (file) => file.decodedBytes ?? file.bytes;
@@ -83,7 +85,7 @@ for (const id of ids) {
     assert.deepEqual(new Set(shown.map((item) => item.href)), advertised, 'the page lists exactly the complete downloads of the registry entry');
     for (const item of shown) {
       const file = completeDownloads(database).find((candidate) => `/data/${candidate.publicPath}` === item.href);
-      assert.equal(item.label, file.format.toUpperCase(), `${item.href} is labelled with its real format`);
+      assert.equal(item.label, labelOf(database, file.format), `${item.href} is labelled with its real format`);
     }
 
     const downloads = await readFile(join(root, 'dist/_db', id, 'downloads/index.html'), 'utf8');

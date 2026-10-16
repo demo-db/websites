@@ -65,9 +65,9 @@ Complete these steps in order. Use the private Neon and Cloud Run consoles or Se
 
 **b. Set the OVDB PostgreSQL connection secrets.** On the Cloud Run service that serves OpenVaultDB, bind one Secret Manager secret per dataset as `OVDB_PG_<DB>_DSN`, for `CHINOOK`, `NORTHWIND`, `PUBS`, `SAKILA`, `ADVENTUREWORKS`, and `EMPLOYEES`. Each secret holds the reader connection string for that dataset's `<db>_reader` role.
 
-**c. Set the Northwind Worker bindings.** The Worker deploy from `openvaultdb/cloud` ([PR #46](https://github.com/openvaultdb/cloud/pull/46), merged) reads `NORTHWIND_NEON_DATABASE_URL` and `NORTHWIND_D1_DATABASE_ID`. Provide both as deploy-time secrets or variables in that repository's environment.
+**c. Retired: Northwind Worker bindings.** The custom `/northwind/d1/*` and `/northwind/neon/*` Worker routes in `openvaultdb/cloud` were removed ([PR #60](https://github.com/openvaultdb/cloud/pull/60)), so `NORTHWIND_NEON_DATABASE_URL` and `NORTHWIND_D1_DATABASE_ID` are no longer read. Nothing to set. Northwind stays on the standard OVDB API at `https://ovdb.demodb.dev/v1/databases/northwind`, and its PostgreSQL copy keeps using `OVDB_PG_NORTHWIND_DSN` (step b).
 
-**d. Enable the PostgreSQL backend.** Set `OVDB_DEMODB_POSTGRES_ENABLED` to `true` in the OpenVaultDB service configuration. Leave it unset or `false` until steps a to c are complete.
+**d. Enable the PostgreSQL backend.** Set `OVDB_DEMODB_POSTGRES_ENABLED` to `true` in the OpenVaultDB service configuration. Leave it unset or `false` until steps a and b are complete.
 
 **e. Verify the imported data against the pinned sources.** From a checkout of each provider repository, with a private `0600` URL file that is not committed:
 

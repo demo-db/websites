@@ -88,15 +88,35 @@ In every pull request (`pnpm test`, `scripts/test-format-matrix.mjs`, against th
   primary keys unique, every foreign-key value present in the referenced column, and the YAML equal to the JSON (parsed with the `yaml` package for datasets up to 12 MB, and a sample of tables above that);
 - this document is current.
 
-In `.github/workflows/served-formats.yml`, against the built asset tree and the provider checkouts at the pinned revisions:
+In the `served-formats` job of `.github/workflows/deploy.yml` (the `deploy` job needs it), against the built asset tree and the provider checkouts at the pinned revisions:
 
 - every served PostgreSQL script is loaded into a throwaway PostgreSQL 17 and compared with the fixture: same tables, row counts, primary-key columns and foreign-key counts, plus the full typed row-multiset check for scripts the shared generator wrote (`validate_served_formats.py`);
-- every inGitDB archive is extracted and compared row by row and definition by definition with the fixture by the independent parity checker (`validate_datatug_exports.py`).
+- every served YAML is loaded with PyYAML, a strict YAML 1.1 reader, and compared with the served JSON (whole documents up to 12 MB, otherwise every table section up to 8 MB; Chinook's provider-written YAML is excluded, see below);
+- every inGitDB archive is extracted and compared row by row and definition by definition with the fixture by the independent parity checker (`validate_datatug_exports.py`), and validated with `ingitdb validate` from inGitDB CLI v0.70.2 (pinned release and checksum).
 
 After deploy, `scripts/smoke-live.mjs` downloads every complete export listed in `corpus.json` and compares size and SHA-256.
+
+## Licences
+
+Every download is a copy of the dataset's data, including the files generated here, and carries the dataset's licence; the dataset and downloads pages say so and link the source and licence page.
+
+| Dataset | Data licence | Source |
+|---|---|---|
+| Chinook | MIT | https://github.com/lerocha/chinook-database |
+| Northwind | MIT | https://github.com/jpwhite3/northwind-SQLite3 |
+| Pubs | MIT | https://github.com/microsoft/sql-server-samples |
+| Sakila | BSD-3-Clause | https://downloads.mysql.com/docs/sakila-db.zip |
+| AdventureWorks OLTP | MIT | https://github.com/microsoft/sql-server-samples |
+| Employees (reduced subset) | CC-BY-SA-3.0 | https://github.com/datacharmer/test_db |
+
+Employees is CC BY-SA 3.0: any file derived from it, in any format, must be shared under the same licence, with attribution. The other datasets are MIT or BSD-3-Clause: keep the licence notice with any copy.
+
+## Known upstream deviations and download behaviour
+
+- Chinook's JSON, YAML, MySQL, PostgreSQL and SQL Server downloads are the provider's files, published as they are. The YAML uses plain scalars, so a YAML 1.1 reader such as PyYAML reads `Customer.State` "ON" (Ontario) as the boolean true and the Employee dates as timestamps. A YAML 1.2 reader does not. The YAML generated for the other datasets quotes every scalar and loads identically in both. The Chinook PostgreSQL script is the upstream psql script: it drops and creates the `chinook` database and uses the psql command `\c`, so load it with psql, not as a single statement.
+- Files stored gzip-encoded (AdventureWorks JSON, YAML and PostgreSQL script, and the provider SQLite and SQL dump) are served with `Content-Encoding: gzip`. On the deployed site Cloudflare's edge decodes them for a client that does not accept gzip, so plain `curl -O` or `wget` saves the decoded file (checked on 2026-10-16 with plain curl against adventureworks.demodb.dev/data/adventureworks.sql). Use `curl --compressed` to transfer the smaller encoded body. `wrangler dev` does not do this edge decoding and sends gzip to every client.
 
 ## What remains
 
 - MySQL and SQL Server scripts for Northwind, Pubs, Sakila, AdventureWorks and Employees: needs a dialect in the shared generator and a MySQL and a SQL Server service in CI to verify it (see the follow-ups above).
-- The inGitDB archives are validated by the independent parity checker; validating them with the inGitDB CLI in CI needs a CLI release that reads the DataTug 0.61.1 collection definitions (v0.70.0 or newer).
 - Formats outside the matrix: sql, metadata are listed in the registry but are not matrix formats.

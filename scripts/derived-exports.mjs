@@ -49,8 +49,13 @@ export function parseRows(json) {
 
 // JSON string escapes are valid YAML double-quoted escapes; the extra escapes keep characters that a
 // YAML 1.1 reader treats as line breaks or byte-order marks from altering a scalar.
-const LINE_BREAK_LIKE = new RegExp(`[${[0x85, 0x2028, 0x2029, 0xfeff].map((code) => String.fromCharCode(code)).join('')}]`, 'g');
-const yamlString = (value) => JSON.stringify(value).replace(LINE_BREAK_LIKE, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
+const ch = String.fromCharCode;
+// DEL, the C1 controls (which include YAML 1.1's NEL), the line/paragraph separators, the byte-order mark and the two
+// noncharacters YAML 1.1 readers such as PyYAML and ruamel refuse in a scalar.
+const ESCAPE_IN_YAML = new RegExp(`[${ch(0x7f)}-${ch(0x9f)}${ch(0x2028)}${ch(0x2029)}${ch(0xfeff)}${ch(0xfffe)}${ch(0xffff)}]`, 'g');
+// A lone surrogate cannot be written in any YAML encoding (libyaml refuses even its escape), and SQLite text is UTF-8, which
+// cannot hold one, so one in a table means a corrupt source: refuse it instead of altering the value.
+const yamlString = (value) => (value.isWellFormed() ? JSON.stringify(value) : (() => { throw new Error('a lone UTF-16 surrogate cannot be written in YAML'); })()).replace(ESCAPE_IN_YAML, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 function yamlScalar(value) {
   if (value === null) return 'null';

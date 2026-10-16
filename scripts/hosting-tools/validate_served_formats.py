@@ -9,6 +9,7 @@ a visitor downloads:
   the full typed row-multiset check of ``postgres_samples.verify_database`` for scripts the shared generator
   wrote. The Chinook script is the upstream one and is loaded the way psql would (it creates and connects to
   its own database).
+* the YAML is loaded with PyYAML (a strict YAML 1.1 reader) and compared with the served JSON;
 * inGitDB archives are extracted and compared, row by row and definition by definition, with the fixture by
   the independent parity checker ``validate_datatug_exports.py``.
 
@@ -22,6 +23,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -34,6 +36,9 @@ import validate_datatug_exports as ingitdb  # noqa: E402
 from test_postgres_live import assert_loopback  # noqa: E402
 
 UPSTREAM_PSQL_SCRIPTS = {"chinook"}  # scripts written by the dataset's upstream project for psql
+# Chinook's YAML is the provider's own, with plain scalars: a YAML 1.1 reader reads Customer.State "ON" (Ontario) as true and
+# Employee dates as timestamps. Documented in docs/format-matrix.md; the YAML generated here quotes every scalar.
+PROVIDER_PLAIN_SCALAR_YAML = {"chinook"}
 
 
 def read_export(data_dir: Path, item: dict[str, Any]) -> bytes:
@@ -165,10 +170,61 @@ def validate_ingitdb(db: dict[str, Any], data_dir: Path, providers: Path) -> dic
             if not names or any(not name.startswith(prefix) or ".." in name.split("/") for name in names):
                 raise AssertionError(f"{db['id']}: archive entries are not all under {prefix}")
             bundle.extractall(scratch)
-        report = ingitdb.validate(root, Path(scratch) / f"{db['id']}-ingitdb")
+        native = Path(scratch) / f"{db['id']}-ingitdb"
+        report = ingitdb.validate(root, native)
+        cli = os.environ.get("INGITDB_CLI")
+        if cli:
+            run = subprocess.run([cli, "validate", "--path", str(native)], capture_output=True, text=True)
+            if run.returncode != 0 or "invalid" in run.stdout.lower() or "error" in run.stdout.lower():
+                raise AssertionError(f"{db['id']}: ingitdb validate failed: {(run.stdout + run.stderr)[-600:]}")
     if not (report["dataChecked"] and report["metadataAndDataMatch"] and report["errorCount"] == 0):
         raise AssertionError(f"{db['id']}: inGitDB parity failed: {report['errors'][:5]}")
-    return {"id": db["id"], "tables": report["tables"], "rows": report["rows"], "errors": report["errorCount"]}
+    return {"id": db["id"], "tables": report["tables"], "rows": report["rows"], "errors": report["errorCount"], "ingitdbCli": bool(cli)}
+
+
+def _same(yaml_value: Any, json_value: Any) -> bool:
+    """Equality that tolerates only YAML 1.1's reading of an exponent number without a dot (1e+21) as text."""
+    if isinstance(json_value, dict):
+        return isinstance(yaml_value, dict) and list(yaml_value) == list(json_value) and all(_same(yaml_value[k], v) for k, v in json_value.items())
+    if isinstance(json_value, list):
+        return isinstance(yaml_value, list) and len(yaml_value) == len(json_value) and all(_same(a, b) for a, b in zip(yaml_value, json_value))
+    if isinstance(json_value, (int, float)) and not isinstance(json_value, bool) and isinstance(yaml_value, str):
+        try:
+            return float(yaml_value) == float(json_value)
+        except ValueError:
+            return False
+    return type(yaml_value) is type(json_value) and yaml_value == json_value
+
+
+def validate_yaml(db: dict[str, Any], data_dir: Path) -> dict[str, Any]:
+    """Load the served YAML with PyYAML (a strict YAML 1.1 reader) and compare it with the served JSON.
+
+    A whole document up to 12 MB; above that, every table section up to 8 MB (the larger ones are covered by the
+    YAML 1.2 comparison in scripts/test-format-matrix.mjs), so memory stays bounded on a CI runner.
+    """
+    import yaml
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    text = read_export(data_dir, complete(db, "yaml")).decode("utf-8")
+    expected = json.loads(read_export(data_dir, complete(db, "json")).decode("utf-8"))
+    checked = tables = 0
+    if len(text) <= 12 * 1024 * 1024:
+        loaded = yaml.load(text, Loader=loader)
+        if not _same(loaded, expected):
+            raise AssertionError(f"{db['id']}: PyYAML reads the served YAML differently from the served JSON")
+        checked = tables = len(expected)
+    else:
+        for section in re.split(r'^(?=")', text, flags=re.M):
+            if not section.strip():
+                continue
+            tables += 1
+            if len(section) > 8 * 1024 * 1024:
+                continue
+            loaded = yaml.load(section, Loader=loader)
+            (name, rows), = loaded.items()
+            if not _same(rows, expected[name]):
+                raise AssertionError(f"{db['id']}.{name}: PyYAML reads the served YAML differently from the served JSON")
+            checked += 1
+    return {"id": db["id"], "tables": tables, "tablesCompared": checked}
 
 
 def main() -> int:
@@ -178,7 +234,7 @@ def main() -> int:
     parser.add_argument("--providers", type=Path, required=True, help="directory of <id>/ provider checkouts at the pinned revisions")
     parser.add_argument("--postgres-url", default=os.environ.get("DEMODB_LIVE_POSTGRES_URL", ""))
     parser.add_argument("--only", action="append", help="limit to a dataset id (repeatable)")
-    parser.add_argument("--skip", choices=["postgresql", "ingitdb"], action="append", default=[])
+    parser.add_argument("--skip", choices=["postgresql", "ingitdb", "yaml"], action="append", default=[])
     args = parser.parse_args()
     databases = json.loads(args.index.read_text(encoding="utf-8"))["databases"]
     results: list[dict[str, Any]] = []
@@ -194,8 +250,12 @@ def main() -> int:
             continue
         data_dir = args.assets / db["id"] / "data"
         for fmt, check in (("postgresql", lambda d=db, dd=data_dir: validate_postgresql(args.postgres_url, d, dd, args.providers)),
-                           ("ingitdb", lambda d=db, dd=data_dir: validate_ingitdb(d, dd, args.providers))):
+                           ("ingitdb", lambda d=db, dd=data_dir: validate_ingitdb(d, dd, args.providers)),
+                           ("yaml", lambda d=db, dd=data_dir: validate_yaml(d, dd))):
             if fmt in args.skip or complete(db, fmt) is None:
+                continue
+            if fmt == "yaml" and db["id"] in PROVIDER_PLAIN_SCALAR_YAML:
+                print(f"skip {db['id']} yaml: provider-written plain scalars, see docs/format-matrix.md", flush=True)
                 continue
             try:
                 result = {"format": fmt, **check()}

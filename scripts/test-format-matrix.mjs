@@ -163,6 +163,16 @@ test('yamlDocument writes block YAML that a YAML 1.2 parser reads back as the sa
   assert.ok(text.includes('12345678901234567890') && text.includes('1.50'), 'numbers are written verbatim');
 });
 
+test('yamlDocument escapes DEL, C1 controls, noncharacters and refuses a lone surrogate', () => {
+  const c = String.fromCharCode;
+  const value = [0x7f, 0x80, 0x85, 0x9f, 0xfffe, 0xffff].map((code) => c(code)).join('');
+  const text = yamlDocument([{ name: 't', json: Buffer.from(JSON.stringify([{ a: value }])) }]).toString();
+  assert.ok(!/[\u007f-\u009f\ufffe\uffff]/.test(text), 'none of them is written raw');
+  assert.equal(parseYaml(text).t[0].a, value);
+  const lone = `["${'\\'}ud800"]`;
+  assert.throws(() => yamlDocument([{ name: 't', json: Buffer.from(`[{"a": ${lone.slice(1, -1)}}]`) }]), /lone UTF-16 surrogate/);
+});
+
 test('parseRows keeps number source text', () => {
   assert.equal(parseRows('[1.50]')[0].source, '1.50');
 });
@@ -212,17 +222,25 @@ async function openFixture(database) {
 
 const quote = (name) => `"${name.replaceAll('"', '""')}"`;
 
-// The provider JSON convention: BLOBs are base64 text; every other value is the SQLite value. A row is compared
-// as a canonical string, so the order of rows (the provider orders by primary key) does not matter but every value does.
-function canonical(value) {
+// The provider JSON convention: BLOBs are base64 text; every other value is the SQLite value, exactly. A row is compared
+// as a canonical string, so the order of rows (the provider orders by primary key) does not matter but every value does,
+// with no numeric coercion and no truncation. TEXT is read from the fixture as bytes (CAST AS BLOB) because node:sqlite on
+// Node 22 returns a TEXT value only up to its first NUL character.
+const exactJson = (value) => {
   if (value === null) return 'null';
-  if (value instanceof Uint8Array) return `s:${Buffer.from(value).toString('base64')}`;
-  if (typeof value === 'bigint' || typeof value === 'number') return `n:${Number(value)}`;
-  // node:sqlite on Node 22 returns a TEXT value only up to its first NUL character (AdventureWorks stores one in
-  // Document.FileExtension) and later Node releases return all of it, so both sides are compared up to the first NUL.
-  return `s:${value.split(String.fromCharCode(0))[0]}`;
+  if (typeof value === 'number') return `n:${value}`;
+  if (typeof value === 'string') return `s:${value}`;
+  throw new Error(`unexpected JSON value ${JSON.stringify(value)}`);
+};
+function exactFixture(type, value) {
+  if (type === 'null') return 'null';
+  if (type === 'blob') return `s:${Buffer.from(value).toString('base64')}`;
+  if (type === 'text') return `s:${Buffer.from(value).toString('utf8')}`;
+  return `n:${value}`;
 }
-const rowKey = (columns, row) => columns.map((column) => canonical(row[column])).join('\u0001');
+const fixtureSelect = (columns) => columns.map((column, index) => `CASE WHEN typeof(${quote(column)}) = 'text' THEN CAST(${quote(column)} AS BLOB) ELSE ${quote(column)} END AS v${index}, typeof(${quote(column)}) AS t${index}`).join(', ');
+const jsonKey = (columns, row) => columns.map((column) => exactJson(row[column])).join('\u0001');
+const fixtureKey = (columns, row) => columns.map((_, index) => exactFixture(row[`t${index}`], row[`v${index}`])).join('\u0001');
 
 // A tiny reader for exactly the YAML subset yamlDocument writes (every scalar is a JSON scalar), independent of
 // the writer, so every row of even the largest file is compared with the JSON.
@@ -272,11 +290,11 @@ for (const id of ids) {
         const remaining = new Map();
         for (const row of rows) {
           assert.deepEqual(Object.keys(row), columns, `${table.name}: columns of a row`);
-          const key = rowKey(columns, row);
+          const key = jsonKey(columns, row);
           remaining.set(key, (remaining.get(key) ?? 0) + 1);
         }
-        for (const source of fixture.prepare(`SELECT * FROM ${quote(table.name)}`).iterate()) {
-          const key = rowKey(columns, source);
+        for (const source of fixture.prepare(`SELECT ${fixtureSelect(columns)} FROM ${quote(table.name)}`).iterate()) {
+          const key = fixtureKey(columns, source);
           const left = remaining.get(key);
           if (!left) assert.fail(`${table.name}: fixture row ${key.slice(0, 200)} is not in the JSON`);
           remaining.set(key, left - 1);

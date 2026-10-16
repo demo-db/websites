@@ -96,14 +96,18 @@ jobs:
           done < "$RUNNER_TEMP/pins.tsv"
       - name: Generate and verify the derived downloads against their lock
         run: pnpm prepare:databases
-      - name: Load every served PostgreSQL script and check every inGitDB archive against its fixture
+      - name: Load every served PostgreSQL script, parse the YAML with PyYAML, and check every inGitDB archive against its fixture
         env:
           DEMODB_LIVE_POSTGRES_URL: postgresql://postgres:throwaway@127.0.0.1:5432/postgres
           DEMODB_LIVE_POSTGRES_ALLOW_DROP: "1"
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -r scripts/hosting-tools/requirements-live.txt
-          "$RUNNER_TEMP/venv/bin/python" scripts/hosting-tools/validate_served_formats.py --providers "$RUNNER_TEMP/providers"
+          # The inGitDB CLI at a pinned release and checksum validates every served archive too.
+          curl -fsSL -o "$RUNNER_TEMP/ingitdb.tar.gz" https://github.com/ingitdb/ingitdb-cli/releases/download/v0.70.2/ingitdb_0.70.2_linux_amd64.tar.gz
+          echo "763e4e6bebc5a7997b60bb09307e1be6db9dbae201e4c235851bcaf4ea0fb44b  $RUNNER_TEMP/ingitdb.tar.gz" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/ingitdb-cli" && tar -xzf "$RUNNER_TEMP/ingitdb.tar.gz" -C "$RUNNER_TEMP/ingitdb-cli"
+          INGITDB_CLI="$RUNNER_TEMP/ingitdb-cli/ingitdb" "$RUNNER_TEMP/venv/bin/python" scripts/hosting-tools/validate_served_formats.py --providers "$RUNNER_TEMP/providers"
 
   deploy:
     needs: served-formats

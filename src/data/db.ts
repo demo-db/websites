@@ -51,3 +51,11 @@ export function downloadFiles(db: Database) {
     href: `/data/${item.publicPath}`,
   }));
 }
+
+// Every download, including the files DemoDB generates from the pinned fixture, is a copy of the dataset's data and carries its licence.
+export function licenceNotice(db: Database): string {
+  const licence = String((db as unknown as { licences?: { data?: string } }).licences?.data ?? db.source.license ?? 'the dataset licence');
+  const origin = String(db.source.repository ?? db.sourceRepository);
+  const shareAlike = /-SA-/i.test(licence) ? ' Files derived from it, in any format, must be shared under the same licence.' : '';
+  return `Every file here, including the JSON, YAML, PostgreSQL script and inGitDB archive that DemoDB generates from the pinned fixture, contains ${db.name} data from ${origin} and is licensed ${licence}.${shareAlike} Keep the licence and attribution notices with any copy.`;
+}

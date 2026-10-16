@@ -293,7 +293,10 @@ async function checkedComparisonFixture() {
 async function checkedRedirect(url, init, expectedLocation) {
   once(init.method, url);
   const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
-  if (response.status !== 308 || response.headers.get('Location') !== expectedLocation) {
+  // The asset router sends a same-origin absolute target as a path (Location: /chinook/), so resolve it first.
+  const location = response.headers.get('Location');
+  const resolved = location === null ? null : new URL(location, url).href;
+  if (response.status !== 308 || resolved !== expectedLocation) {
     throw new Error(`redirect from ${url}: HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}, expected 308 to ${expectedLocation}`);
   }
 }

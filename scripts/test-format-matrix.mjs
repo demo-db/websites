@@ -218,7 +218,9 @@ function canonical(value) {
   if (value === null) return 'null';
   if (value instanceof Uint8Array) return `s:${Buffer.from(value).toString('base64')}`;
   if (typeof value === 'bigint' || typeof value === 'number') return `n:${Number(value)}`;
-  return `s:${value}`;
+  // node:sqlite on Node 22 returns a TEXT value only up to its first NUL character (AdventureWorks stores one in
+  // Document.FileExtension) and later Node releases return all of it, so both sides are compared up to the first NUL.
+  return `s:${value.split(String.fromCharCode(0))[0]}`;
 }
 const rowKey = (columns, row) => columns.map((column) => canonical(row[column])).join('\u0001');
 

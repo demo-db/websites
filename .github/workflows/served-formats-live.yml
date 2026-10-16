@@ -1,0 +1,70 @@
+name: Served formats live (MySQL)
+
+# NOT a required check (it is path-filtered, and the required checks in deploy.yml are unchanged). It proves two things the required lane
+# cannot without Docker and the datatug binary:
+#   1. regenerating every MySQL script with the pinned datatug release (tag and SHA-256 in config/dialect-scripts.json, fail closed on a
+#      mismatch) gives byte for byte the script committed in the provider repository;
+#   2. every script loads, with the client flags its header recommends, into the digest-pinned mysql:8.4 image, a second load stops at the
+#      marker table, and tables, columns, primary keys, foreign key counts, row counts and the marker row match the pinned SQLite fixture.
+# The comparison of every value is datatug-cli's own journey-mysql workflow (see docs/dialect-scripts.md).
+on:
+  pull_request:
+    paths:
+      - config/dialect-scripts.json
+      - config/databases.json
+      - config/format-matrix.json
+      - scripts/dialect-scripts.mjs
+      - scripts/verify-mysql-live.mjs
+      - scripts/derived-exports.mjs
+      - .github/workflows/served-formats-live.yml
+  push:
+    branches: [main]
+    paths:
+      - config/dialect-scripts.json
+      - config/databases.json
+      - config/format-matrix.json
+      - scripts/dialect-scripts.mjs
+      - scripts/verify-mysql-live.mjs
+      - scripts/derived-exports.mjs
+      - .github/workflows/served-formats-live.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: served-formats-live-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Check out provider repositories at their pinned revisions
+        run: |
+          mkdir -p "$RUNNER_TEMP/providers"
+          python3 - <<'PY' > "$RUNNER_TEMP/pins.tsv"
+          import json
+          for d in json.load(open("config/databases.json"))["databases"]:
+              print(d["id"], d["repository"], d["commit"], sep="\t")
+          PY
+          while IFS=$'\t' read -r id repo commit; do
+            dir="$RUNNER_TEMP/providers/$id"
+            git init -q "$dir"
+            git -C "$dir" fetch -q --depth 1 "$repo" "$commit"
+            git -C "$dir" checkout -q FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
+          done < "$RUNNER_TEMP/pins.tsv"
+      - name: Check every script against its provider manifest and the pinned inputs
+        run: node scripts/dialect-scripts.mjs check --providers "$RUNNER_TEMP/providers"
+      - name: Regenerate every script with the pinned datatug release and compare it byte for byte
+        run: node scripts/dialect-scripts.mjs regenerate-check --providers "$RUNNER_TEMP/providers" --tools "$RUNNER_TEMP/tools"
+      - name: Load every script into the pinned MySQL 8.4 and compare it with the SQLite fixture
+        run: node scripts/verify-mysql-live.mjs --providers "$RUNNER_TEMP/providers"

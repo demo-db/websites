@@ -407,7 +407,7 @@ assert.notEqual(missingComparisonAsset.headers.get('Cache-Control'), 'public, ma
 chunkAssets.set(comparisonFixtureAssetPath, comparisonFixtureBytes);
 assert.equal((await fetch('chinook.demodb.dev', `/data/compare/${'0'.repeat(64)}.sqlite`)).status, 404, 'unregistered content-addressed fixtures are not served');
 assert.equal((await fetch('demodb.dev', `/data/${comparisonFixturePath}`)).status, 404, 'comparison fixture remains scoped to its database host');
-for (const path of ['/data/chinook.json', '/data/chinook.yaml', '/data/chinook.postgresql.sql', '/data/chinook.mysql.sql', '/data/chinook.sqlserver.sql', '/data/json/chinook.Album.json', '/data/yaml/chinook.Album.yaml', '/data/sql/chinook.Album.sql']) {
+for (const path of ['/data/chinook.json', '/data/chinook.yaml', '/data/chinook.postgresql.sql', '/data/chinook.mysql.sql', '/data/upstream/chinook.mysql.sql', '/data/chinook.sqlserver.sql', '/data/json/chinook.Album.json', '/data/yaml/chinook.Album.yaml', '/data/sql/chinook.Album.sql']) {
   assert.equal((await fetch('chinook.demodb.dev', path)).status, 200, `legacy Chinook export remains available at ${path}`);
 }
 assert.equal((await fetch('northwind.demodb.dev', '/data/northwind.sql')).status, 200);

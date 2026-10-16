@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
 import datatugCatalog from './fixtures/datatug-postgresql-catalog.json' with { type: 'json' };
+import derivedLock from '../config/derived-exports.lock.json' with { type: 'json' };
+import dialectConfig from '../config/dialect-scripts.json' with { type: 'json' };
 import { decodedExportBytes } from './corpus-exports.mjs';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
@@ -298,16 +300,52 @@ async function checkedCompleteExports() {
       if (bytes !== expectedBytes || hash.digest('hex') !== expectedSha256) throw new Error(`${file.url}: download differs from corpus metadata (declared ${expectedBytes} bytes ${expectedSha256}, received ${bytes} bytes)`);
       files += 1;
     }
-    const missing = availability.filter((entry) => entry.state === 'unavailable');
+    const missing = availability.filter((entry) => entry.state !== 'download');
     if (missing.length) {
       const page = await (await fetch(`https://${database.localId}.demodb.dev/downloads/`, { cache: 'no-store' })).text();
       for (const entry of missing) {
-        if (!page.includes('Not available:') || !page.includes(entry.label)) throw new Error(`${database.localId}: the downloads page does not state that ${entry.label} is not available`);
-        if (database.exports.some((file) => file.format === entry.format)) throw new Error(`${database.localId}: ${entry.format} is declared unavailable but the corpus lists an export`);
+        const word = entry.state === 'planned' ? 'Planned' : 'Not available';
+        if (!page.includes(`${word}:`) || !page.includes(entry.label)) throw new Error(`${database.localId}: the downloads page does not state that ${entry.label} is ${word.toLowerCase()}`);
+        if (database.exports.some((file) => file.format === entry.format)) throw new Error(`${database.localId}: ${entry.format} is declared ${entry.state} but the corpus lists an export`);
       }
     }
   }
   return files;
+}
+
+// Every generated MySQL script the corpus advertises, read from the live site: it decodes (a gzip stream that is not complete fails
+// here), is the script the lock pins (SHA-256 and size), starts with the contract-edition label, carries the licence of its dataset,
+// begins by creating the marker table and ends with the completion comment. Chinook's upstream script is still served, apart.
+async function checkedMysqlScripts() {
+  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
+  const spec = dialectConfig.dialects.mysql;
+  let checkedScripts = 0;
+  for (const database of corpus.databases) {
+    const declared = database.formatAvailability.find((entry) => entry.format === 'mysql');
+    if (declared?.state !== 'download') throw new Error(`${database.localId}: the MySQL script is not declared as a download`);
+    const file = database.exports.find((item) => item.format === 'mysql');
+    const pinned = derivedLock.datasets?.[database.localId]?.mysql;
+    if (!file || !pinned) throw new Error(`${database.localId}: no MySQL script in the corpus or in the lock`);
+    const response = await fetch(file.url, { redirect: 'manual', cache: 'no-store' });
+    if (response.status !== 200) throw new Error(`${file.url}: HTTP ${response.status}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length !== pinned.bytes || createHash('sha256').update(bytes).digest('hex') !== pinned.sha256) throw new Error(`${file.url}: the served script is not the one the lock pins`);
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error(`${file.url}: still gzip after decoding`);
+    const text = bytes.toString('utf8');
+    const lines = text.split('\n');
+    if (lines[0] !== `-- ${dialectConfig.edition}`) throw new Error(`${file.url}: the first line is not the contract-edition label`);
+    if (!lines.slice(0, 40).includes(`-- Licence: ${database.licences.data}`)) throw new Error(`${file.url}: the header lacks the licence ${database.licences.data}`);
+    if (!lines.some((line) => line.startsWith(`CREATE TABLE \`${spec.marker}\``))) throw new Error(`${file.url}: no marker table`);
+    if (!lines.some((line) => line.startsWith(`INSERT INTO \`${spec.marker}\` VALUES ('${database.localId}', `))) throw new Error(`${file.url}: the marker row is missing`);
+    if (text.includes('\r')) throw new Error(`${file.url}: holds a CR`);
+    if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') throw new Error(`${file.url}: does not end with the completion comment`);
+    checkedScripts += 1;
+  }
+  const upstream = await fetch('https://chinook.demodb.dev/data/upstream/chinook.mysql.sql', { redirect: 'manual', cache: 'no-store' });
+  if (upstream.status !== 200) throw new Error(`chinook: the upstream MySQL script is not served at /data/upstream/chinook.mysql.sql (HTTP ${upstream.status})`);
+  const upstreamText = await upstream.text();
+  if (!upstreamText.includes('Chinook_MySql.sql') || !upstreamText.includes('DROP DATABASE IF EXISTS')) throw new Error('chinook: /data/upstream/chinook.mysql.sql is not the upstream script');
+  return checkedScripts;
 }
 
 async function checkedComparisonFixture() {
@@ -386,4 +424,5 @@ await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtq
   body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
 }, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
 const completeExportCount = await checkedCompleteExports();
-console.log(`Live DemoDB pages, typed manifests, discovery, ${completeExportCount} complete-database downloads checked against the corpus, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);
+const mysqlScriptCount = await checkedMysqlScripts();
+console.log(`Live DemoDB pages, typed manifests, discovery, ${completeExportCount} complete-database downloads checked against the corpus, ${mysqlScriptCount} MySQL scripts checked against the lock and their headers, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);

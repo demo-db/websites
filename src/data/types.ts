@@ -66,8 +66,8 @@ export type ExportFile = {
 export type FormatAvailability = {
   format: string;
   label: string;
-  state: 'download' | 'unavailable';
-  origin?: 'provider' | 'provider-artifact' | 'derived' | 'archive';
+  state: 'download' | 'unavailable' | 'planned';
+  origin?: 'provider' | 'provider-artifact' | 'derived' | 'archive' | 'provider-script';
   publicPath?: string | null;
   reason?: string;
   followUp?: string;

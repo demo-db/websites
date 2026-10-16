@@ -7,7 +7,7 @@ import { parse as parseYaml } from 'yaml';
 import { assertAppendOnlyFixturePins, materializeComparisonFixtures } from './comparison-fixtures.mjs';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 import { materializeProviderExports } from './provider-exports.mjs';
-import { LOCK_FORMAT, LOCK_PATH, deriveDatasetExports, serializeLock } from './derived-exports.mjs';
+import { LOCK_FORMAT, LOCK_PATH, SQL_SCRIPT_FORMATS, deriveDatasetExports, serializeLock } from './derived-exports.mjs';
 import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 
@@ -295,7 +295,7 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
-  const exports = source.contract.exports.map((item) => normalizeExport(entry.id, item, schema.tables, source.checksums));
+  const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums)));
   const paths = new Set();
   const physicalPaths = new Set();
   const publicPaths = new Set();
@@ -358,6 +358,21 @@ async function materializeModels(db, source) {
   if (modelChecksumsBytes) await writeFile(join(internalAssets, db.id, 'model/checksums.json'), modelChecksumsBytes);
 }
 
+// A provider's own complete SQL script of an engine (Chinook ships lerocha's upstream mysql, postgresql and sqlserver scripts) keeps the
+// canonical URL only while the matrix says the provider file is what is served. When the matrix serves a script that DemoDB generated and
+// verified for that format, the canonical URL belongs to it and the provider's upstream script moves to /data/upstream/<file>, as
+// format `upstream-<format>` (labelled "upstream (unverified, drops database)" on the pages).
+function displacedByGenerated(id, item) {
+  if (item.table || !item.dbWide || !SQL_SCRIPT_FORMATS.includes(item.format)) return item;
+  const cell = formatMatrix.datasets[id]?.[item.format];
+  if (!cell || cell.state !== 'download' || cell.origin === 'provider') return item;
+  const move = (path) => `upstream/${path}`;
+  return {
+    ...item, format: `upstream-${item.format}`, publicPath: move(item.publicPath), assetPath: move(item.assetPath),
+    chunks: item.chunks.map((chunk) => ({ ...chunk, assetPath: move(chunk.assetPath) })),
+  };
+}
+
 function normalizeExport(id, item, tables, checksums) {
   const path = item.path;
   safeRelative(path);
@@ -414,14 +429,14 @@ function normalizeExport(id, item, tables, checksums) {
   const match = tables.find((table) => tableName ? table.name === tableName : !databaseWideFilename && (
     logicalBase === `${id}.${table.name}.${ext}` || logicalBase === `${table.name}.${ext}`
   ));
-  if (!format && match) format = ext === 'sql' && /\/(postgresql|mysql|sqlserver)\//i.test(path) ? 'sql' : ext;
+  if (!format && match) format = ext === 'sql' && /\/(postgresql|mysql|sqlserver|oracle)\//i.test(path) ? 'sql' : ext;
   if (!match) {
     if (!format) {
       if (base === `${id}.sqlite` || base === `${id}.db`) format = 'sqlite';
       else if (base === `${id}.sql`) format = 'sql';
       else if (base === `${id}.json`) format = 'json';
       else if (base === `${id}.yaml` || base === `${id}.yml`) format = 'yaml';
-      else if (new RegExp(`^${id}\\.(postgresql|mysql|sqlserver)\\.sql$`).test(base)) format = base.split('.')[1];
+      else if (new RegExp(`^${id}\\.(postgresql|mysql|sqlserver|oracle)\\.sql$`).test(base)) format = base.split('.')[1];
     }
     if (!format) throw new Error(`${id}: cannot classify export ${path}`);
   }
@@ -430,7 +445,7 @@ function normalizeExport(id, item, tables, checksums) {
   let publicPath;
   if (match || tableName) publicPath = `${format}/${id}.${tableName ?? match.name}.${extension}`;
   else if (format === 'sqlite') publicPath = `${id}.sqlite`;
-  else if (format === 'sql' || ['postgresql', 'mysql', 'sqlserver'].includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
+  else if (format === 'sql' || SQL_SCRIPT_FORMATS.includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);
   const assetPath = compression === 'gzip' && !normalizedChunks.length ? `${publicPath}.gz` : publicPath;

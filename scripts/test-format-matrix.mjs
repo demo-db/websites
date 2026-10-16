@@ -14,7 +14,7 @@ import { gunzipSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 import { parse as parseYaml } from 'yaml';
 import { chunkEncoded, deterministicGzip, jsonDocument, parseRows, pinOrVerify, placeDerivedExport, yamlDocument } from './derived-exports.mjs';
-import { formatAvailability, validateMatrix } from './format-matrix.mjs';
+import { GENERATED_ORIGINS, formatAvailability, isUpstreamFormat, validateMatrix } from './format-matrix.mjs';
 import { renderMatrixDoc } from './format-matrix-doc.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -60,6 +60,64 @@ test('validateMatrix rejects a missing cell, an unexplained gap and an unknown d
   assert.throws(() => validateMatrix(matrix, [...ids, 'newdb']), /newdb is registered but not declared/);
 });
 
+test('a planned format needs a reason, has no origin, is never served, and the committed matrix plans SQL Server and Oracle without serving them', () => {
+  const clone = () => structuredClone(matrix);
+  const noReason = clone(); noReason.datasets.pubs.oracle = { state: 'planned', reason: 'soon' };
+  assert.throws(() => validateMatrix(noReason, ids), /pubs\/oracle: a planned format needs a specific reason/);
+  const withOrigin = clone(); withOrigin.datasets.pubs.oracle = { state: 'planned', origin: 'derived', reason: 'a specific and sufficiently long reason text' };
+  assert.throws(() => validateMatrix(withOrigin, ids), /pubs\/oracle: a planned format has no origin/);
+  const small = { datasets: { x: { oracle: { state: 'planned', reason: 'a specific and sufficiently long reason text' } } }, formats: ['oracle'], labels: { oracle: 'Oracle script' } };
+  assert.deepEqual(formatAvailability(small, 'x', []).map((item) => [item.format, item.state]), [['oracle', 'planned']]);
+  assert.throws(() => formatAvailability(small, 'x', [{ format: 'oracle', table: null, publicPath: 'x.oracle.sql', derived: true }]), /oracle: declared planned but x\.oracle\.sql is served/);
+  for (const id of ids) {
+    assert.equal(matrix.datasets[id].oracle.state, 'planned', `${id}: Oracle is planned, not available`);
+    assert.notEqual(matrix.datasets[id].sqlserver.state === 'planned' ? 'x' : matrix.datasets[id].sqlserver.origin === 'provider-script' ? 'served' : 'x', 'served', `${id}: no generated SQL Server script is claimed`);
+    assert.equal(matrix.datasets[id].mysql.state, 'download');
+    assert.equal(matrix.datasets[id].mysql.origin, 'provider-script', `${id}: the MySQL script is the generated one`);
+  }
+  assert.deepEqual(ids.filter((id) => matrix.datasets[id].sqlserver.state === 'download'), ['chinook'], 'only the upstream Chinook SQL Server script is served');
+  assert.equal(matrix.datasets.chinook.sqlserver.origin, 'provider');
+});
+
+test('an upstream script that a generated one displaced is served outside the matrix', () => {
+  assert.ok(isUpstreamFormat('upstream-mysql') && !isUpstreamFormat('mysql') && !isUpstreamFormat('upstream-'));
+  const small = { datasets: { x: { mysql: { state: 'download', origin: 'provider-script' } } }, formats: ['mysql'], labels: { mysql: 'MySQL script' } };
+  const generated = { format: 'mysql', table: null, publicPath: 'x.mysql.sql', derived: true };
+  const upstream = { format: 'upstream-mysql', table: null, publicPath: 'upstream/x.mysql.sql', derived: false };
+  assert.deepEqual(formatAvailability(small, 'x', [generated, upstream]).map((item) => [item.format, item.publicPath]), [['mysql', 'x.mysql.sql']]);
+  assert.ok(GENERATED_ORIGINS.includes('provider-script') && !GENERATED_ORIGINS.includes('provider-artifact') && !GENERATED_ORIGINS.includes('provider'));
+});
+
+test('Chinook: the generated MySQL script owns the canonical URL and lerocha\'s upstream script is served apart, unchanged', async () => {
+  const chinook = generated.find((item) => item.id === 'chinook');
+  const [canonical] = completeOf(chinook, 'mysql');
+  assert.equal(canonical.publicPath, 'chinook.mysql.sql');
+  assert.equal(canonical.derived, true);
+  const upstream = completeOf(chinook, 'upstream-mysql');
+  assert.equal(upstream.length, 1);
+  assert.equal(upstream[0].publicPath, 'upstream/chinook.mysql.sql');
+  const first = (await decodedBytesOf(chinook, canonical)).subarray(0, 80).toString();
+  assert.equal(first.split('\n')[0], '-- DemoDB contract edition, identical to the SQLite/CSV/JSON');
+  const old = await decodedBytesOf(chinook, upstream[0]);
+  assert.ok(old.toString().includes('Chinook_MySql.sql') && old.toString().includes('DROP DATABASE IF EXISTS'));
+  const downloadsPage = decodeHtml(await readFile(join(root, 'dist/_db/chinook/downloads/index.html'), 'utf8'));
+  assert.ok(downloadsPage.includes('MySQL script, upstream (unverified, drops database)'), 'the page labels the upstream script');
+  assert.ok(downloadsPage.includes('<a href="/data/upstream/chinook.mysql.sql" download>'));
+});
+
+test('every dataset page names the files DemoDB generates, and only those', async () => {
+  for (const id of ids) {
+    const page = decodeHtml(await readFile(join(root, 'dist/_db', id, 'downloads/index.html'), 'utf8'));
+    const generatedLabels = matrix.formats.filter((format) => GENERATED_ORIGINS.includes(matrix.datasets[id][format].origin)).map((format) => matrix.labels[format]);
+    const notGenerated = matrix.formats.filter((format) => matrix.datasets[id][format].state === 'download' && !GENERATED_ORIGINS.includes(matrix.datasets[id][format].origin)).map((format) => matrix.labels[format]);
+    const notice = page.match(/Every file here[^<]*/)?.[0] ?? '';
+    const claimed = notice.match(/, including the (.*) that DemoDB generates from the pinned fixture,/)?.[1] ?? '';
+    for (const label of generatedLabels) assert.ok(claimed.includes(label), `${id}: the licence notice names ${label}`);
+    for (const label of notGenerated) assert.ok(!claimed.includes(label), `${id}: the licence notice does not claim to generate ${label}`);
+    if (id === 'employees') assert.ok(notice.includes('must be shared under the same licence'), 'Employees share-alike is stated');
+  }
+});
+
 test('formatAvailability fails when the declaration and the produced exports differ', () => {
   const small = { datasets: { x: { json: { state: 'download', origin: 'derived' }, yaml: { state: 'unavailable', reason: 'a specific and sufficiently long reason text' } } }, formats: ['json', 'yaml'], labels: { json: 'JSON', yaml: 'YAML' } };
   const json = { format: 'json', table: null, publicPath: 'x.json', derived: true };
@@ -97,7 +155,7 @@ for (const id of ids) {
         assert.ok(datasetPage.includes(`<a href="/data/${file.publicPath}">`), `${format}: the dataset page links ${file.publicPath}`);
         assert.ok(!downloadsPage.includes(`${entry.label}</strong><span>Not available`), `${format}: not also described as unavailable`);
       } else {
-        const sentence = `Not available: ${cell.reason}`;
+        const sentence = `${cell.state === 'planned' ? 'Planned' : 'Not available'}: ${cell.reason}`;
         assert.ok(downloadsPage.includes(sentence), `${format}: the downloads page says "${sentence.slice(0, 60)}…"`);
         assert.ok(datasetPage.includes(sentence), `${format}: the dataset page says it too`);
         assert.ok(!database.exports.some((file) => file.format === format && !file.table), `${format}: no file behind an unavailable format`);
@@ -124,7 +182,7 @@ for (const id of ids) {
 
   test(`${id}: every generated file is pinned by the lock, and nothing else is`, () => {
     const pinned = Object.keys(lock.datasets[id] ?? {}).sort();
-    const generatedFormats = matrix.formats.filter((format) => ['derived', 'provider-artifact', 'archive'].includes(matrix.datasets[id][format].origin)).sort();
+    const generatedFormats = matrix.formats.filter((format) => ['derived', 'provider-artifact', 'archive', 'provider-script'].includes(matrix.datasets[id][format].origin)).sort();
     assert.deepEqual(pinned, generatedFormats);
     for (const format of generatedFormats.filter((item) => item !== 'ingitdb')) {
       const [file] = completeOf(database, format);

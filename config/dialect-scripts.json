@@ -1,0 +1,34 @@
+{
+  "format": "demodb-dialect-scripts-config/v1",
+  "generator": {
+    "name": "datatug",
+    "tag": "v0.97.1",
+    "sourceRelease": "https://github.com/datatug/datatug-cli/releases/tag/v0.97.1",
+    "downloadBase": "https://github.com/datatug/datatug/releases/download/v0.97.1",
+    "note": "datatug-cli is a private repository; its public binaries are copied unchanged to datatug/datatug. The checksums file is byte for byte the one of the datatug-cli release.",
+    "checksumsFile": "datatug_0.97.1_checksums.txt",
+    "checksumsSha256": "c736ea434e107cdf0189c7f0b82b08e81c1475cb92e593d5aafc6c7b7b434f60",
+    "assets": {
+      "linux-x64": { "name": "datatug_0.97.1_linux_amd64.tar.gz", "sha256": "c08109b215a1d37823dbc444faa8db2a04235fb5c5e5d003a9f3f98d43698037" },
+      "linux-arm64": { "name": "datatug_0.97.1_linux_arm64.tar.gz", "sha256": "9102f61b3d596a36809b33e81d871df7a04b5d74f323971285bccac16401a51d" },
+      "darwin-x64": { "name": "datatug_0.97.1_darwin_amd64.tar.gz", "sha256": "86e7996e44a75df08e86bd8e041fda3e1f653f5619945aa0cf28584a92a8309b" },
+      "darwin-arm64": { "name": "datatug_0.97.1_darwin_arm64.tar.gz", "sha256": "02b6096d462f3ffb99a346f5491fc0ac14a27972b3c5cd790d4c24b377cb419c" }
+    }
+  },
+  "edition": "DemoDB contract edition, identical to the SQLite/CSV/JSON",
+  "dialects": {
+    "mysql": {
+      "format": "mysql",
+      "extension": "mysql.sql",
+      "minimumServer": "MySQL 8.0.16",
+      "verifiedOn": "MySQL 8.4 LTS",
+      "serverImage": "mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70",
+      "clientFlags": "--default-character-set=utf8mb4 --skip-commands --skip-system-command",
+      "marker": "_demodb_import"
+    }
+  },
+  "planned": {
+    "sqlserver": "datatug dialect=mssql is in review and arrives in a later datatug release; adding it here is a change of this file, the matrix and a regeneration, nothing else.",
+    "oracle": "No generator exists yet."
+  }
+}

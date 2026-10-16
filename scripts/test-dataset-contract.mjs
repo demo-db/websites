@@ -32,7 +32,11 @@ const CATALOG_URL = 'https://raw.githubusercontent.com/datatug/datatug-apps/main
 const exists = (path) => access(path).then(() => true, () => false);
 const providerOf = (id) => generated.find((database) => database.id === id);
 // The label a download carries: the matrix's name for its format, or an explicit one for the SQLite-dialect dump.
-const labelOf = (database, format) => (format === 'sql' ? 'SQL (SQLite dialect)' : database.formatAvailability.find((item) => item.format === format)?.label);
+const labelOf = (database, format) => {
+  if (format === 'sql') return 'SQL (SQLite dialect)';
+  if (format.startsWith('upstream-')) return `${database.formatAvailability.find((item) => item.format === format.slice('upstream-'.length))?.label}, upstream (unverified, drops database)`;
+  return database.formatAvailability.find((item) => item.format === format)?.label;
+};
 const completeDownloads = (database) => database.exports.filter((file) => !file.table && file.format !== 'metadata');
 const decodedSha = (file) => file.decodedSha256 ?? file.sha256;
 const decodedBytes = (file) => file.decodedBytes ?? file.bytes;

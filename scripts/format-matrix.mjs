@@ -6,12 +6,21 @@
 // dataset metadata (generated index and corpus.json) so every page can say "Not available: <reason>" instead
 // of silently omitting a format. docs/format-matrix.md is rendered from the same declaration.
 export const MATRIX_FORMAT = 'demodb-format-matrix/v1';
-export const STATES = ['download', 'unavailable'];
-export const ORIGINS = ['provider', 'provider-artifact', 'derived', 'archive'];
+// `planned` is a gap with a roadmap: nothing is served and the page says "Planned", never "available". `provider-script` is a
+// SQL script written by the DataTug exporter, pinned by tag and SHA-256 in config/dialect-scripts.json and checked into
+// the provider repository (scripts/dialect-scripts.mjs).
+export const STATES = ['download', 'unavailable', 'planned'];
+export const ORIGINS = ['provider', 'provider-artifact', 'derived', 'archive', 'provider-script'];
+export const DERIVED_ORIGINS = ['derived', 'archive', 'provider-artifact', 'provider-script'];
+// Origins whose bytes DemoDB itself generates from the pinned fixture (a provider artifact is the provider's own file).
+export const GENERATED_ORIGINS = ['derived', 'archive', 'provider-script'];
 
 // Complete-database export formats that are not part of the matrix: the SQLite-dialect dump every
 // provider ships as `sql`, and per-dataset metadata.
 export const EXTRA_FORMATS = ['sql', 'metadata'];
+// An upstream script that a generated one has displaced from its canonical URL (`upstream-mysql` at /data/upstream/...): served,
+// labelled "upstream (unverified)", and outside the matrix.
+export const isUpstreamFormat = (format) => /^upstream-[a-z]+$/.test(format);
 
 
 export function validateMatrix(matrix, datasetIds) {
@@ -36,8 +45,8 @@ export function validateMatrix(matrix, datasetIds) {
         if (!ORIGINS.includes(cell.origin)) problems.push(`${where}: origin must be one of ${ORIGINS.join(', ')}`);
         if (cell.reason) problems.push(`${where}: a served format carries no reason`);
       } else {
-        if (typeof cell.reason !== 'string' || cell.reason.trim().length < 30) problems.push(`${where}: an unavailable format needs a specific reason (30+ characters)`);
-        if (cell.origin) problems.push(`${where}: an unavailable format has no origin`);
+        if (typeof cell.reason !== 'string' || cell.reason.trim().length < 30) problems.push(`${where}: ${cell.state === 'planned' ? 'a planned' : 'an unavailable'} format needs a specific reason (30+ characters)`);
+        if (cell.origin) problems.push(`${where}: ${cell.state === 'planned' ? 'a planned' : 'an unavailable'} format has no origin`);
         if (cell.followUp != null && typeof cell.followUp !== 'string') problems.push(`${where}: followUp must be a string`);
       }
     }
@@ -47,7 +56,7 @@ export function validateMatrix(matrix, datasetIds) {
   return matrix;
 }
 
-const completeExports = (exports) => exports.filter((item) => !item.table && !EXTRA_FORMATS.includes(item.format));
+const completeExports = (exports) => exports.filter((item) => !item.table && !EXTRA_FORMATS.includes(item.format) && !isUpstreamFormat(item.format));
 
 // Compares the declaration for one dataset with the exports the build really produced, and returns the
 // metadata the pages and corpus.json publish. Throws on any difference: a declared download that was not
@@ -64,15 +73,15 @@ export function formatAvailability(matrix, id, exports) {
     const served = complete.filter((item) => item.format === format);
     if (served.length > 1) problems.push(`${format}: ${served.length} complete downloads`);
     if (cell.state === 'download' && served.length !== 1) problems.push(`${format}: declared as a download but ${served.length ? 'duplicated' : 'not produced'}`);
-    if (cell.state === 'unavailable' && served.length) problems.push(`${format}: declared unavailable but ${served[0].publicPath} is served`);
+    if (cell.state !== 'download' && served.length) problems.push(`${format}: declared ${cell.state} but ${served[0].publicPath} is served`);
     if (cell.state === 'download' && served.length === 1) {
       const derived = served[0].derived === true;
-      const wantsDerived = cell.origin === 'derived' || cell.origin === 'archive' || cell.origin === 'provider-artifact';
+      const wantsDerived = DERIVED_ORIGINS.includes(cell.origin);
       if (derived !== wantsDerived) problems.push(`${format}: declared origin ${cell.origin} but the export is ${derived ? 'derived' : 'a provider contract export'}`);
     }
     return cell.state === 'download'
       ? { format, label: matrix.labels[format], state: 'download', origin: cell.origin, publicPath: served[0]?.publicPath ?? null }
-      : { format, label: matrix.labels[format], state: 'unavailable', reason: cell.reason, ...(cell.followUp ? { followUp: cell.followUp } : {}) };
+      : { format, label: matrix.labels[format], state: cell.state, reason: cell.reason, ...(cell.followUp ? { followUp: cell.followUp } : {}) };
   });
   if (problems.length) throw new Error(`${id}: the format matrix and the built exports disagree:\n  ${problems.join('\n  ')}`);
   return availability;

@@ -4,7 +4,6 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import worker from '../src/worker';
 import { ORDERS_EVIDENCE_ASSETS, ORDERS_EVIDENCE_REVISION, publishNorthwindOrdersEvidence } from './northwind-orders-evidence.mjs';
 
 const root = process.cwd();
@@ -61,32 +60,20 @@ test('the built Northwind evidence route contains exactly pinned provider bytes'
     }
   }
 
-  const requests: string[] = [];
-  const env = { ASSETS: { fetch: async (request: Request) => {
-    const path = new URL(request.url).pathname;
-    requests.push(path);
-    try {
-      const bytes = await readFile(join(root, 'dist', path));
-      return new Response(request.method === 'HEAD' ? null : bytes, { status: 200 });
-    } catch { return new Response(null, { status: 404 }); }
-  } } };
+  // Served Worker-less from the northwind.demodb.dev static bundle: the files sit at their public paths and
+  // one _headers rule gives them read-only CORS and a cross-origin resource policy (simple GETs need no preflight).
+  const host = join(root, 'dist-hosts/northwind.demodb.dev');
   const paths = ['/evidence/public-orders/', `/evidence/public-orders/${receiptName}`, '/evidence/public-orders/README.md', '/evidence/public-orders/source-rights.json'];
   for (const path of paths) {
-    for (const origin of ['https://datatug.app', 'http://localhost:4200']) {
-      const options = await worker.fetch(new Request(`https://northwind.demodb.dev${path}`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'GET' } }), env);
-      assert.equal(options.status, 204, path);
-      assert.equal(options.headers.get('Access-Control-Allow-Origin'), '*', path);
-      assert.match(options.headers.get('Access-Control-Allow-Methods') ?? '', /GET/);
-      for (const method of ['GET', 'HEAD']) {
-        const response = await worker.fetch(new Request(`https://northwind.demodb.dev${path}`, { method, headers: { Origin: origin } }), env);
-        assert.equal(response.status, 200, `${method} ${path}`);
-        assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*', `${method} ${path}`);
-        assert.equal(response.headers.get('Cross-Origin-Resource-Policy'), 'cross-origin', `${method} ${path}`);
-        if (method === 'HEAD') assert.equal(await response.text(), '');
-      }
-    }
+    const file = join(host, path.endsWith('/') ? `${path}index.html` : path);
+    assert.deepEqual(await readFile(file), await readFile(join(root, 'dist/_db/northwind', path.endsWith('/') ? `${path}index.html` : path)), path);
   }
-  assert.deepEqual(requests, paths.flatMap((path) => Array(4).fill(`/_db/northwind${path.endsWith('/') ? `${path}index.html` : path}`)));
+  const headers = await readFile(join(host, '_headers'), 'utf8');
+  const rule = headers.split('\n\n').find((block) => block.startsWith('/evidence/public-orders/*\n'));
+  assert.ok(rule, 'the evidence files have their own header rule');
+  assert.match(rule, /^  Access-Control-Allow-Origin: \*$/m);
+  assert.match(rule, /^  Access-Control-Allow-Methods: GET, HEAD$/m);
+  assert.match(rule, /^  Cross-Origin-Resource-Policy: cross-origin$/m);
 });
 
 test('publication fails closed if pinned evidence bytes change', async () => {

@@ -7,5 +7,5 @@
     "paths": { "@/*": ["src/*"] },
     "resolveJsonModule": true
   },
-  "exclude": ["scripts", "dist", ".astro", "node_modules", "public"]
+  "exclude": ["scripts", "dist", "dist-hosts", "deploy", ".astro", "node_modules", "public"]
 }

@@ -151,8 +151,10 @@ for (const id of ids) {
       const entry = recomputed.find((item) => item.format === format);
       if (cell.state === 'download') {
         const [file] = completeOf(database, format);
-        assert.ok(downloadsPage.includes(`<a href="/data/${file.publicPath}" download>`), `${format}: the downloads page links ${file.publicPath}`);
-        assert.ok(datasetPage.includes(`<a href="/data/${file.publicPath}">`), `${format}: the dataset page links ${file.publicPath}`);
+        // A gzip export is linked through its demodb-chunked-export/v1 manifest; it has no single-file URL.
+        const href = `/data/${file.publicPath}${file.compression === 'gzip' ? '.parts.json' : ''}`;
+        assert.ok(downloadsPage.includes(`<a href="${href}" download>`), `${format}: the downloads page links ${href}`);
+        assert.ok(datasetPage.includes(`<a href="${href}">`), `${format}: the dataset page links ${href}`);
         assert.ok(!downloadsPage.includes(`${entry.label}</strong><span>Not available`), `${format}: not also described as unavailable`);
       } else {
         const sentence = `${cell.state === 'planned' ? 'Planned' : 'Not available'}: ${cell.reason}`;

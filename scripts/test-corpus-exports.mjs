@@ -20,7 +20,7 @@ test('the published corpus describes the decoded size of every gzip export', () 
 test('the live smoke can read the AdventureWorks decoded sizes from the corpus', () => {
   assert.equal(decodedExportBytes(corpus, 'adventureworks', 'sqlite'), 126820352);
   assert.ok(decodedExportBytes(corpus, 'adventureworks', 'sql') > 0);
-  assert.equal(corpusExport(corpus, 'adventureworks', 'sql').url, 'https://adventureworks.demodb.dev/data/adventureworks.sql');
+  assert.equal(corpusExport(corpus, 'adventureworks', 'sql').url, 'https://adventureworks.demodb.dev/data/adventureworks.sql.parts.json');
 });
 
 test('a missing decoded size is reported, not guessed', () => {

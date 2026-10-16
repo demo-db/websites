@@ -537,21 +537,23 @@ function buildCorpus(databases) {
         foreignKeys: table.foreignKeys,
         availableRepresentations: db.exports.filter((file) => file.table === table.name).map((file) => ({
           format: file.format,
-          url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,
+          url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}${file.compression === 'gzip' ? '.parts.json' : ''}`,
           bytes: file.bytes,
           sha256: file.sha256,
-          ...(file.compression === 'gzip' ? { compression: file.compression, decodedBytes: file.decodedBytes, decodedSha256: file.decodedSha256 } : {}),
-          note: file.compression === 'gzip' ? 'The browser receives decoded content from this encoded gzip export.' : undefined,
+          ...(file.compression === 'gzip' ? { compression: file.compression, decodedBytes: file.decodedBytes, decodedSha256: file.decodedSha256, delivery: 'demodb-chunked-export/v1' } : {}),
+          note: file.compression === 'gzip' ? 'Published as gzip chunks: url is a demodb-chunked-export/v1 manifest; join the parts in order and gunzip.' : undefined,
         })),
         sampleExportUrl: db.exports.find((file) => file.table === table.name && file.format === 'json')
-          ? `https://${db.siteHost}/data/${db.exports.find((file) => file.table === table.name && file.format === 'json').publicPath.split('/').map(encodeURIComponent).join('/')}`
+          ? `https://${db.siteHost}/data/${db.exports.find((file) => file.table === table.name && file.format === 'json').publicPath.split('/').map(encodeURIComponent).join('/')}${db.exports.find((file) => file.table === table.name && file.format === 'json').compression === 'gzip' ? '.parts.json' : ''}`
           : null,
       })),
       sourceViews: db.schema.sourceViews ?? [],
       formatAvailability: db.formatAvailability,
+      // A gzip export has no single-file URL: `url` is its demodb-chunked-export/v1 manifest (see scripts/build-hosts.mjs).
       exports: db.exports.filter((file) => !file.table && file.format !== 'metadata').map((file) => ({
         format: file.format,
-        url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}`,
+        url: `https://${db.siteHost}/data/${file.publicPath.split('/').map(encodeURIComponent).join('/')}${file.compression === 'gzip' ? '.parts.json' : ''}`,
+        ...(file.compression === 'gzip' ? { delivery: 'demodb-chunked-export/v1' } : {}),
         bytes: file.bytes,
         sha256: file.sha256,
         ...(file.compression === 'gzip' ? { compression: file.compression, decodedBytes: file.decodedBytes, decodedSha256: file.decodedSha256 } : {}),

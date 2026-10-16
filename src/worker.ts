@@ -126,8 +126,11 @@ export default {
     const comparisonFixture = exportPath == null ? undefined : db.comparisonFixtures?.find((item) => item.publicPath === exportPath);
     if (exportPath?.startsWith('compare/') && !comparisonFixture) return notFound();
     const isPublicData = isDataPath(url.pathname);
+    const isOrdersEvidence = databaseId === 'northwind' && isOrdersEvidencePath(url.pathname);
     if (request.method === 'OPTIONS' && isPublicData) return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
+    if (request.method === 'OPTIONS' && isOrdersEvidence) return new Response(null, { status: 204, headers: readonlyCorsHeaders() });
     if (isPublicData && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
+    if (isOrdersEvidence && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { ...readonlyCorsHeaders(), Allow: 'GET, HEAD, OPTIONS' } });
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
 
     const exportFile = exportPath == null ? undefined : db.exports?.find((item) => item.publicPath === exportPath && item.compression === 'gzip');
@@ -141,6 +144,7 @@ export default {
         ? internalAssetPath(db.id, `/data/${exportFile.assetPath.split('/').map(encodeURIComponent).join('/')}`)
       : internalAssetPath(db.id, url.pathname);
     const response = await serveAsset(request, env, url, target, exportFile?.compression === 'gzip');
+    if (isOrdersEvidence) return withDataHeaders(response, request.method, false, false, true);
     if (isPublicData) {
       return withDataHeaders(response, request.method, exportFile?.compression === 'gzip', Boolean(comparisonFixture), true);
     }
@@ -303,6 +307,13 @@ function leaksPrivatePath(location: string, originalUrl: URL): boolean {
 
 function isDataPath(pathname: string): boolean {
   return pathname === '/data' || pathname.startsWith('/data/') || pathname === '/schema.json' || (pathname.startsWith('/model/') && pathname !== '/model/' && /\.[a-z0-9]+$/i.test(pathname));
+}
+
+function isOrdersEvidencePath(pathname: string): boolean {
+  return pathname === '/evidence/public-orders/'
+    || pathname === '/evidence/public-orders/README.md'
+    || pathname === '/evidence/public-orders/public-orders-evidence-2026-10-16.json'
+    || pathname === '/evidence/public-orders/source-rights.json';
 }
 
 async function serveAsset(request: Request, env: Env, originalUrl: URL, targetPath: string, encodedGzip = false): Promise<Response> {

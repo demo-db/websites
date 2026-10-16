@@ -21,6 +21,40 @@ test('the built Northwind evidence route contains exactly pinned provider bytes'
   assert.match(page, /Public Orders evidence/);
   assert.match(page, new RegExp(ORDERS_EVIDENCE_REVISION.slice(0, 12)));
   assert.match(page, /not prove other tables, future API state/);
+  const receiptName = 'public-orders-evidence-2026-10-16.json';
+  assert.match(page, new RegExp(`/evidence/public-orders/${receiptName}`));
+  assert.match(page, /\/evidence\/public-orders\/source-rights\.json/);
+  assert.match(page, /\/evidence\/public-orders\/README\.md/);
+  const receipt = JSON.parse(await readFile(join(published, receiptName), 'utf8'));
+  const rights = JSON.parse(await readFile(join(published, 'source-rights.json'), 'utf8'));
+  assert.equal(rights.format, 'demodb-observed-source-rights/v1');
+  assert.deepEqual(rights.usedSourceIds, ['ovdb:demodb.dev/northwind/Orders']);
+  assert.equal(rights.admission.endpoint, receipt.sources.sqlite.endpoint);
+  assert.equal(rights.admission.querySha256, receipt.sources.sqlite.querySha256);
+  assert.equal(rights.admission.canonicalRowsSha256, receipt.sources.sqlite.canonicalRowsSha256);
+  assert.equal(rights.admission.rows, 830);
+  assert.equal(rights.admission.complete, true);
+  assert.equal(rights.admission.executionSourcesPresent, false);
+  assert.deepEqual(rights.admission.fields, receipt.sources.sqlite.fields);
+  assert.equal(rights.sourceRights[0].sourceId, rights.usedSourceIds[0]);
+  assert.deepEqual(rights.sourceRights[0].declaredAt, rights.sourceRights[0].source);
+  assert.equal(rights.sourceRights[0].evidenceOrigin, 'publisher-verified');
+  assert.equal(rights.sourceRights[0].declaration.spdx, 'MIT');
+  assert.equal(rights.receipt.sha256, digest(await readFile(join(published, receiptName))));
+  const readme = await readFile(join(published, 'README.md'), 'utf8');
+  const links = [...readme.matchAll(/\]\(([^)]+)\)/g)].map((match) => match[1]);
+  assert.ok(links.includes(receiptName), 'the source README links to the published original receipt filename');
+  assert.ok(links.includes('source-rights.json'), 'the source README links to the published rights declaration');
+  for (const link of links) {
+    const target = new URL(link, 'https://northwind.demodb.dev/evidence/public-orders/');
+    if (target.origin === 'https://northwind.demodb.dev') {
+      const file = join(root, 'dist/_db/northwind', target.pathname);
+      assert.ok((await stat(file)).isFile(), `README target ${link} exists in the built site`);
+    } else {
+      assert.equal(target.origin, 'https://github.com');
+      assert.equal(target.pathname, '/demo-db/northwind/blob/de7f81c591abccc30fb9a0a58f44be9fd7265cd6/scripts/verify-public-orders.py');
+    }
+  }
 
   const requests: string[] = [];
   const env = { ASSETS: { fetch: async (request: Request) => {
@@ -31,16 +65,28 @@ test('the built Northwind evidence route contains exactly pinned provider bytes'
       return new Response(request.method === 'HEAD' ? null : bytes, { status: 200 });
     } catch { return new Response(null, { status: 404 }); }
   } } };
-  for (const path of ['/evidence/public-orders/', '/evidence/public-orders/receipt.json', '/evidence/public-orders/README.md']) {
-    const response = await worker.fetch(new Request(`https://northwind.demodb.dev${path}`), env);
-    assert.equal(response.status, 200, path);
+  const paths = ['/evidence/public-orders/', `/evidence/public-orders/${receiptName}`, '/evidence/public-orders/README.md', '/evidence/public-orders/source-rights.json'];
+  for (const path of paths) {
+    for (const origin of ['https://datatug.app', 'http://localhost:4200']) {
+      const options = await worker.fetch(new Request(`https://northwind.demodb.dev${path}`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'GET' } }), env);
+      assert.equal(options.status, 204, path);
+      assert.equal(options.headers.get('Access-Control-Allow-Origin'), '*', path);
+      assert.match(options.headers.get('Access-Control-Allow-Methods') ?? '', /GET/);
+      for (const method of ['GET', 'HEAD']) {
+        const response = await worker.fetch(new Request(`https://northwind.demodb.dev${path}`, { method, headers: { Origin: origin } }), env);
+        assert.equal(response.status, 200, `${method} ${path}`);
+        assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*', `${method} ${path}`);
+        assert.equal(response.headers.get('Cross-Origin-Resource-Policy'), 'cross-origin', `${method} ${path}`);
+        if (method === 'HEAD') assert.equal(await response.text(), '');
+      }
+    }
   }
-  assert.deepEqual(requests, ['/_db/northwind/evidence/public-orders/index.html', '/_db/northwind/evidence/public-orders/receipt.json', '/_db/northwind/evidence/public-orders/README.md']);
+  assert.deepEqual(requests, paths.flatMap((path) => Array(4).fill(`/_db/northwind${path.endsWith('/') ? `${path}index.html` : path}`)));
 });
 
 test('publication fails closed if pinned evidence bytes change', async () => {
   const manifest = { files: Object.fromEntries(Object.entries(ORDERS_EVIDENCE_ASSETS).map(([name, item]) => [`artifacts/hosting-imports/${name}`, { bytes: item.bytes, sha256: item.sha256 }])) };
-  const altered = Buffer.from(await readFile(join(published, 'receipt.json')));
+  const altered = Buffer.from(await readFile(join(published, 'public-orders-evidence-2026-10-16.json')));
   altered[0] ^= 1;
   const outputDir = await mkdtemp(join(tmpdir(), 'northwind-evidence-'));
   try {
@@ -51,6 +97,6 @@ test('publication fails closed if pinned evidence bytes change', async () => {
       return new Response(body);
     };
     await assert.rejects(publishNorthwindOrdersEvidence({ fetchFile, outputDir }), /content disagrees with publication pin/);
-    await assert.rejects(stat(join(outputDir, 'receipt.json')), { code: 'ENOENT' });
+    await assert.rejects(stat(join(outputDir, 'public-orders-evidence-2026-10-16.json')), { code: 'ENOENT' });
   } finally { await rm(outputDir, { recursive: true, force: true }); }
 });

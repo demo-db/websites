@@ -21,9 +21,15 @@ export function displayCount(value: number | null): string {
   return value == null ? '—' : value.toLocaleString();
 }
 
+// A gzip-encoded export has no single-file URL: it is published as chunks behind a
+// demodb-chunked-export/v1 manifest at `/data/<file>.parts.json`.
+export function exportHref(item: { publicPath: string; compression?: string | null }): string {
+  return item.compression === 'gzip' ? `/data/${item.publicPath}.parts.json` : `/data/${item.publicPath}`;
+}
+
 export function publicDataPath(db: Database, format: string, recordset?: string): string | undefined {
   const candidate = db.exports.find((item) => item.format === format && item.table === (recordset ?? null));
-  return candidate ? `/data/${candidate.publicPath}` : undefined;
+  return candidate ? exportHref(candidate) : undefined;
 }
 
 // The label of a complete-database download. The matrix names its formats; `sql` is the SQLite-dialect dump
@@ -67,7 +73,7 @@ export function downloadFiles(db: Database) {
   return db.exports.filter((item) => item.format !== 'metadata').map((item) => ({
     ...item,
     label: item.table ? `${item.table} · ${item.format.toUpperCase()}` : item.format.toUpperCase(),
-    href: `/data/${item.publicPath}`,
+    href: exportHref(item),
   }));
 }
 

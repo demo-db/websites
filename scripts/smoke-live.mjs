@@ -1,15 +1,25 @@
+// Post-deploy smoke of the live, Worker-less DemoDB hosts.
+//
+// Budget: at most ONE request per URL and method per run, and no retry loops. Every DemoDB host is an
+// assets-only deployment, and on 2026-10-16 a request loop helped exhaust the account's Workers request quota
+// (Cloudflare Error 1027). `get()` memoizes each GET, so checks that read the same page or manifest share one
+// response. The OVDB API is no longer served by this repository (it moved to https://ovdb.demodb.dev/v1,
+// served by the openvaultdb-cloud Worker), so this smoke checks only that the old URLs redirect there and
+// sends no API query.
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { gunzipSync } from 'node:zlib';
 import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
 import datatugCatalog from './fixtures/datatug-postgresql-catalog.json' with { type: 'json' };
 import derivedLock from '../config/derived-exports.lock.json' with { type: 'json' };
 import dialectConfig from '../config/dialect-scripts.json' with { type: 'json' };
-import { decodedExportBytes } from './corpus-exports.mjs';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
 if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be a full 40-digit Git SHA');
 
+const OVDB_API = 'https://ovdb.demodb.dev/v1';
+const IMMUTABLE = 'public, max-age=31536000, immutable';
 const requiredQueryableDatabaseIds = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
 const comparisonFixture = {
   sha256: '3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f',
@@ -18,118 +28,73 @@ const comparisonFixture = {
 const comparisonFixturePath = `/data/compare/${comparisonFixture.sha256}.sqlite`;
 const sites = [
   ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json', '/adventureworks/', '/adventureworks/ovdb-database.json', '/ovdb/db/adventureworks/ovdb-database.json', '/employees/', '/employees/ovdb-database.json', '/ovdb/db/employees/ovdb-database.json']],
-  ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/data/chinook.sqlite', '/.well-known/openvaultdb']],
-  ['https://northwind.demodb.dev', ['/', '/theme.js', '/tables/Order%20Details/', '/tables/Invoices/', '/data/northwind.sqlite', '/.well-known/openvaultdb']],
-  ['https://pubs.demodb.dev', ['/', '/theme.js', '/tables/', '/tables/titles/', '/data/pubs.sqlite', '/.well-known/openvaultdb']],
-  ['https://sakila.demodb.dev', ['/', '/theme.js', '/tables/film_actor/', '/tables/actor_info/', '/data/sakila.sqlite', '/.well-known/openvaultdb']],
+  ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/.well-known/openvaultdb']],
+  ['https://northwind.demodb.dev', ['/', '/theme.js', '/tables/Order%20Details/', '/tables/Invoices/', '/.well-known/openvaultdb']],
+  ['https://pubs.demodb.dev', ['/', '/theme.js', '/tables/', '/tables/titles/', '/.well-known/openvaultdb']],
+  ['https://sakila.demodb.dev', ['/', '/theme.js', '/tables/film_actor/', '/tables/actor_info/', '/.well-known/openvaultdb']],
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
-  ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/data/employees.sqlite', '/.well-known/openvaultdb']],
+  ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/.well-known/openvaultdb']],
 ];
 const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`, `${id}-bigquery`]);
 
+const requested = new Set();
+function once(method, url) {
+  const key = `${method} ${url}`;
+  if (requested.has(key)) throw new Error(`smoke budget: ${key} was already requested once in this run`);
+  requested.add(key);
+}
+
+// One GET per URL: the text body and headers are cached for every later check.
+const pages = new Map();
+function get(url) {
+  if (!pages.has(url)) {
+    once('GET', url);
+    pages.set(url, fetch(url, { redirect: 'manual', cache: 'no-store' }).then(async (response) => ({ response, body: await response.text() })));
+  }
+  return pages.get(url);
+}
+
 async function checked(url, validate) {
-  let last = 'request was not attempted';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    try {
-      const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
-      if (response.ok) {
-        const body = await response.text();
-        // A validator returns true, false, or a string that says what was wrong.
-        const verdict = validate(body, response);
-        if (verdict && typeof verdict !== 'string') return;
-        last = typeof verdict === 'string' ? `response from ${url} did not match the expected build: ${verdict}` : `response from ${url} did not match the expected build`;
-      } else last = `HTTP ${response.status} from ${url}`;
-    } catch (error) { last = error instanceof Error ? error.message : String(error); }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
-  }
-  throw new Error(`${url}: ${last}`);
+  const { response, body } = await get(url);
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  // A validator returns true, false, or a string that says what was wrong.
+  const verdict = validate(body, response);
+  if (!verdict || typeof verdict === 'string') throw new Error(`${url}: response did not match the expected build${typeof verdict === 'string' ? `: ${verdict}` : ''}`);
 }
 
-async function checkedNotFound(url) {
-  let last = 'request was not attempted';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    try {
-      const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
-      if (response.status === 404) return;
-      last = `HTTP ${response.status} from ${url}`;
-    } catch (error) { last = error instanceof Error ? error.message : String(error); }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
-  }
-  throw new Error(`${url}: expected HTTP 404 after retries; ${last}`);
+// One GET of a binary file, streamed and hashed without buffering it twice.
+async function download(url) {
+  once('GET', url);
+  const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
+  if (response.status !== 200) throw new Error(`${url}: HTTP ${response.status}`);
+  return { response, bytes: Buffer.from(await response.arrayBuffer()) };
 }
 
-async function checkedReadOnlyQuery(localId, query, pageSize, nativeRecordset) {
-  const url = `https://demodb.dev/ovdb/v1/databases/${localId}/dtql`;
-  let last = 'request was not attempted';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (pageSize !== undefined) headers['OVDB-Page-Size'] = String(pageSize);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query }),
-        cache: 'no-store',
-      });
-      const body = await response.text();
-      if (response.ok) {
-        const result = JSON.parse(body);
-        const expectedRecords = pageSize ?? 1;
-        if (Array.isArray(result.records) && result.records.length === expectedRecords) {
-          const records = result.records;
-          if (records.every((record) => typeof record.key === 'string'
-            && record.key.startsWith(`${nativeRecordset}/`)
-            && typeof record.data?.id === 'string'
-            && record.data.id.length > 0
-            && record.data.id !== '<nil>'
-            && record.key.slice(nativeRecordset.length + 1) === record.data.id)) {
-            const first = records[0];
-            const keyUrl = url.replace(/\/dtql$/, `/records/${encodeURIComponent(nativeRecordset)}/${encodeURIComponent(first.data.id)}`);
-            const keyResponse = await fetch(keyUrl, { cache: 'no-store' });
-            if (keyResponse.ok) {
-              const keyResult = await keyResponse.json();
-              if (keyResult.key === first.key && keyResult.data?.id === first.data.id) {
-                assert.deepStrictEqual(keyResult.data, first.data, `${localId} keyed record payload matches the query row`);
-                return;
-              }
-              last = `${localId} record lookup did not preserve its queried identity and data`;
-            } else last = `${localId} record lookup returned HTTP ${keyResponse.status}`;
-          } else last = `${localId} query did not preserve its native record identity`;
-        } else last = `query returned an unexpected record payload: ${body}`;
-      } else last = `HTTP ${response.status} from ${url}: ${body}`;
-    } catch (error) { last = error instanceof Error ? error.message : String(error); }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
-  }
-  throw new Error(`${url}: ${last}`);
-}
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-async function checkedConfiguredDatabaseQueries() {
-  const response = await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Cannot read the public corpus manifest for API smoke: HTTP ${response.status}`);
-  const corpus = await response.json();
-  const databases = corpus.databases;
-  if (!Array.isArray(databases)) throw new Error('The public corpus manifest has no database list');
-  const ids = databases.map((database) => database.localId).sort();
-  if (JSON.stringify(ids) !== JSON.stringify([...requiredQueryableDatabaseIds].sort())) {
-    throw new Error(`Configured database IDs differ from the six-provider smoke contract: ${ids.join(', ')}`);
+// A demodb-chunked-export/v1 manifest: every part once, each part and the joined gzip checked against the
+// manifest, the decoded bytes returned for the caller to compare with the corpus.
+async function chunkedExport(manifestUrl) {
+  const { response, body } = await get(manifestUrl);
+  if (response.status !== 200) throw new Error(`${manifestUrl}: HTTP ${response.status}`);
+  if (response.headers.get('Access-Control-Allow-Origin') !== '*') throw new Error(`${manifestUrl}: no read-only CORS`);
+  const manifest = JSON.parse(body);
+  if (manifest.format !== 'demodb-chunked-export/v1' || manifest.compression !== 'gzip' || !manifest.parts?.length) throw new Error(`${manifestUrl}: not a demodb-chunked-export/v1 gzip manifest`);
+  const pieces = [];
+  for (const part of manifest.parts) {
+    const url = new URL(part.path, manifestUrl).href;
+    const { response: partResponse, bytes } = await download(url);
+    if (bytes.length !== part.bytes || sha256(bytes) !== part.sha256) throw new Error(`${url}: part differs from its manifest entry`);
+    if (partResponse.headers.get('Cache-Control') !== IMMUTABLE) throw new Error(`${url}: part is not served with immutable caching`);
+    if (partResponse.headers.get('Access-Control-Allow-Origin') !== '*') throw new Error(`${url}: part lacks read-only CORS`);
+    if (partResponse.headers.get('Content-Encoding')) throw new Error(`${url}: part was served with a Content-Encoding`);
+    pieces.push(bytes);
   }
-
-  const targetedQueries = new Map([
-    ['chinook', { query: 'from: {name: Artist}\nlimit: 1\n', recordset: 'Artist' }],
-    ['northwind', { query: "from: {name: 'Order Details'}\norderBy: [{field: OrderID}, {field: ProductID}]\n", pageSize: 2, recordset: 'Order Details' }],
-    ['pubs', { query: 'from: {name: authors}\nlimit: 1\n', recordset: 'authors' }],
-  ]);
-  for (const database of databases) {
-    const capabilities = database.capabilities;
-    if (capabilities?.read !== true || capabilities?.query !== true || capabilities?.write !== false) {
-      throw new Error(`${database.localId}: query smoke requires the verified read-only API capability`);
-    }
-    const targeted = targetedQueries.get(database.localId);
-    const recordset = targeted ? undefined : database.recordsets?.find((item) => item.kind === 'table' && item.rowCount > 0 && item.columns?.some((column) => column.primaryKey));
-    if (!targeted && !recordset) throw new Error(`${database.localId}: no populated keyed physical table is available for the query smoke`);
-    const query = targeted?.query ?? `from: {name: ${JSON.stringify(recordset.name)}}\nlimit: 1\n`;
-    await checkedReadOnlyQuery(database.localId, query, targeted?.pageSize, targeted?.recordset ?? recordset.name);
-  }
+  const joined = Buffer.concat(pieces);
+  if (joined.length !== manifest.bytes || sha256(joined) !== manifest.sha256) throw new Error(`${manifestUrl}: joined gzip differs from the manifest`);
+  const decoded = gunzipSync(joined);
+  if (manifest.uncompressedSha256 && sha256(decoded) !== manifest.uncompressedSha256) throw new Error(`${manifestUrl}: decoded bytes differ from uncompressedSha256`);
+  return decoded;
 }
 
 for (const [origin, paths] of sites) {
@@ -160,31 +125,16 @@ for (const id of storageIds) {
           body.includes('does not execute or proxy SQL') && body.includes('DataTug browser query execution is not enabled yet') &&
           !body.includes('Open read-only API') && !body.includes('Database descriptor')
         : body.includes('Open read-only API')));
-  if (id.endsWith('-bigquery') || id.endsWith('-postgresql')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
 }
 await checkedDataTugPostgresqlLinks();
 await checkedServedModels();
-await checkedConfiguredDatabaseQueries();
 await checkedComparisonFixture();
 await checkedAdventureWorksSchema();
-await checkedDecodedSqlite('adventureworks');
-// A pre-gzipped SQL asset must be served once: its decoded length matches the corpus, and it is not still gzip.
-{
-  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
-  const expectedSqlBytes = decodedExportBytes(corpus, 'adventureworks', 'sql');
-  const response = await fetch('https://adventureworks.demodb.dev/data/adventureworks.sql', { redirect: 'manual', cache: 'no-store' });
-  if (response.status !== 200) throw new Error(`adventureworks: SQL download returned HTTP ${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length !== expectedSqlBytes) throw new Error(`adventureworks: SQL download decoded to ${bytes.length} bytes, expected ${expectedSqlBytes}`);
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error('adventureworks: SQL download is still gzip after decoding');
-}
 
 // Every "Explore PostgreSQL in DataTug" link the live pages render must open the SPA on
 // datatug.app. The links are read from the live dataset and OVDB database pages, so a link
 // that is rendered but not served fails here; the set must equal datatug-apps' catalogue
-// routes (the vendored fixture), and a pending flag must render none. Tolerant by design:
-// the SPA answers every route with its shell (HTTP 200), so this proves deployment of the
-// route, while the table list and rows were verified in a real browser when the CTA landed.
+// routes (the vendored fixture), and a pending flag must render none.
 async function checkedDataTugPostgresqlLinks() {
   const expected = new Map(datatugCatalog.entries.map(({ dataset, route }) => [dataset, `https://datatug.app${route}`]));
   assert.deepEqual([...expected.keys()].sort(), [...requiredQueryableDatabaseIds].sort(), 'the catalogue fixture covers every dataset');
@@ -204,13 +154,6 @@ async function checkedDataTugPostgresqlLinks() {
 }
 
 // Every dataset's model files and model page, in the current ModelSpec spelling.
-// Model files are served with `Cache-Control: public, max-age=300, must-revalidate`, but
-// that only concerns the client that asked: Node's fetch keeps no HTTP cache and the Worker
-// uses no Cache API, so these requests (`cache: 'no-store'` as everywhere in this script)
-// always reach the Worker. The build-info check above has already shown that every host
-// serves this commit, so a mismatch here is a real fault. On the landing that first serves
-// the current spelling, an edge location still running the previous version is covered by
-// the retries in `checked`.
 async function checkedServedModels() {
   assert.deepEqual(Object.keys(servedModels).sort(), [...requiredQueryableDatabaseIds].sort(), 'every dataset has a served-model expectation');
   for (const id of requiredQueryableDatabaseIds) {
@@ -231,9 +174,9 @@ async function checkedServedModels() {
 }
 
 async function checkedAdventureWorksSchema() {
-  const response = await fetch('https://adventureworks.demodb.dev/schema.json', { cache: 'no-store' });
+  const { response, body } = await get('https://adventureworks.demodb.dev/schema.json');
   if (!response.ok) throw new Error(`AdventureWorks source schema returned HTTP ${response.status}`);
-  const schema = await response.json();
+  const schema = JSON.parse(body);
   const tables = schema.tables?.filter((table) => table.kind === 'table') ?? [];
   const executableViews = schema.tables?.filter((table) => table.kind === 'view') ?? [];
   const sourceViews = schema.sourceViews ?? [];
@@ -248,40 +191,13 @@ async function checkedAdventureWorksSchema() {
   }
 }
 
-async function checkedDecodedSqlite(localId) {
-  const corpusResponse = await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' });
-  if (!corpusResponse.ok) throw new Error(`Cannot read the public corpus manifest: HTTP ${corpusResponse.status}`);
-  const corpus = await corpusResponse.json();
-  const database = corpus.databases?.find((item) => item.localId === localId);
-  const expected = database?.exports?.find((item) => item.format === 'sqlite');
-  if (!expected || expected.decodedBytes !== 126820352 || !/^[a-f0-9]{64}$/.test(expected.decodedSha256 ?? '')) {
-    throw new Error(`${localId}: corpus metadata does not describe the complete decoded SQLite export`);
-  }
-  const response = await fetch(`https://${localId}.demodb.dev/data/${localId}.sqlite`, { redirect: 'manual', cache: 'no-store' });
-  if (response.status !== 200) throw new Error(`${localId}: SQLite download returned HTTP ${response.status}`);
-  if (response.headers.get('Content-Encoding') !== 'gzip') throw new Error(`${localId}: chunked SQLite route did not retain its gzip transfer encoding`);
-  if (response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error(`${localId}: SQLite download has the wrong content type`);
-  if (!/accept-encoding/i.test(response.headers.get('Vary') ?? '')) throw new Error(`${localId}: gzip transfer does not vary on Accept-Encoding`);
-  if (response.headers.get('Cross-Origin-Resource-Policy') !== 'cross-origin') throw new Error(`${localId}: SQLite download lacks the cross-origin resource policy`);
-  if (!response.body) throw new Error(`${localId}: SQLite download has no response body`);
-  const hash = createHash('sha256');
-  let bytes = 0;
-  for await (const chunk of response.body) {
-    const part = Buffer.from(chunk);
-    bytes += part.length;
-    hash.update(part);
-  }
-  const actualSha256 = hash.digest('hex');
-  if (bytes !== expected.decodedBytes || actualSha256 !== expected.decodedSha256) {
-    throw new Error(`${localId}: full decoded SQLite download failed verification (bytes=${bytes}, sha256=${actualSha256})`);
-  }
-}
-
-// Every complete-database download the corpus advertises is fetched and compared with its declared decoded
-// size and SHA-256, and every format the corpus declares unavailable is stated as such on the downloads page
-// and has no file behind it. A format the site advertises but cannot serve fails the deploy check.
+// Every complete-database download the corpus advertises, each fetched once: a plain file is compared with
+// its declared size and SHA-256; a chunked one (url is its .parts.json manifest) is joined, decoded and
+// compared with its declared decoded size and SHA-256. Formats declared unavailable must say so on the page.
+// MySQL scripts are kept for the MySQL check so they are not downloaded twice.
+const mysqlScripts = new Map();
 async function checkedCompleteExports() {
-  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
+  const corpus = JSON.parse((await get('https://demodb.dev/corpus.json')).body);
   let files = 0;
   for (const database of corpus.databases) {
     const availability = database.formatAvailability;
@@ -290,19 +206,27 @@ async function checkedCompleteExports() {
       if (!database.exports.some((file) => file.format === item.format)) throw new Error(`${database.localId}: ${item.format} is declared as a download but the corpus lists no such export`);
     }
     for (const file of database.exports) {
-      const response = await fetch(file.url, { redirect: 'manual', cache: 'no-store' });
-      if (response.status !== 200 || !response.body) throw new Error(`${file.url}: HTTP ${response.status}`);
-      const hash = createHash('sha256');
-      let bytes = 0;
-      for await (const chunk of response.body) { const part = Buffer.from(chunk); bytes += part.length; hash.update(part); }
+      let bytes;
+      if (file.delivery === 'demodb-chunked-export/v1') {
+        if (!file.url.endsWith('.parts.json')) throw new Error(`${file.url}: a chunked export must point at its .parts.json manifest`);
+        bytes = await chunkedExport(file.url);
+        if (file.format === 'sqlite' && bytes.subarray(0, 16).toString('latin1') !== 'SQLite format 3\0') throw new Error(`${file.url}: decoded bytes are not a SQLite database`);
+      } else {
+        const result = await download(file.url);
+        bytes = result.bytes;
+        if (result.response.headers.get('Access-Control-Allow-Origin') !== '*') throw new Error(`${file.url}: no read-only CORS`);
+        if (result.response.headers.get('Cross-Origin-Resource-Policy') !== 'cross-origin') throw new Error(`${file.url}: no cross-origin resource policy`);
+        if (file.format === 'sqlite' && result.response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error(`${file.url}: SQLite download has the wrong content type`);
+      }
       const expectedBytes = file.decodedBytes ?? file.bytes;
       const expectedSha256 = file.decodedSha256 ?? file.sha256;
-      if (bytes !== expectedBytes || hash.digest('hex') !== expectedSha256) throw new Error(`${file.url}: download differs from corpus metadata (declared ${expectedBytes} bytes ${expectedSha256}, received ${bytes} bytes)`);
+      if (bytes.length !== expectedBytes || sha256(bytes) !== expectedSha256) throw new Error(`${file.url}: download differs from corpus metadata (declared ${expectedBytes} bytes ${expectedSha256}, received ${bytes.length} bytes)`);
+      if (file.format === 'mysql') mysqlScripts.set(database.localId, bytes);
       files += 1;
     }
     const missing = availability.filter((entry) => entry.state !== 'download');
     if (missing.length) {
-      const page = await (await fetch(`https://${database.localId}.demodb.dev/downloads/`, { cache: 'no-store' })).text();
+      const { body: page } = await get(`https://${database.localId}.demodb.dev/downloads/`);
       for (const entry of missing) {
         const word = entry.state === 'planned' ? 'Planned' : 'Not available';
         if (!page.includes(`${word}:`) || !page.includes(entry.label)) throw new Error(`${database.localId}: the downloads page does not state that ${entry.label} is ${word.toLowerCase()}`);
@@ -313,116 +237,76 @@ async function checkedCompleteExports() {
   return files;
 }
 
-// Every generated MySQL script the corpus advertises, read from the live site: it decodes (a gzip stream that is not complete fails
-// here), is the script the lock pins (SHA-256 and size), starts with the contract-edition label, carries the licence of its dataset,
-// begins by creating the marker table and ends with the completion comment. Chinook's upstream script is still served, apart.
+// Every generated MySQL script the corpus advertises (bytes from checkedCompleteExports): it is the script the
+// lock pins, starts with the contract-edition label, carries its licence, creates the marker table and ends with
+// the completion comment. Chinook's upstream script is still served, apart.
 async function checkedMysqlScripts() {
-  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
+  const corpus = JSON.parse((await get('https://demodb.dev/corpus.json')).body);
   const spec = dialectConfig.dialects.mysql;
   let checkedScripts = 0;
   for (const database of corpus.databases) {
     const declared = database.formatAvailability.find((entry) => entry.format === 'mysql');
     if (declared?.state !== 'download') throw new Error(`${database.localId}: the MySQL script is not declared as a download`);
-    const file = database.exports.find((item) => item.format === 'mysql');
     const pinned = derivedLock.datasets?.[database.localId]?.mysql;
-    if (!file || !pinned) throw new Error(`${database.localId}: no MySQL script in the corpus or in the lock`);
-    const response = await fetch(file.url, { redirect: 'manual', cache: 'no-store' });
-    if (response.status !== 200) throw new Error(`${file.url}: HTTP ${response.status}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length !== pinned.bytes || createHash('sha256').update(bytes).digest('hex') !== pinned.sha256) throw new Error(`${file.url}: the served script is not the one the lock pins`);
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error(`${file.url}: still gzip after decoding`);
+    const bytes = mysqlScripts.get(database.localId);
+    if (!bytes || !pinned) throw new Error(`${database.localId}: no MySQL script in the corpus or in the lock`);
+    if (bytes.length !== pinned.bytes || sha256(bytes) !== pinned.sha256) throw new Error(`${database.localId}: the served MySQL script is not the one the lock pins`);
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error(`${database.localId}: MySQL script still gzip after decoding`);
     const text = bytes.toString('utf8');
     const lines = text.split('\n');
-    if (lines[0] !== `-- ${dialectConfig.edition}`) throw new Error(`${file.url}: the first line is not the contract-edition label`);
-    if (!lines.slice(0, 40).includes(`-- Licence: ${database.licences.data}`)) throw new Error(`${file.url}: the header lacks the licence ${database.licences.data}`);
-    if (!lines.some((line) => line.startsWith(`CREATE TABLE \`${spec.marker}\``))) throw new Error(`${file.url}: no marker table`);
-    if (!lines.some((line) => line.startsWith(`INSERT INTO \`${spec.marker}\` VALUES ('${database.localId}', `))) throw new Error(`${file.url}: the marker row is missing`);
-    if (text.includes('\r')) throw new Error(`${file.url}: holds a CR`);
-    if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') throw new Error(`${file.url}: does not end with the completion comment`);
+    if (lines[0] !== `-- ${dialectConfig.edition}`) throw new Error(`${database.localId}: the first line is not the contract-edition label`);
+    if (!lines.slice(0, 40).includes(`-- Licence: ${database.licences.data}`)) throw new Error(`${database.localId}: the header lacks the licence ${database.licences.data}`);
+    if (!lines.some((line) => line.startsWith(`CREATE TABLE \`${spec.marker}\``))) throw new Error(`${database.localId}: no marker table`);
+    if (!lines.some((line) => line.startsWith(`INSERT INTO \`${spec.marker}\` VALUES ('${database.localId}', `))) throw new Error(`${database.localId}: the marker row is missing`);
+    if (text.includes('\r')) throw new Error(`${database.localId}: holds a CR`);
+    if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') throw new Error(`${database.localId}: does not end with the completion comment`);
     checkedScripts += 1;
   }
-  const upstream = await fetch('https://chinook.demodb.dev/data/upstream/chinook.mysql.sql', { redirect: 'manual', cache: 'no-store' });
+  const { response: upstream, body: upstreamText } = await get('https://chinook.demodb.dev/data/upstream/chinook.mysql.sql');
   if (upstream.status !== 200) throw new Error(`chinook: the upstream MySQL script is not served at /data/upstream/chinook.mysql.sql (HTTP ${upstream.status})`);
-  const upstreamText = await upstream.text();
   if (!upstreamText.includes('Chinook_MySql.sql') || !upstreamText.includes('DROP DATABASE IF EXISTS')) throw new Error('chinook: /data/upstream/chinook.mysql.sql is not the upstream script');
   return checkedScripts;
 }
 
 async function checkedComparisonFixture() {
   const url = `https://chinook.demodb.dev${comparisonFixturePath}`;
-  const signal = AbortSignal.timeout(45_000);
-  const response = await fetch(url, { redirect: 'manual', cache: 'no-store', signal });
-  if (response.status !== 200) throw new Error(`Chinook comparison fixture returned HTTP ${response.status}`);
+  const { response, bytes } = await download(url);
   if (response.headers.get('Content-Type') !== 'application/vnd.sqlite3') throw new Error('Chinook comparison fixture has the wrong content type');
   if (response.headers.get('Access-Control-Allow-Origin') !== '*') throw new Error('Chinook comparison fixture is missing read-only CORS');
-  if (response.headers.get('Cache-Control') !== 'public, max-age=31536000, immutable') throw new Error('Chinook comparison fixture is not served with immutable caching');
-  if (!response.body) throw new Error('Chinook comparison fixture has no response body');
-  const declaredBytes = Number(response.headers.get('Content-Length'));
-  if (Number.isSafeInteger(declaredBytes) && declaredBytes > comparisonFixture.bytes) {
-    await response.body.cancel();
-    throw new Error(`Chinook comparison fixture declares ${declaredBytes} bytes, above the ${comparisonFixture.bytes}-byte bound`);
+  if (response.headers.get('Cache-Control') !== IMMUTABLE) throw new Error('Chinook comparison fixture is not served with immutable caching');
+  if (bytes.length !== comparisonFixture.bytes || sha256(bytes) !== comparisonFixture.sha256) {
+    throw new Error(`Chinook comparison fixture failed full-byte verification (bytes=${bytes.length})`);
   }
-  const hash = createHash('sha256');
-  let bytes = 0;
-  const reader = response.body.getReader();
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      if (bytes > comparisonFixture.bytes) {
-        await reader.cancel();
-        throw new Error(`Chinook comparison fixture exceeded the ${comparisonFixture.bytes}-byte bound`);
-      }
-      hash.update(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const actualSha256 = hash.digest('hex');
-  if (bytes !== comparisonFixture.bytes || actualSha256 !== comparisonFixture.sha256) {
-    throw new Error(`Chinook comparison fixture failed full-byte verification (bytes=${bytes}, sha256=${actualSha256})`);
-  }
-
-  const head = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store', signal });
+  once('HEAD', url);
+  const head = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store' });
   const headLength = head.headers.get('Content-Length');
   if (head.status !== 200 || (headLength !== null && headLength !== String(comparisonFixture.bytes)) ||
       head.headers.get('Content-Type') !== 'application/vnd.sqlite3' ||
       head.headers.get('Access-Control-Allow-Origin') !== '*' ||
-      head.headers.get('Cache-Control') !== 'public, max-age=31536000, immutable') {
+      head.headers.get('Cache-Control') !== IMMUTABLE) {
     throw new Error('Chinook comparison fixture HEAD response did not preserve byte metadata and immutable CORS headers');
   }
   if (await head.text() !== '') throw new Error('Chinook comparison fixture HEAD response included a body');
+}
 
-  const options = await fetch(url, { method: 'OPTIONS', redirect: 'manual', cache: 'no-store', signal });
-  if (options.status !== 204 || options.headers.get('Access-Control-Allow-Origin') !== '*' ||
-      !/\bGET\b/.test(options.headers.get('Access-Control-Allow-Methods') ?? '') ||
-      !/\bHEAD\b/.test(options.headers.get('Access-Control-Allow-Methods') ?? '')) {
-    throw new Error('Chinook comparison fixture OPTIONS response did not allow read-only CORS');
+// Redirects are answered by the static asset router before any file; one request each, not followed.
+async function checkedRedirect(url, init, expectedLocation) {
+  once(init.method, url);
+  const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
+  if (response.status !== 308 || response.headers.get('Location') !== expectedLocation) {
+    throw new Error(`redirect from ${url}: HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}, expected 308 to ${expectedLocation}`);
   }
 }
 
-async function checkedLegacyRedirect(url, init, expectedLocation) {
-  let last = 'request was not attempted';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    try {
-      const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
-      if (response.status === 308 && response.headers.get('Location') === expectedLocation) return;
-      last = `HTTP ${response.status} to ${response.headers.get('Location') ?? 'no location'}`;
-    } catch (error) { last = error instanceof Error ? error.message : String(error); }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 15000)));
-  }
-  throw new Error(`legacy redirect from ${url} did not match after retries: ${last}`);
+await checkedRedirect('https://demodb.dev/ovdb/v1/databases/chinook?smoke=api', { method: 'GET' }, `${OVDB_API}/databases/chinook?smoke=api`);
+await checkedRedirect('https://demodb.dev/ovdb/dbs/chinook', { method: 'GET' }, 'https://demodb.dev/chinook/');
+for (const path of ['/_db/chinook/index.html', '/data/adventureworks.sqlite']) {
+  const url = `https://${path.includes('adventureworks') ? 'adventureworks' : 'chinook'}.demodb.dev${path}`;
+  once('GET', url);
+  const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
+  await response.body?.cancel();
+  if (response.status !== 404) throw new Error(`${url}: expected 404 (no private namespace, no single-file URL for a chunked export), got ${response.status}`);
 }
-
-await checkedLegacyRedirect('https://chinookdb.com/tables/Artist/?smoke=legacy', { method: 'GET' }, 'https://chinook.demodb.dev/tables/Artist/?smoke=legacy');
-await checkedLegacyRedirect('https://chinookdb.com/data/chinook.sqlite?download=1', { method: 'HEAD' }, 'https://chinook.demodb.dev/data/chinook.sqlite?download=1');
-await checkedLegacyRedirect('https://chinookdb.com/ovdb/dbs/chinook?smoke=profile', { method: 'GET' }, 'https://demodb.dev/chinook/?smoke=profile');
-await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtql?smoke=query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
-}, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
 const completeExportCount = await checkedCompleteExports();
 const mysqlScriptCount = await checkedMysqlScripts();
-console.log(`Live DemoDB pages, typed manifests, discovery, ${completeExportCount} complete-database downloads checked against the corpus, ${mysqlScriptCount} MySQL scripts checked against the lock and their headers, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);
+console.log(`Live DemoDB static hosts serve ${commit}: pages, typed manifests, discovery, ${completeExportCount} complete-database downloads (chunked ones joined and decoded) checked against the corpus, ${mysqlScriptCount} MySQL scripts checked against the lock, legacy and API redirects; ${requested.size} requests, none repeated.`);

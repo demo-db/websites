@@ -12,3 +12,4 @@ public/ovdb/ovdb-server.json
 public/ovdb/db/
 public/ovdb/schemas/
 public/*/ovdb-database.json
+dist-hosts/

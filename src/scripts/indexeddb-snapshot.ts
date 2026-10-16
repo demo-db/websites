@@ -66,8 +66,7 @@ export async function importSnapshot(configuration: ImportConfiguration, onProgr
         onProgress({ table: table.name, tableIndex, tableTotal: physicalTables.length, rows: checkpoint.count, rowTotal: table.rowCount, bytes: expectedBytes ?? 0, byteTotal: expectedBytes ?? null });
         continue;
       }
-      const response = await fetch(file.url, { signal, headers: { Accept: 'application/json' } });
-      if (!response.ok || !response.body) throw new Error(`${table.name}: export request failed (${response.status}).`);
+      const body = await openExportBody(file, signal, table.name);
       let rowCount = 0;
       let bytesRead = 0;
       const hash = new IncrementalSha256();
@@ -91,7 +90,7 @@ export async function importSnapshot(configuration: ImportConfiguration, onProgr
           transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB write was aborted.'));
         });
       };
-      await parseJsonArray(response.body, async (row) => {
+      await parseJsonArray(body, async (row) => {
         if (expectedBytes != null && bytesRead > expectedBytes) throw new Error(`${table.name}: decoded export exceeds its declared size.`);
         if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error(`${table.name}: JSON export contains a non-record value.`);
         pending.push({ row: row as Record<string, unknown>, ordinal: rowCount });
@@ -458,3 +457,41 @@ export class IncrementalSha256 {
 
 function rotate(value: number, bits: number): number { return (value >>> bits) | (value << (32 - bits)); }
 const SHA256_K = new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+
+// A gzip-encoded export is published only as gzip chunks plus a demodb-chunked-export/v1 manifest at
+// `<url>.parts.json` (static assets cannot serve a joined file above 25 MiB). The parts are fetched in order,
+// joined and decoded here; the caller verifies the decoded size and SHA-256.
+async function openExportBody(file: { url: string; compression?: string | null }, signal: AbortSignal, label: string): Promise<ReadableStream<Uint8Array>> {
+  if (file.compression !== 'gzip') {
+    const response = await fetch(file.url, { signal, headers: { Accept: 'application/json' } });
+    if (!response.ok || !response.body) throw new Error(`${label}: export request failed (${response.status}).`);
+    return response.body;
+  }
+  const manifestUrl = new URL(`${file.url}.parts.json`, location.href);
+  const manifestResponse = await fetch(manifestUrl, { signal });
+  if (!manifestResponse.ok) throw new Error(`${label}: chunked export manifest request failed (${manifestResponse.status}).`);
+  const manifest = await manifestResponse.json() as { format?: string; compression?: string; parts?: { path: string; bytes: number }[] };
+  if (manifest.format !== 'demodb-chunked-export/v1' || manifest.compression !== 'gzip' || !Array.isArray(manifest.parts) || !manifest.parts.length) throw new Error(`${label}: unsupported chunked export manifest.`);
+  const parts = manifest.parts;
+  let next = 0;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const joined = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      while (true) {
+        if (!reader) {
+          if (next === parts.length) { controller.close(); return; }
+          const part = parts[next++];
+          const response = await fetch(new URL(part.path, manifestUrl), { signal });
+          if (!response.ok || !response.body) throw new Error(`${label}: chunk request failed (${response.status}).`);
+          reader = response.body.getReader();
+        }
+        const { done, value } = await reader.read();
+        if (done) { reader = null; continue; }
+        controller.enqueue(value);
+        return;
+      }
+    },
+    async cancel(reason) { await reader?.cancel(reason); },
+  });
+  return joined.pipeThrough(new DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+}

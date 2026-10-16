@@ -27,6 +27,8 @@ const config = JSON.parse(await readFile(join(root, 'config/databases.json'), 'u
 const generated = JSON.parse(await readFile(join(root, 'src/data/generated/index.json'), 'utf8')).databases;
 const ids = config.databases.map((entry) => entry.id);
 const CTA = 'Explore SQLite in DataTug';
+// A gzip export has no single-file URL: pages link its demodb-chunked-export/v1 manifest (scripts/build-hosts.mjs).
+const hrefOf = (file) => `/data/${file.publicPath}${file.compression === 'gzip' ? '.parts.json' : ''}`;
 const CATALOG_URL = 'https://raw.githubusercontent.com/datatug/datatug-apps/main/libs/datatug/main/src/lib/queries/demo-sqlite-catalog.ts';
 
 const exists = (path) => access(path).then(() => true, () => false);
@@ -83,14 +85,14 @@ for (const id of ids) {
 
   test(`${id}: the download lists name only files that exist in the registry entry and in the built assets`, async () => {
     const database = providerOf(id);
-    const advertised = new Set(completeDownloads(database).map((file) => `/data/${file.publicPath}`));
+    const advertised = new Set(completeDownloads(database).map(hrefOf));
     const page = await readFile(join(root, 'dist/_db', id, 'index.html'), 'utf8');
     const list = /<div class="format-list">(.*?)<\/div><\/div><\/section>/s.exec(page)?.[1];
     assert.ok(list, 'the page has a format list');
     const shown = [...list.matchAll(/<a href="([^"]*)"><span class="format-label">([^<]*)<\/span>/g)].map((match) => ({ href: match[1], label: match[2] }));
     assert.deepEqual(new Set(shown.map((item) => item.href)), advertised, 'the page lists exactly the complete downloads of the registry entry');
     for (const item of shown) {
-      const file = completeDownloads(database).find((candidate) => `/data/${candidate.publicPath}` === item.href);
+      const file = completeDownloads(database).find((candidate) => hrefOf(candidate) === item.href);
       assert.equal(item.label, labelOf(database, file.format), `${item.href} is labelled with its real format`);
     }
 
@@ -98,7 +100,7 @@ for (const id of ids) {
     const linked = new Set([...downloads.matchAll(/<a href="(\/data\/[^"]*)" download>/g)].map((match) => match[1]));
     for (const href of advertised) assert.ok(linked.has(href), `the downloads page offers ${href}`);
     for (const href of [...shown.map((item) => item.href), ...[...linked].filter((href) => advertised.has(href))]) {
-      const file = completeDownloads(database).find((candidate) => `/data/${candidate.publicPath}` === href);
+      const file = completeDownloads(database).find((candidate) => hrefOf(candidate) === href);
       const assets = file.chunks?.length ? file.chunks.map((chunk) => chunk.assetPath) : [file.assetPath];
       for (const asset of assets) assert.ok(await exists(join(root, 'dist/_db', id, 'data', asset)), `${href} is backed by the built asset ${asset}`);
     }

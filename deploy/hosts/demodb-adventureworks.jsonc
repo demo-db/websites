@@ -1,0 +1,20 @@
+// Assets-only (no `main`): every request is served by Workers static assets and never runs a Worker script.
+// Generated layout: scripts/build-hosts.mjs writes dist-hosts/adventureworks.demodb.dev/ including _headers and _redirects.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "demodb-adventureworks",
+  "compatibility_date": "2026-10-04",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "../../dist-hosts/adventureworks.demodb.dev",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [
+    {
+      "pattern": "adventureworks.demodb.dev",
+      "custom_domain": true
+    }
+  ]
+}

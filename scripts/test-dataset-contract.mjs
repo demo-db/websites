@@ -136,7 +136,8 @@ test('the DataTug catalog and this registry list the same datasets with the same
     const entry = catalog.demoSqliteCatalog[id];
     assert.deepEqual(
       { id, url: entry.url, sha256: entry.sha256, bytes: entry.bytes, transferBytes: entry.transferBytes },
-      { id, url: `https://${providerOf(id).siteHost}/data/${file.publicPath}`, sha256: decodedSha(file), bytes: decodedBytes(file), transferBytes: file.bytes },
+      // A gzip export is chunked: its public URL is the .parts.json manifest (prepare-databases.mjs), never a joined file.
+      { id, url: `https://${providerOf(id).siteHost}/data/${file.publicPath}${file.compression === 'gzip' ? '.parts.json' : ''}`, sha256: decodedSha(file), bytes: decodedBytes(file), transferBytes: file.bytes },
       `${id}: DataTug catalog vs DemoDB registry`,
     );
   }

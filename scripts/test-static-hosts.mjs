@@ -65,7 +65,11 @@ const urlOf = (file) => `/${file}`.replace(/(^|\/)index\.html$/, '$1');
 
 test('every host config points at a built bundle, and every bundle respects the static asset limits', async () => {
   const configs = await hostConfigs();
-  assert.deepEqual(configs.map(({ config }) => config.routes[0].pattern).sort(), manifest.hosts.map((host) => host.host).sort());
+  // Every built dataset and catalogue host has a config. A legacy alias (chinookdb.com) is built but deployed only
+  // while its own config file exists, so dropping it is one file deletion.
+  const configured = configs.map(({ config }) => config.routes[0].pattern);
+  for (const host of manifest.hosts.filter((entry) => entry.kind !== 'alias')) assert.ok(configured.includes(host.host), `${host.host} has a deploy config`);
+  for (const pattern of configured) assert.ok(manifest.hosts.some((host) => host.host === pattern), `${pattern} has a built bundle`);
   for (const { config } of configs) {
     const dir = join(out, config.routes[0].pattern);
     assert.ok((await stat(dir)).isDirectory());
@@ -108,7 +112,7 @@ test('chunked exports follow the demodb-chunked-export/v1 contract and decode to
       assert.equal(published.file, item.publicPath.split('/').at(-1));
       assert.equal(published.compression, 'gzip');
       const pieces = [];
-      published.parts.forEach((part, n) => assert.equal(part.path, `${published.file}.gz.part-${n + 1}`));
+      published.parts.forEach((part, n) => assert.equal(part.path, `${published.file}.gz.${part.sha256.slice(0, 16)}.part-${n + 1}`, 'part names are content-addressed'));
       for (const part of published.parts) {
         assert.deepEqual(Object.keys(part), ['path', 'bytes', 'sha256']);
         const bytes = await readFile(join(file, '..', part.path));
@@ -140,7 +144,7 @@ test('_headers give every file one value per header: CORS, nosniff, content type
       if (path.startsWith('/data/')) {
         assert.equal(headers.get('access-control-allow-origin'), '*', path);
         assert.equal(headers.get('cross-origin-resource-policy'), 'cross-origin', path);
-        const immutable = path.startsWith('/data/compare/') || /\.gz\.part-\d+$/.test(path);
+        const immutable = path.startsWith('/data/compare/') || /\.gz\.[0-9a-f]{16}\.part-\d+$/.test(path);
         assert.equal(headers.get('cache-control'), immutable ? IMMUTABLE_CACHE : SHORT_CACHE, path);
         if (path.endsWith('.sqlite')) assert.equal(headers.get('content-type'), 'application/vnd.sqlite3', path);
         if (path.endsWith('.sql')) assert.equal(headers.get('content-type'), 'application/sql; charset=utf-8', path);
@@ -174,7 +178,8 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   assert.deepEqual(redirect(catalogue, '/ovdb/v1'), { to: OVDB_API, status: 308 });
   assert.deepEqual(redirect(catalogue, '/ovdb/v1/databases/chinook/dtql'), { to: `${OVDB_API}/databases/chinook/dtql`, status: 308 });
   assert.deepEqual(redirect(catalogue, '/ovdb/dbs/northwind/'), { to: 'https://demodb.dev/northwind/', status: 308 });
-  assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind'), { to: 'https://demodb.dev/northwind/', status: 308 });
+  // As in the retired Worker, a storage route wins: /ovdb/db/northwind has its own storage page.
+  assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind'), { to: 'https://demodb.dev/ovdb/db/northwind/', status: 308 });
   assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind-sqlite'), { to: 'https://demodb.dev/ovdb/db/northwind-sqlite/', status: 308 });
   assert.equal(redirect(catalogue, '/ovdb/db/northwind-sqlite/'), null, 'storage pages are served, not redirected');
   assert.equal(redirect(catalogue, '/'), null);

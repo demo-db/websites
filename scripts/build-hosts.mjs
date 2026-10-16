@@ -18,7 +18,7 @@
 //
 //   GET https://<id>.demodb.dev/data/<file>.parts.json
 //   {"format":"demodb-chunked-export/v1","file":"<file>","compression":"gzip","bytes":N,"sha256":"<joined gzip>",
-//    "uncompressedSha256":"<decoded file>"|null,"parts":[{"path":"<file>.gz.part-1","bytes":N,"sha256":"..."}]}
+//    "uncompressedSha256":"<decoded file>"|null,"parts":[{"path":"<file>.gz.<sha256[:16]>.part-1","bytes":N,"sha256":"..."}]}
 //
 // Each part `path` is relative to the manifest URL.
 import { createHash } from 'node:crypto';
@@ -51,13 +51,18 @@ const READONLY_CORS = ['Access-Control-Allow-Origin: *', 'Access-Control-Allow-M
 const SHARED_ASSETS = ['_astro', 'embed/datatug.js', 'embed/exact-decimal.js', 'theme.js', 'favicon.svg', 'build-info.json', '404.html'];
 
 export function workerName(host) {
-  if (host === CATALOGUE_HOST) return 'demodb-catalogue';
+  // The catalogue reuses the existing script name, so the cutover replaces demodb-websites' code in place
+  // instead of creating a new Worker (the account is at the Free plan's 100-Worker limit).
+  if (host === CATALOGUE_HOST) return 'demodb-websites';
   const dataset = /^([a-z][a-z0-9-]*)\.demodb\.dev$/.exec(host);
   if (dataset) return `demodb-${dataset[1]}`;
   return `demodb-${host.replace(/[^a-z0-9]+/g, '-')}`;
 }
 
 function headersFile(rules) {
+  const patterns = rules.map(([pattern]) => pattern);
+  const duplicate = patterns.find((pattern, i) => patterns.indexOf(pattern) !== i);
+  if (duplicate) throw new Error(`_headers has two rules for ${duplicate}`);
   const lines = [];
   for (const [pattern, values] of rules) lines.push(pattern, ...values.map((value) => `  ${value}`), '');
   if (rules.length > 100) throw new Error(`_headers has ${rules.length} rules; the platform limit is 100`);
@@ -65,7 +70,27 @@ function headersFile(rules) {
   return lines.join('\n');
 }
 
+// Rejects every rule wrangler would report as invalid (and ignore): duplicate sources, bad status codes,
+// sources that are not paths, destinations that are neither paths nor absolute https URLs, overlong rules.
+export function redirectProblems(rules) {
+  const problems = [];
+  const seen = new Set();
+  for (const [from, to, status] of rules) {
+    const line = `${from} ${to} ${status}`;
+    if (!from.startsWith('/') || /\s/.test(from)) problems.push(`invalid source: ${line}`);
+    if (!(to.startsWith('/') || /^https:\/\/[^\s/]+(\/\S*)?$/.test(to)) || /\s/.test(to)) problems.push(`invalid destination: ${line}`);
+    if (![301, 302, 303, 307, 308].includes(status)) problems.push(`invalid status: ${line}`);
+    if (line.length > 1000) problems.push(`rule longer than 1,000 characters: ${from}`);
+    if ((from.match(/\*/g) ?? []).length > 1) problems.push(`more than one splat: ${line}`);
+    if (seen.has(from)) problems.push(`duplicate source ${from}`);
+    seen.add(from);
+  }
+  return problems;
+}
+
 function redirectsFile(rules) {
+  const problems = redirectProblems(rules);
+  if (problems.length) throw new Error(`_redirects would contain rules wrangler rejects:\n${problems.join('\n')}`);
   const dynamic = rules.filter(([from]) => /[*:]/.test(from)).length;
   const fixed = rules.length - dynamic;
   if (dynamic > 100 || fixed > 2000) throw new Error(`_redirects exceeds limits (static=${fixed}, dynamic=${dynamic})`);
@@ -159,7 +184,8 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
       ...ovdbIds.flatMap((id) => [
         [`/ovdb/dbs/${id}`, `https://demodb.dev/${id}/`, 308],
         [`/ovdb/dbs/${id}/`, `https://demodb.dev/${id}/`, 308],
-        [`/ovdb/db/${id}`, `https://demodb.dev/${id}/`, 308],
+        // The retired Worker checked storage routes first: an id that is also a storage entry keeps its storage page.
+        ...(storageIds.includes(id) ? [] : [[`/ovdb/db/${id}`, `https://demodb.dev/${id}/`, 308]]),
       ]),
       // Storage catalogue entries gain their trailing slash with the Worker's permanent status.
       ...storageIds.map((id) => [`/ovdb/db/${id}`, `https://demodb.dev/ovdb/db/${id}/`, 308]),
@@ -200,7 +226,9 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
       const parts = [];
       for (const [n, bytes] of pieces.entries()) {
         if (bytes.length > MAX_ASSET_BYTES) throw new Error(`${db.id}/${item.publicPath}: part ${n + 1} exceeds the 25 MiB asset limit`);
-        const name = `${file}.gz.part-${n + 1}`;
+        // Content-addressed: the part's own SHA-256 prefix is in its name, so a one-year immutable cache can
+        // never serve stale bytes after a re-pin. Consumers take part paths from the manifest.
+        const name = `${file}.gz.${sha256(bytes).slice(0, 16)}.part-${n + 1}`;
         await writeFile(join(dir, 'data', dirname(item.publicPath), name), bytes);
         parts.push({ path: name, bytes: bytes.length, sha256: sha256(bytes) });
       }
@@ -244,7 +272,8 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
       // `/data/*.json` above also types the .parts.json manifests; a second rule would join two values.
       // Content-addressed comparison fixtures and the parts of a chunked export never change at their URL.
       ['/data/compare/*', immutable],
-      ...chunked.map((item) => [`/data/${item.publicPath}.gz.part-*`, [...immutable, 'Content-Type: application/octet-stream']]),
+      // One exact rule per part: a pattern would also stamp a year of immutable caching on 404s next to them.
+      ...chunked.flatMap((item) => item.parts.map((part) => [`/data/${dirname(item.publicPath) === '.' ? '' : `${dirname(item.publicPath)}/`}${part.path}`, [...immutable, 'Content-Type: application/octet-stream']])),
       ['/robots.txt', ['Cache-Control: public, max-age=300']],
       ['/sitemap.xml', ['Cache-Control: public, max-age=300', 'Content-Type: application/xml; charset=utf-8']],
       ['/ovdb', REDIRECT_HEADERS],

@@ -44,7 +44,13 @@
       "id": "employees",
       "repository": "https://github.com/demo-db/employees",
       "commit": "add7744ddc5cefc535a7cbb09b3dffee41811ade",
-      "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443"
+      "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443",
+      "textReplacements": [
+        { "from": "Employees (browser edition)", "to": "Employees (reduced subset)" },
+        { "from": "browser-sized edition of", "to": "reduced subset of" },
+        { "from": "Browser-sized subset of", "to": "Reduced subset of" },
+        { "from": "for the browser edition", "to": "for the reduced subset" }
+      ]
     }
   ],
   "comparisonFixtures": [

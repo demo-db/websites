@@ -1,0 +1,10 @@
+---
+import { datatugLocalLimitLines, datatugLocalLimits, type LimitsSubject } from '../data/datatug-limits';
+
+const { recordsets } = Astro.props as { recordsets: readonly LimitsSubject[] };
+const lines = datatugLocalLimitLines(datatugLocalLimits(recordsets));
+---
+<section class="shell section datatug-limits" data-datatug-limits>
+  <div class="section-heading compact"><div><p class="eyebrow">Explore SQLite in DataTug</p><h2>Known limits.</h2></div></div>
+  <ul class="muted">{lines.map((line) => <li>{line}</li>)}</ul>
+</section>

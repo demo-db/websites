@@ -42,19 +42,23 @@ await mkdir(generatedDir, { recursive: true });
 await mkdir(internalAssets, { recursive: true });
 await mkdir(researchSnapshots, { recursive: true });
 
+const presentationHits = new Map();
 const databases = [];
 const ovdbDescriptors = [];
 for (const entry of registry.databases) {
   const source = await loadProvider(entry);
   validateDatabaseEntry(entry, source.manifest, source.contract);
   const db = normalizeProvider(entry, source);
+  applyPresentationText(db, entry, ['name', 'description', 'source', 'queries', 'model', 'meaning']);
   databases.push(db);
   const descriptor = validateDatabaseDescriptor(source.ovdbDescriptor, entry.id);
   validateDescriptorSchemaProjection(descriptor, db.schema.tables);
   validateDescriptorAssetReferences(descriptor, db);
   if (descriptor.title !== source.ovdb.title || descriptor.description !== source.ovdb.description) throw new Error(`${entry.id}: OVDB descriptor text disagrees with the publisher metadata`);
   if (descriptor.capabilities.query !== db.ovdb.query) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
-  ovdbDescriptors.push({ descriptor, bytes: source.ovdbDescriptorBytes });
+  const displayDescriptor = structuredClone(descriptor);
+  applyPresentationText(displayDescriptor, entry, ['title', 'description', 'provenance', 'model', 'meaning']);
+  ovdbDescriptors.push({ descriptor, displayDescriptor, bytes: source.ovdbDescriptorBytes });
   await materializeExports(db, source);
   await materializeModels(db, source);
   const schemaPath = join(internalAssets, db.id, 'metadata/schema.json');
@@ -97,6 +101,7 @@ for (const asset of comparisonAssets) {
   });
 }
 
+assertPresentationReplacementsUsed();
 const ids = new Set();
 const hosts = new Map();
 const aliasHosts = new Map();
@@ -173,7 +178,7 @@ const postgresqlApiSource = relative(root, postgresqlApiPath).split(sep).join('/
 const postgresqlApiProvenance = { source: postgresqlApiSource, sha256: createHash('sha256').update(postgresqlApiBytes).digest('hex'), default: postgresqlApiSource === defaultPostgresqlApiSource };
 if (!postgresqlApiProvenance.default) console.warn(`WARNING: PostgreSQL API config comes from ${postgresqlApiSource}; this build is not deployable.`);
 await writeFile(join(generatedDir, 'postgresql-api.json'), `${JSON.stringify({ ...postgresqlApi, provenance: postgresqlApiProvenance }, null, 2)}\n`);
-await writeFile(join(generatedDir, 'ovdb.json'), `${JSON.stringify({ server: ovdbServer, databases: ovdbDescriptors.map(({ descriptor }) => descriptor) }, null, 2)}\n`);
+await writeFile(join(generatedDir, 'ovdb.json'), `${JSON.stringify({ server: ovdbServer, databases: ovdbDescriptors.map(({ displayDescriptor }) => displayDescriptor) }, null, 2)}\n`);
 console.log(`Prepared ${databases.length} provider contracts: ${databases.map((db) => db.id).join(', ')}`);
 
 async function loadProvider(entry) {
@@ -215,6 +220,36 @@ async function fetchPinnedRevision(repository, commit, path) {
   const response = await fetch(url, { headers: { 'User-Agent': 'DemoDB-provider-contract/1' } });
   if (!response.ok) throw new Error(`GET ${url} failed with ${response.status}`);
   return Buffer.from(await response.arrayBuffer());
+}
+
+// Registry-level wording corrections for user-visible text. The provider's own descriptor
+// bytes stay pinned and are served unchanged; only the site's rendered pages, generated
+// catalogue data and descriptive metadata use the corrected wording. Every replacement
+// must match at least once so a stale entry fails the build instead of silently doing nothing.
+function applyPresentationText(target, entry, fields) {
+  const replacements = entry.textReplacements ?? [];
+  const rewrite = (value) => {
+    if (typeof value === 'string') {
+      let out = value;
+      for (const { from, to } of replacements) {
+        if (!out.includes(from)) continue;
+        presentationHits.set(`${entry.id}\0${from}`, true);
+        out = out.split(from).join(to);
+      }
+      return out;
+    }
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewrite(item)]));
+    return value;
+  };
+  for (const field of fields) if (field in target) target[field] = rewrite(target[field]);
+}
+function assertPresentationReplacementsUsed() {
+  for (const entry of registry.databases) {
+    for (const { from } of entry.textReplacements ?? []) {
+      if (!presentationHits.has(`${entry.id}\0${from}`)) throw new Error(`${entry.id}: textReplacements entry ${JSON.stringify(from)} matched nothing; remove it`);
+    }
+  }
 }
 
 function normalizeProvider(entry, source) {

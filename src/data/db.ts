@@ -35,7 +35,11 @@ export function downloadLabel(db: Database, format: string): string {
     const engine = format.slice('upstream-'.length);
     return `${db.formatAvailability.find((item) => item.format === engine)?.label ?? engine.toUpperCase()}, upstream (unverified, drops database)`;
   }
-  return db.formatAvailability.find((item) => item.format === format)?.label ?? format.toUpperCase();
+  const item = db.formatAvailability.find((entry) => entry.format === format);
+  // A provider's own SQL script of an engine (Chinook's lerocha scripts) is served as the provider wrote it: say so, because it is not
+  // checked against the pinned fixture and starts with DROP DATABASE.
+  if (item?.state === 'download' && item.origin === 'provider' && ['postgresql', 'mysql', 'sqlserver', 'oracle'].includes(format)) return `${item.label}, upstream (unverified, drops database)`;
+  return item?.label ?? format.toUpperCase();
 }
 
 // Complete-database downloads in the matrix's format order, the SQLite-dialect dump after the matrix formats.

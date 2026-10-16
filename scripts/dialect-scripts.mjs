@@ -19,7 +19,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +59,7 @@ export function validateConfig(config) {
     if (typeof asset?.name !== 'string' || !asset.name.includes(generator.tag?.slice(1) ?? '\0') || !isHash(asset.sha256)) problems.push(`generator.assets.${platform} needs a name of this release and a SHA-256`);
   }
   if (typeof config?.edition !== 'string' || config.edition.length === 0 || config.edition.length > 255) problems.push('edition must be a label of at most 255 characters');
+  if (config?.notice?.enabled && (typeof config.notice.param !== 'string' || !/^[a-z][a-z-]*$/.test(config.notice.param))) problems.push('notice.enabled needs notice.param, the exporter parameter that takes the notice file');
   for (const [dialect, spec] of Object.entries(config?.dialects ?? {})) {
     if (!/^[a-z][a-z0-9]*$/.test(dialect) || !/^[a-z][a-z0-9]*$/.test(spec.format ?? '') || typeof spec.extension !== 'string' || !spec.extension.endsWith('.sql') || typeof spec.marker !== 'string') problems.push(`dialects.${dialect} is incomplete`);
   }
@@ -95,25 +96,38 @@ export async function ensureDatatug(config, toolsDir, key = platformKey()) {
   if (!asset.name.endsWith('.tar.gz')) throw new Error(`${asset.name}: only .tar.gz assets are supported`);
   const dir = join(toolsDir, `datatug-${generator.tag}-${key}`);
   const binary = join(dir, 'datatug');
-  const receipt = join(dir, 'verified.json');
-  if (existsSync(binary) && existsSync(receipt)) {
-    const saved = JSON.parse(await readFile(receipt, 'utf8'));
-    if (saved.assetSha256 === asset.sha256 && saved.binarySha256 === sha256(await readFile(binary))) return binary;
+  const tarball = join(dir, asset.name);
+  // Nothing in the cache is trusted because this program wrote it: the kept archive is hashed again on every use and the binary is
+  // unpacked from it again, so a changed cache file or binary is replaced or refused, never run.
+  if (existsSync(tarball) && sha256(await readFile(tarball)) === asset.sha256) {
+    const unpacked = spawnSync('tar', ['-xzf', tarball, '-C', dir, 'datatug'], { encoding: 'utf8' });
+    if (unpacked.status === 0) return binary;
   }
   const checksumsText = (await download(`${generator.downloadBase}/${generator.checksumsFile}`)).toString('utf8');
   const bytes = await download(`${generator.downloadBase}/${asset.name}`);
   verifyRelease(config, checksumsText, asset.name, bytes);
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, asset.name), bytes);
-  const unpacked = spawnSync('tar', ['-xzf', join(dir, asset.name), '-C', dir, 'datatug'], { encoding: 'utf8' });
+  await writeFile(tarball, bytes);
+  const unpacked = spawnSync('tar', ['-xzf', tarball, '-C', dir, 'datatug'], { encoding: 'utf8' });
   if (unpacked.status !== 0) throw new Error(`could not unpack ${asset.name}: ${unpacked.stderr}`);
-  await writeFile(receipt, `${JSON.stringify({ tag: generator.tag, asset: asset.name, assetSha256: asset.sha256, binarySha256: sha256(await readFile(binary)) })}\n`);
   return binary;
 }
 
 // --- inputs and the guard ---------------------------------------------------------------------------------
 export const sqliteSha256Of = (manifest) => manifest.source?.databaseSha256 ?? manifest.source?.sha256;
+
+// The licence notice a script header carries in full, written from the upstream licence files (config/dialect-notices/<id>.txt) and
+// switched on in config/dialect-scripts.json (`notice.enabled`, with the exporter parameter that takes it) when the pinned datatug
+// release can write a multi-line notice. Off, it changes no input and no byte.
+export function noticeOf(id, config) {
+  if (!config.notice?.enabled) return null;
+  const path = resolve(root, config.notice.dir ?? 'config/dialect-notices', `${id}.txt`);
+  if (!existsSync(path)) throw new Error(`${id}: notice.enabled is set but ${path} does not exist`);
+  const text = readFileSync(path, 'utf8');
+  if (text.includes('\r') || text.includes('\0') || !text.endsWith('\n')) throw new Error(`${id}: the notice file must be LF text ending in a line break`);
+  return text;
+}
 
 export function inputsOf({ manifest, config, dialect, attribution }) {
   const sha = sqliteSha256Of(manifest);
@@ -121,6 +135,7 @@ export function inputsOf({ manifest, config, dialect, attribution }) {
   const license = manifest.source?.license;
   if (typeof license !== 'string' || license.length === 0) throw new Error(`${manifest.id}: manifest.json has no source.license`);
   if (typeof attribution !== 'string' || attribution.length === 0) throw new Error(`${manifest.id}: ${MANIFEST_PATH} has no attribution`);
+  const notice = noticeOf(manifest.id, config);
   return {
     attribution,
     dialect,
@@ -128,6 +143,7 @@ export function inputsOf({ manifest, config, dialect, attribution }) {
     generator: { checksumsSha256: config.generator.checksumsSha256, tag: config.generator.tag },
     license,
     name: manifest.id,
+    ...(notice ? { noticeSha256: sha256(Buffer.from(notice)) } : {}),
     sqliteSha256: sha,
   };
 }
@@ -188,11 +204,56 @@ export async function readStoredScript(record, read) {
 }
 
 // --- the script itself ------------------------------------------------------------------------------------
-// Tokens the exporter emits at the start of a script line. No data byte can start a line (a value with a line break is
-// written as hex), so a line starting with anything else is a script that someone edited.
-const LINE_START = [/^$/, /^--/, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^ {2}/, /^\)/];
+// Tokens the exporter emits at the start of a script line. No data byte can start a line (a value with a line break is written as
+// hex), so a line starting with anything else is a script that someone edited. An indented line is a column or key definition.
+const LINE_START = [/^$/, /^--/, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^\)/,
+  /^ {2}(`|PRIMARY KEY|UNIQUE KEY|UNIQUE |KEY |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/];
 
-export function scriptProblems(bytes, { id, inputs, spec }) {
+// Walks the script as the mysql client does and reports the first thing no exporter output contains:
+//   * a backslash anywhere outside a `--` comment line (the client reads `\` as an escape in a string and as a command start
+//     elsewhere, and the exporter writes a value with a backslash as hex);
+//   * `#` or `/*` outside a string or a quoted name (a comment or a conditional comment the exporter never writes), or `--` after
+//     the start of a line;
+//   * a raw line break inside a string or a quoted name (a value with a line break is written as hex);
+//   * anything after a `;` on the same line (`COMMIT; \! cmd` would run a second command).
+// `--` comment lines are skipped whole: the header is free text and the client ignores a comment line.
+export function literalProblems(bytes) {
+  const problems = [];
+  const n = bytes.length;
+  let state = 0; // 0 statement text, 1 string literal, 2 quoted name
+  let line = 1;
+  let atLineStart = true;
+  const report = (message) => { if (problems.length < 5) problems.push(`line ${line}: ${message}`); };
+  for (let i = 0; i < n; i += 1) {
+    const c = bytes[i];
+    if (c === 0x0a) {
+      if (state !== 0) report(state === 1 ? 'a raw line break inside a string literal' : 'a raw line break inside a quoted name');
+      state = 0; line += 1; atLineStart = true;
+      continue;
+    }
+    if (state === 0 && atLineStart && c === 0x2d && bytes[i + 1] === 0x2d) {
+      const end = bytes.indexOf(0x0a, i);
+      if (end === -1) break;
+      i = end - 1;
+      continue;
+    }
+    const wasLineStart = atLineStart;
+    atLineStart = false;
+    if (c === 0x5c) { report('a backslash outside a comment line'); continue; }
+    if (state === 1) { if (c === 0x27) { if (bytes[i + 1] === 0x27) i += 1; else state = 0; } continue; }
+    if (state === 2) { if (c === 0x60) { if (bytes[i + 1] === 0x60) i += 1; else state = 0; } continue; }
+    if (c === 0x27) state = 1;
+    else if (c === 0x60) state = 2;
+    else if (c === 0x23) report('a # comment');
+    else if (c === 0x2f && bytes[i + 1] === 0x2a) report('a /* comment');
+    else if (c === 0x2d && bytes[i + 1] === 0x2d && !wasLineStart) report('a -- comment inside a line');
+    else if (c === 0x3b && i + 1 < n && bytes[i + 1] !== 0x0a) report('text after a semicolon on the same line');
+  }
+  if (state !== 0) report('the script ends inside a literal or a quoted name');
+  return problems;
+}
+
+export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   const problems = [];
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) problems.push('the script starts with a byte order mark');
   if (bytes.includes(0x0d)) problems.push('the script holds a CR byte (LF line ends only)');
@@ -208,6 +269,12 @@ export function scriptProblems(bytes, { id, inputs, spec }) {
   expectHeader('-- Dataset: ', id, 'the dataset name');
   expectHeader('-- Licence: ', inputs.license, 'the licence of the provider manifest');
   expectHeader('-- Attribution: ', inputs.attribution, 'the attribution of the provider');
+  if (inputs.noticeSha256) {
+    const block = [];
+    for (const line of lines) { if (!line.startsWith('--')) break; block.push(line); }
+    const missing = notice.split('\n').filter((line) => line.trim().length > 0).find((line) => !block.includes(`-- ${line.trimEnd()}`));
+    if (missing !== undefined) problems.push(`the header lacks the licence notice line ${JSON.stringify(missing.slice(0, 60))}`);
+  }
   if (!header.some((line) => line.startsWith(`-- Generated by datatug ${inputs.generator.tag} (`) && line.endsWith(`SHA-256 ${inputs.sqliteSha256}`))) problems.push('the header does not name the pinned datatug release and the SQLite SHA-256');
   if (!header.some((line) => line.includes(spec.clientFlags.split(' ')[1]))) problems.push('the header does not recommend the safe client flags');
   const statements = lines.filter((line) => line.startsWith('CREATE TABLE') || line.startsWith('INSERT INTO `' + spec.marker));
@@ -219,6 +286,7 @@ export function scriptProblems(bytes, { id, inputs, spec }) {
   for (const [index, line] of lines.entries()) {
     if (!LINE_START.some((pattern) => pattern.test(line))) { problems.push(`line ${index + 1} starts with something the exporter never writes: ${JSON.stringify(line.slice(0, 40))}`); break; }
   }
+  problems.push(...literalProblems(bytes));
   return problems;
 }
 
@@ -230,7 +298,7 @@ async function readJsonFile(path) {
 // Verifies one dialect script of one provider through `read(path)` (a file system or a pinned-revision reader).
 // Returns { bytes, record, inputs, problems }. `problems` lists every disagreement; `bytes` is null when the stored files
 // cannot be read.
-export async function verifyDialectScript({ id, manifest, dialect, config, read }) {
+export async function verifyDialectScript({ id, manifest, dialect, config, read, requireVerification = true }) {
   const problems = [];
   const spec = config.dialects[dialect];
   if (!spec) return { bytes: null, problems: [`no ${dialect} dialect in config/dialect-scripts.json`] };
@@ -247,8 +315,13 @@ export async function verifyDialectScript({ id, manifest, dialect, config, read 
   let bytes = null;
   try { bytes = await readStoredScript(record, read); } catch (error) { problems.push(`${dialect}: ${error.message}`); }
   if (bytes) {
-    problems.push(...scriptProblems(bytes, { id, inputs, spec }).map((problem) => `${dialect}: ${problem}`));
+    problems.push(...scriptProblems(bytes, { id, inputs, spec, notice: noticeOf(id, config) }).map((problem) => `${dialect}: ${problem}`));
     if (record.verification && record.verification.scriptSha256 !== record.stored.decodedSha256) problems.push(`${dialect}: the recorded verification is for another script (${record.verification.scriptSha256})`);
+    if (requireVerification) {
+      const v = record.verification;
+      if (!v) problems.push(`${dialect}: the manifest records no verification of this script (load it into ${spec.verifiedOn} and run the cross-engine verifier, then: node scripts/dialect-scripts.mjs record-verification)`);
+      else if (v.differences !== 0 || !(v.rows > 0) || !(v.tables > 0) || v.secondLoadRefusedAtMarkerTable !== true) problems.push(`${dialect}: the recorded verification is not a clean one (differences ${v.differences}, rows ${v.rows}, tables ${v.tables})`);
+    }
     if (record.report) {
       try {
         const reportBytes = await read(record.report.path);
@@ -264,10 +337,14 @@ const fsReader = (dir) => async (path) => {
   return readFile(join(dir, path));
 };
 
-export async function checkProvider(dir, config, dialect = 'mysql') {
+export async function checkProvider(dir, config, dialect = 'mysql', { requireVerification = true, checkSqlite = true } = {}) {
   const manifest = await readJsonFile(join(dir, 'manifest.json'));
-  const result = await verifyDialectScript({ id: manifest.id, manifest, dialect, config, read: fsReader(dir) });
-  return result.problems;
+  const result = await verifyDialectScript({ id: manifest.id, manifest, dialect, config, read: fsReader(dir), requireVerification });
+  const problems = [...result.problems];
+  if (checkSqlite && existsSync(join(dir, manifest.dataFile ?? ''))) {
+    try { await sqliteBytes(dir, manifest); } catch (error) { problems.push(error.message); }
+  }
+  return problems;
 }
 
 // Compact, path-free report kept next to the script: what the exporter could not carry exactly.
@@ -300,7 +377,13 @@ export async function runExporter({ dir, manifest, config, dialect, attribution,
     const output = join(scratch, `${manifest.id}.${config.dialects[dialect].extension}`);
     const inputs = inputsOf({ manifest, config, dialect, attribution });
     const enc = (value) => encodeURIComponent(value);
-    const destination = `sqlscript://${output}?dialect=${enc(dialect)}&name=${enc(inputs.name)}&license=${enc(inputs.license)}&attribution=${enc(inputs.attribution)}&edition=${enc(inputs.edition)}`;
+    let destination = `sqlscript://${output}?dialect=${enc(dialect)}&name=${enc(inputs.name)}&license=${enc(inputs.license)}&attribution=${enc(inputs.attribution)}&edition=${enc(inputs.edition)}`;
+    const notice = noticeOf(manifest.id, config);
+    if (notice) {
+      const noticePath = join(scratch, 'notice.txt');
+      await writeFile(noticePath, notice);
+      destination += `&${config.notice.param}=${enc(noticePath)}`;
+    }
     const result = spawnSync(binary, ['db', 'copy', '--from', `sqlite://${source}`, '--to', destination, '--json'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, DATATUG_TELEMETRY: '0' } });
     if (result.error) throw new Error(`could not start ${binary}: ${result.error.message}`);
     if (result.status !== 0) throw new Error(`${manifest.id}: datatug db copy exited ${result.status}: ${result.stderr || result.stdout}`);
@@ -329,7 +412,7 @@ export async function generateProvider({ dir, config, dialect = 'mysql', force =
   const inputs = inputsOf({ manifest, config, dialect, attribution: dialectManifest.attribution });
   const hash = inputsSha256Of(inputs);
   const previous = dialectManifest.scripts?.[dialect];
-  if (!force && previous?.inputsSha256 === hash && (await checkProvider(dir, config, dialect)).length === 0) return 'unchanged';
+  if (!force && previous?.inputsSha256 === hash && (await checkProvider(dir, config, dialect, { requireVerification: false, checkSqlite: false })).length === 0) return 'unchanged';
   const binary = await getBinary();
   const { report, script } = await runExporter({ dir, manifest, config, dialect, attribution: dialectManifest.attribution, binary });
   const reportBytes = Buffer.from(serializeJson(report));
@@ -357,12 +440,73 @@ export async function generateProvider({ dir, config, dialect = 'mysql', force =
   dialectManifest.id = id;
   dialectManifest.scripts = { ...(dialectManifest.scripts ?? {}), [dialect]: record };
   await atomicWrite(manifestPath, Buffer.from(serializeJson(dialectManifest)));
-  const problems = await checkProvider(dir, config, dialect);
+  const problems = await checkProvider(dir, config, dialect, { requireVerification: false });
   if (problems.length) throw new Error(`${id}: the generated script fails its own check:\n  ${problems.join('\n  ')}`);
   return outcome;
 }
 
 const countKinds = (warnings) => Object.fromEntries(Object.entries(warnings.reduce((counts, warning) => ({ ...counts, [warning.kind]: (counts[warning.kind] ?? 0) + 1 }), {})).sort(([a], [b]) => (a < b ? -1 : 1)));
+
+// --- the provider pins -----------------------------------------------------------------------------------------
+// config/databases.json pins one commit per provider. A pin the provider's `main` does not contain would serve files nobody reviewed on
+// main (a squash or rebase of the provider pull request leaves the pinned head behind). GitHub's compare of main...<commit> says which:
+//   identical, behind  the commit is on main: good
+//   ahead              the commit is only on a branch or pull request: refused in strict mode (the push to main that deploys),
+//                      reported in `warn-ahead` mode (a pull request, so its CI can run before the providers land)
+//   diverged, error    refused in both modes
+export function classifyPin(status) {
+  if (status === 'identical' || status === 'behind') return 'on-main';
+  if (status === 'ahead') return 'ahead';
+  return 'refused';
+}
+
+export async function pinProblems({ databases, fetchJson, mode = 'strict' }) {
+  const problems = [];
+  const notes = [];
+  for (const entry of databases) {
+    const slug = new URL(entry.repository).pathname.replace(/^\/|\/$/g, '');
+    let status;
+    try { status = (await fetchJson(`https://api.github.com/repos/${slug}/compare/main...${entry.commit}`)).status; } catch (error) { problems.push(`${entry.id}: cannot compare ${entry.commit} with main of ${slug}: ${error.message}`); continue; }
+    const verdict = classifyPin(status);
+    if (verdict === 'on-main') continue;
+    if (verdict === 'ahead' && mode === 'warn-ahead') { notes.push(`${entry.id}: ${entry.commit} is not on main of ${slug} yet (it is ahead of it): land the provider pull request, then re-pin if its commit changed`); continue; }
+    problems.push(`${entry.id}: the pinned commit ${entry.commit} is ${status}, not on main of ${slug}${verdict === 'ahead' ? ' (land the provider pull request first, then pin the commit main now has)' : ''}`);
+  }
+  return { problems, notes };
+}
+
+async function githubJson(url) {
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'DemoDB-dialect-scripts/1', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) };
+  const response = await fetch(url, { headers });
+  if (!response.ok) throw new Error(`GET ${url} returned ${response.status}`);
+  return response.json();
+}
+
+// Writes the verification block of one provider script from the numbers of a cross-engine verifier run over exactly that script.
+export async function recordVerification({ dir, config, dialect = 'mysql', result }) {
+  const manifestPath = join(dir, MANIFEST_PATH);
+  const dialectManifest = await readJsonFile(manifestPath);
+  const record = dialectManifest.scripts?.[dialect];
+  if (!record) throw new Error(`${dir}: no ${dialect} script to record a verification for`);
+  for (const key of ['tables', 'rows', 'valuesCompared', 'differences', 'verifierWarnings']) if (!Number.isInteger(result[key]) || result[key] < 0) throw new Error(`--${key} must be a non-negative integer`);
+  if (result.differences !== 0) throw new Error('a verification with differences is not recorded');
+  const spec = config.dialects[dialect];
+  record.verification = {
+    date: result.date ?? new Date().toISOString().slice(0, 10),
+    differences: 0,
+    engine: result.engine,
+    image: spec.serverImage,
+    loadedWith: `${spec.clientFlags}, stop at first error`,
+    rows: result.rows,
+    scriptSha256: record.stored.decodedSha256,
+    secondLoadRefusedAtMarkerTable: true,
+    tables: result.tables,
+    valuesCompared: result.valuesCompared,
+    verifier: result.verifier,
+    verifierWarnings: result.verifierWarnings,
+  };
+  await atomicWrite(manifestPath, Buffer.from(serializeJson(dialectManifest)));
+}
 
 // --- command line -----------------------------------------------------------------------------------------
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -392,11 +536,28 @@ async function main(argv) {
   const config = await loadConfig();
   const toolsDir = resolve(options.tools ?? process.env.DEMODB_TOOLS_DIR ?? join(tmpdir(), 'demodb-tools'));
   const dirs = options.provider ? [resolve(options.provider)] : options.providers ? (await datasetIds()).map((id) => join(resolve(options.providers), id)) : [];
-  if (dirs.length === 0 && ['generate', 'check', 'regenerate-check'].includes(command)) throw new Error('pass --provider <checkout> or --providers <directory of checkouts named by dataset id>');
+  if (dirs.length === 0 && ['generate', 'check', 'regenerate-check', 'record-verification'].includes(command)) throw new Error('pass --provider <checkout> or --providers <directory of checkouts named by dataset id>');
   if (command === 'generate') {
     let binary = null;
     const getBinary = async () => (binary ??= await ensureDatatug(config, toolsDir));
     for (const dir of dirs) console.log(`${dir}: ${await generateProvider({ dir, config, force: options.force === true, getBinary })}`);
+    return 0;
+  }
+  if (command === 'check-pins') {
+    const { problems, notes } = await pinProblems({ databases: (await readJsonFile(join(root, 'config/databases.json'))).databases, fetchJson: githubJson, mode: options.mode ?? process.env.DEMODB_PIN_MODE ?? 'strict' });
+    for (const note of notes) console.warn(`::warning::${note}`);
+    for (const problem of problems) console.error(problem);
+    if (!problems.length) console.log(notes.length ? `no pin is refused (${notes.length} unlanded pull request head(s) allowed in warn-ahead mode)` : "every pinned provider commit is on main");
+    return problems.length ? 1 : 0;
+  }
+  if (command === 'record-verification') {
+    const number = (name) => (options[name] === undefined ? NaN : Number(options[name]));
+    await recordVerification({ dir: dirs[0], config, result: {
+      tables: number('tables'), rows: number('rows'), valuesCompared: number('values'), differences: number('differences'), verifierWarnings: number('warnings'),
+      engine: options.engine ?? 'MySQL 8.4.11 (official mysql:8.4 image)', date: options.date,
+      verifier: options.verifier ?? 'datatug-cli internal/crossverify TestJourneyMySQL at v0.97.1, run locally over this exact script; reads source and target through Go drivers',
+    } });
+    console.log(`${dirs[0]}: verification recorded`);
     return 0;
   }
   if (command === 'check') {
@@ -421,7 +582,7 @@ async function main(argv) {
     }
     return failed ? 1 : 0;
   }
-  throw new Error('usage: dialect-scripts.mjs generate|check|regenerate-check --provider <dir> | --providers <dir> [--tools <dir>] [--force]');
+  throw new Error('usage: dialect-scripts.mjs generate|check|regenerate-check|record-verification --provider <dir> | --providers <dir> [--tools <dir>] [--force]; check-pins [--mode strict|warn-ahead]');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

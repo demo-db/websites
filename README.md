@@ -33,7 +33,7 @@ The Python API exposes `import_database(connection, provider_root)` and `verify_
 ## MySQL scripts
 
 Every dataset's MySQL script is written by the DataTug SQL-script exporter (release pinned by tag and SHA-256 in [`config/dialect-scripts.json`](config/dialect-scripts.json)), checked into the provider repository
-under `dialect-scripts/`, loaded into a real MySQL 8.4 and served as `/data/<id>.mysql.sql`. SQL Server and Oracle scripts are planned and not served. See [`docs/dialect-scripts.md`](docs/dialect-scripts.md).
+under `dialect-scripts/`, loaded into a real MySQL 8.4 and served as `/data/<id>.mysql.sql`. Generated SQL Server and Oracle scripts are planned and not served (Chinook's existing SQL Server file is lerocha's upstream script, labelled as such). See [`docs/dialect-scripts.md`](docs/dialect-scripts.md).
 
 ## Local development
 

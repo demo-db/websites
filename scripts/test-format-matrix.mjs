@@ -192,6 +192,26 @@ for (const id of ids) {
   });
 }
 
+// Every entry of every published checksums.json describes the bytes served at its path, and every complete file of a dataset that publishes one is listed.
+for (const id of ids) {
+  test(`${id}: every entry of a published checksums.json matches the bytes served at its path`, async () => {
+    const database = generated.find((item) => item.id === id);
+    const listing = database.exports.find((file) => file.format === 'metadata' && file.publicPath === 'metadata/checksums.json');
+    if (!listing) return;
+    const document = JSON.parse((await decodedBytesOf(database, listing)).toString('utf8'));
+    for (const [path, expected] of Object.entries(document.files)) {
+      const file = database.exports.find((item) => item.publicPath === path);
+      const bytes = file ? await decodedBytesOf(database, file) : await readFile(join(dataDir(id), path));
+      assert.equal(bytes.length, expected.bytes, `${id}: ${path} size`);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), expected.sha256, `${id}: ${path} sha256`);
+    }
+    const listed = new Set(Object.keys(document.files));
+    for (const file of database.exports.filter((item) => item.format !== 'metadata')) assert.ok(listed.has(file.publicPath), `${id}: ${file.publicPath} is served but not listed`);
+    assert.ok(!listed.has('chinook.mysql.sql') || id !== 'chinook' || document.files['chinook.mysql.sql'].sha256 === lock.datasets.chinook.mysql.sha256, 'the canonical Chinook MySQL entry is the generated script');
+    assert.ok(id !== 'chinook' || listed.has('upstream/chinook.mysql.sql'), 'the displaced upstream script is listed at its upstream path');
+  });
+}
+
 test('docs/format-matrix.md is the current rendering of the declaration and the build', async () => {
   const expected = renderMatrixDoc({ matrix, databases: generated, lock });
   const actual = await readFile(join(root, 'docs/format-matrix.md'), 'utf8');

@@ -35,7 +35,9 @@ const providerOf = (id) => generated.find((database) => database.id === id);
 const labelOf = (database, format) => {
   if (format === 'sql') return 'SQL (SQLite dialect)';
   if (format.startsWith('upstream-')) return `${database.formatAvailability.find((item) => item.format === format.slice('upstream-'.length))?.label}, upstream (unverified, drops database)`;
-  return database.formatAvailability.find((item) => item.format === format)?.label;
+  const item = database.formatAvailability.find((entry) => entry.format === format);
+  if (item?.state === 'download' && item.origin === 'provider' && ['postgresql', 'mysql', 'sqlserver', 'oracle'].includes(format)) return `${item.label}, upstream (unverified, drops database)`;
+  return item?.label;
 };
 const completeDownloads = (database) => database.exports.filter((file) => !file.table && file.format !== 'metadata');
 const decodedSha = (file) => file.decodedSha256 ?? file.sha256;

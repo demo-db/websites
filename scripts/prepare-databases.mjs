@@ -146,6 +146,7 @@ for (const db of databases) {
   db.exports.push(...derivedByDatabase.get(db.id));
   db.exportByPublicPath = Object.fromEntries(db.exports.map((item) => [item.publicPath, item]));
   db.formatAvailability = formatAvailability(formatMatrix, db.id, db.exports);
+  await rewritePublishedChecksums(db);
 }
 if (updateDerivedLock) {
   await writeFile(join(root, LOCK_PATH), serializeLock(lockCollector.collected));
@@ -356,6 +357,38 @@ async function materializeModels(db, source) {
     await writeFile(target, bytes);
   }
   if (modelChecksumsBytes) await writeFile(join(internalAssets, db.id, 'model/checksums.json'), modelChecksumsBytes);
+}
+
+// A provider may publish `metadata/checksums.json`, "every other published data file with its SHA-256 and size". Chinook does. The site moves
+// and adds downloads after the provider wrote it (a displaced upstream script, the generated scripts and archives), so the published copy is
+// rewritten here to describe what is served: an upstream script moves to its `upstream/` path, and each file DemoDB generated gets its
+// entry (decoded size and SHA-256, as a client receives it). The provider's own entries are not touched, and a test compares every entry
+// of every published checksums.json with the bytes served at its path.
+async function rewritePublishedChecksums(db) {
+  const entry = db.exports.find((item) => item.format === 'metadata' && item.publicPath === 'metadata/checksums.json' && !item.compression && !item.chunks?.length);
+  if (!entry) return;
+  const target = join(internalAssets, db.id, 'data', entry.assetPath);
+  const document = JSON.parse(await readFile(target, 'utf8'));
+  if (!document.files || typeof document.files !== 'object') return;
+  const files = { ...document.files };
+  let changed = false;
+  const identityOf = (file) => ({ sha256: file.decodedSha256 ?? file.sha256, bytes: file.decodedBytes ?? file.bytes });
+  for (const file of db.exports.filter((item) => !item.table && item.format.startsWith('upstream-'))) {
+    const original = file.publicPath.slice('upstream/'.length);
+    if (files[original]?.sha256 === identityOf(file).sha256) delete files[original];
+    files[file.publicPath] = identityOf(file);
+    changed = true;
+  }
+  for (const file of db.exports.filter((item) => !item.table && item.derived)) {
+    files[file.publicPath] = identityOf(file);
+    changed = true;
+  }
+  if (!changed) return;
+  const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const rewritten = Buffer.from(`${JSON.stringify({ ...document, files: sorted, siteNote: 'DemoDB rewrote this file when it built the site: an upstream script that a generated one displaced is listed at its upstream/ path, and the files DemoDB generates are listed with the size and SHA-256 a client receives.' }, null, 2)}\n`);
+  await writeFile(target, rewritten);
+  entry.bytes = rewritten.length;
+  entry.sha256 = sha256(rewritten);
 }
 
 // A provider's own complete SQL script of an engine (Chinook ships lerocha's upstream mysql, postgresql and sqlserver scripts) keeps the

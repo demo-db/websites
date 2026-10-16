@@ -7,9 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { gzipSync } from 'node:zlib';
+import { spawnSync } from 'node:child_process';
 import {
   MANIFEST_FORMAT, canonicalJson, checkProvider, describeStored, encodeScript, generateProvider, inputsOf, inputsSha256Of, loadConfig,
-  scriptProblems, serializeJson, validateConfig, verifyRelease,
+  scriptProblems, serializeJson, validateConfig, verifyRelease, literalProblems, classifyPin, pinProblems, recordVerification, ensureDatatug,
 } from './dialect-scripts.mjs';
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -88,6 +89,8 @@ function scriptFor({ id = 'demo', inputs, body = ['CREATE TABLE `t` (', '  `a` B
   ].join('\n'));
 }
 
+const verificationFor = (stored) => ({ scriptSha256: stored.decodedSha256, differences: 0, rows: 1, tables: 1, secondLoadRefusedAtMarkerTable: true });
+
 async function syntheticProvider({ license = 'MIT', gzip = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'demodb-dialect-test-'));
   scratch.push(dir);
@@ -105,7 +108,7 @@ async function syntheticProvider({ license = 'MIT', gzip = false } = {}) {
   const stored = describeStored(encoded.mode, encoded.files, script);
   const dialectManifest = {
     format: MANIFEST_FORMAT, id: 'demo', attribution: ATTRIBUTION,
-    scripts: { mysql: { inputs, inputsSha256: inputsSha256Of(inputs), report: { bytes: report.length, path: 'dialect-scripts/demo.mysql.report.json', sha256: sha(report), warnings: {} }, stored } },
+    scripts: { mysql: { verification: verificationFor(stored), inputs, inputsSha256: inputsSha256Of(inputs), report: { bytes: report.length, path: 'dialect-scripts/demo.mysql.report.json', sha256: sha(report), warnings: {} }, stored } },
   };
   await writeFile(join(dir, 'dialect-scripts/manifest.json'), serializeJson(dialectManifest));
   return { dir, manifest, inputs, script, dialectManifest };
@@ -144,6 +147,56 @@ test('the check fails when a stored byte, the licence, the attribution or the SQ
   m.source.databaseSha256 = sha(Buffer.from('another fixture'));
   await writeFile(join(pinned.dir, 'manifest.json'), JSON.stringify(m));
   assert.match((await checkProvider(pinned.dir, config)).join('\n'), /inputs changed/, 'a new SQLite fixture makes the script stale');
+});
+
+test('the check requires a clean recorded verification of this very script', async () => {
+  const { dir } = await syntheticProvider();
+  await rewriteManifest(dir, (value) => { delete value.scripts.mysql.verification; });
+  assert.match((await checkProvider(dir, config)).join('\n'), /records no verification/);
+  assert.deepEqual(await checkProvider(dir, config, 'mysql', { requireVerification: false }), [], 'only the verification is missing');
+  await rewriteManifest(dir, (value) => { value.scripts.mysql.verification = { scriptSha256: value.scripts.mysql.stored.decodedSha256, differences: 2, rows: 1, tables: 1, secondLoadRefusedAtMarkerTable: true }; });
+  assert.match((await checkProvider(dir, config)).join('\n'), /not a clean one/);
+});
+
+// The reviewer's bypass: edit the script, re-hash the manifest, drop the verification. The check must still refuse every client-command shape.
+for (const [name, edit] of [
+  ['a command after a semicolon in a line', (text) => text.replace('(1);', '(1);\nCOMMIT; \\! touch /tmp/pwn_mid')],
+  ['an indented command', (text) => text.replace('(1);', '(1);\n  \\! touch /tmp/pwn_indent')],
+  ['a command inside a value line', (text) => text.replace('(1);', "(1), ('a\\! cmd');")],
+  ['a source command in an indented line', (text) => text.replace('(1);', '(1);\n  source /etc/passwd')],
+  ['a mid-line comment that hides text', (text) => text.replace('(1);', '(1); -- x')],
+  ['a hash comment', (text) => text.replace('(1);', '(1) # x\n;')],
+  ['a conditional comment', (text) => text.replace('(1);', '(1) /*! x */;')],
+  ['a raw line break inside a string', (text) => text.replace('(1);', "('a\nb');")],
+  ['an unterminated string', (text) => text.replace('(1);', "('a);")],
+]) {
+  test(`the required check refuses ${name}, even when the manifest is re-hashed and carries no verification`, async () => {
+    const { dir, script, inputs } = await syntheticProvider();
+    const edited = Buffer.from(edit(script.toString()));
+    assert.notDeepEqual(edited, script);
+    await writeFile(join(dir, 'dialect-scripts/demo.mysql.sql'), edited);
+    await rewriteManifest(dir, (value) => {
+      const record = value.scripts.mysql;
+      record.stored = describeStored('plain', new Map([['dialect-scripts/demo.mysql.sql', edited]]), edited);
+      delete record.verification;
+      assert.equal(record.inputsSha256, inputsSha256Of(inputs));
+    });
+    const problems = (await checkProvider(dir, config)).join('\n');
+    assert.match(problems, /starts with something the exporter never writes|line \d+: |records no verification/);
+    assert.match(problems, /line \d+: |starts with something/, 'the script itself is refused, not only the missing verification');
+  });
+}
+
+test('a clean script with strings, quoted names and doubled quotes passes the literal lint', () => {
+  const ok = Buffer.from("-- c \\ # /* \nINSERT INTO `a``b` VALUES\n(1, 'it''s -- not a comment; \u00e9', _utf8mb4 X'5c21'),\n(2, NULL);\n");
+  assert.deepEqual(literalProblems(ok), []);
+});
+
+test('the SQLite file of the provider must match its pin when it is present', async () => {
+  const { dir } = await syntheticProvider();
+  await writeFile(join(dir, 'data-source/source.sqlite'), Buffer.from('changed'));
+  assert.match((await checkProvider(dir, config)).join('\n'), /does not decode to the pinned SQLite SHA-256/);
+  assert.deepEqual(await checkProvider(dir, config, 'mysql', { checkSqlite: false }), []);
 });
 
 test('a recorded verification must be for the stored script', async () => {
@@ -214,7 +267,8 @@ test('a changed input runs the pinned exporter with every parameter intact (; & 
   const binary = await fakeDatatug(dir);
   const outcome = await generateProvider({ dir, config, getBinary: async () => binary });
   assert.equal(outcome, 'rewritten');
-  assert.deepEqual(await checkProvider(dir, config), []);
+  assert.match((await checkProvider(dir, config)).join('\n'), /records no verification/, 'a regenerated script has no verification until one is recorded');
+  assert.deepEqual(await checkProvider(dir, config, 'mysql', { requireVerification: false }), []);
   const script = (await readFile(join(dir, 'dialect-scripts/demo.mysql.sql'))).toString();
   assert.ok(script.includes(`-- Attribution: ${ATTRIBUTION}`), 'the attribution reached the header unchanged');
   assert.ok(script.includes('-- Licence: CC-BY-SA-3.0'));
@@ -272,4 +326,122 @@ test('the live workflow is path-filtered, unscheduled, pins its actions and load
   assert.match(required, /dialect-scripts\.mjs check --providers/, 'the required served-formats job checks the scripts without Docker');
   assert.ok(!/docker|regenerate-check/.test(required.match(/dialect-scripts[^\n]*/g)?.join('\n') ?? ''), 'and without the datatug binary');
   assert.deepEqual(Object.keys(deploy.jobs), ['verified-postgresql-state', 'served-formats', 'deploy'], 'no job was added to or removed from the required workflow');
+});
+
+// --- the provider pins -----------------------------------------------------------------------------------------
+
+test('a pin must be on the provider main: identical and behind pass, ahead only in warn-ahead mode, diverged and API errors never', async () => {
+  assert.deepEqual(['identical', 'behind', 'ahead', 'diverged', undefined].map(classifyPin), ['on-main', 'on-main', 'ahead', 'refused', 'refused']);
+  const databases = [{ id: 'a', repository: 'https://github.com/demo-db/a', commit: 'c1' }, { id: 'b', repository: 'https://github.com/demo-db/b', commit: 'c2' }];
+  const fetchJson = (statuses) => async (url) => {
+    const id = url.match(/repos\/demo-db\/(\w)\/compare\/main\.\.\.(\w+)$/);
+    assert.ok(id, `compares main with the pinned commit: ${url}`);
+    const status = statuses[id[1]];
+    if (status === 'error') throw new Error('HTTP 500');
+    return { status };
+  };
+  assert.deepEqual((await pinProblems({ databases, fetchJson: fetchJson({ a: 'identical', b: 'behind' }) })).problems, []);
+  const ahead = await pinProblems({ databases, fetchJson: fetchJson({ a: 'identical', b: 'ahead' }) });
+  assert.match(ahead.problems.join('\n'), /b: the pinned commit c2 is ahead, not on main/);
+  const warn = await pinProblems({ databases, fetchJson: fetchJson({ a: 'identical', b: 'ahead' }), mode: 'warn-ahead' });
+  assert.deepEqual(warn.problems, []);
+  assert.match(warn.notes.join('\n'), /b: c2 is not on main/);
+  assert.match((await pinProblems({ databases, fetchJson: fetchJson({ a: 'diverged', b: 'identical' }), mode: 'warn-ahead' })).problems.join('\n'), /a: the pinned commit c1 is diverged/);
+  assert.match((await pinProblems({ databases, fetchJson: fetchJson({ a: 'error', b: 'identical' }), mode: 'warn-ahead' })).problems.join('\n'), /cannot compare c1 with main/);
+});
+
+test('the required served-formats job checks the pins, strictly on a push to main', async () => {
+  const { parse } = await import('yaml');
+  const deploy = parse(await readFile(join(new URL('..', import.meta.url).pathname, '.github/workflows/deploy.yml'), 'utf8'));
+  const step = deploy.jobs['served-formats'].steps.find((item) => /check-pins/.test(item.run ?? ''));
+  assert.ok(step, 'a check-pins step');
+  assert.match(step.env.DEMODB_PIN_MODE, /pull_request.*warn-ahead.*strict/);
+  assert.match(step.env.GITHUB_TOKEN, /github\.token/);
+});
+
+// --- verification record and the binary cache ------------------------------------------------------------------
+
+test('record-verification stamps the numbers of a clean run onto the stored script and refuses a run with differences', async () => {
+  const { dir } = await syntheticProvider();
+  await rewriteManifest(dir, (value) => { delete value.scripts.mysql.verification; });
+  const result = { tables: 2, rows: 9, valuesCompared: 40, differences: 0, verifierWarnings: 1, engine: 'MySQL 8.4.11', verifier: 'v' };
+  await assert.rejects(recordVerification({ dir, config, result: { ...result, differences: 1 } }), /not recorded/);
+  await assert.rejects(recordVerification({ dir, config, result: { ...result, rows: NaN } }), /--rows/);
+  await recordVerification({ dir, config, result });
+  assert.deepEqual(await checkProvider(dir, config), []);
+});
+
+test('the datatug cache is hashed again on every use: a changed archive is downloaded again, a changed binary is unpacked again', async () => {
+  const work = await mkdtemp(join(tmpdir(), 'demodb-cache-test-'));
+  scratch.push(work);
+  await mkdir(join(work, 'src'));
+  await writeFile(join(work, 'src/datatug'), '#!/bin/sh\necho real\n');
+  const name = 'datatug_0.97.1_linux_amd64.tar.gz';
+  spawnSync('tar', ['-czf', join(work, name), '-C', join(work, 'src'), 'datatug']);
+  const archive = await readFile(join(work, name));
+  const checksums = `${sha(archive)}  ${name}\n`;
+  const local = clone(config);
+  local.generator.assets['linux-x64'] = { name, sha256: sha(archive) };
+  local.generator.checksumsSha256 = sha(Buffer.from(checksums));
+  const realFetch = globalThis.fetch;
+  let downloads = 0;
+  globalThis.fetch = async (url) => { downloads += 1; return new Response(String(url).endsWith('checksums.txt') ? checksums : archive); };
+  try {
+    const tools = join(work, 'tools');
+    const binary = await ensureDatatug(local, tools, 'linux-x64');
+    assert.equal(downloads, 2);
+    assert.equal((await readFile(binary)).toString(), '#!/bin/sh\necho real\n');
+    await ensureDatatug(local, tools, 'linux-x64');
+    assert.equal(downloads, 2, 'a verified cache is used without a download');
+    await writeFile(binary, 'tampered binary');
+    await ensureDatatug(local, tools, 'linux-x64');
+    assert.equal(downloads, 2);
+    assert.equal((await readFile(binary)).toString(), '#!/bin/sh\necho real\n', 'the binary is unpacked again from the verified archive');
+    await writeFile(join(tools, 'datatug-v0.97.1-linux-x64', name), 'tampered archive');
+    await ensureDatatug(local, tools, 'linux-x64');
+    assert.equal(downloads, 4, 'a changed archive is downloaded and verified again');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+// --- the licence notice input ----------------------------------------------------------------------------------
+
+test('a notice input changes the inputs hash and the header must carry every notice line; off, nothing changes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'demodb-notice-test-'));
+  scratch.push(dir);
+  await writeFile(join(dir, 'demo.txt'), 'Copyright (c) 2026 Someone\n\nPermission is hereby granted.\n');
+  const withNotice = { ...clone(config), notice: { enabled: true, dir, param: 'notice-file' } };
+  const manifest = { id: 'demo', source: { databaseSha256: sha(SQLITE), license: 'MIT' } };
+  const off = inputsOf({ manifest, config, dialect: 'mysql', attribution: ATTRIBUTION });
+  const on = inputsOf({ manifest, config: withNotice, dialect: 'mysql', attribution: ATTRIBUTION });
+  assert.ok(!('noticeSha256' in off) && /^[0-9a-f]{64}$/.test(on.noticeSha256));
+  assert.notEqual(inputsSha256Of(on), inputsSha256Of(off));
+  const notice = 'Copyright (c) 2026 Someone\n\nPermission is hereby granted.\n';
+  const header = scriptFor({ inputs: on }).toString().replace('-- Attribution:', '-- Copyright (c) 2026 Someone\n-- \n-- Permission is hereby granted.\n-- Attribution:');
+  assert.equal(scriptProblems(Buffer.from(header), { id: 'demo', inputs: on, spec, notice }).join('\n'), '');
+  assert.match(scriptProblems(scriptFor({ inputs: on }), { id: 'demo', inputs: on, spec, notice }).join('\n'), /lacks the licence notice line/);
+  assert.throws(() => validateConfig({ ...clone(config), notice: { enabled: true, dir, param: null } }), /notice\.param/);
+  await rm(join(dir, 'demo.txt'));
+  assert.throws(() => inputsOf({ manifest, config: withNotice, dialect: 'mysql', attribution: ATTRIBUTION }), /does not exist/);
+});
+
+test('the staged licence notices exist for every dataset and carry the text each licence asks to travel', async () => {
+  const root = new URL('..', import.meta.url).pathname;
+  const ids = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8')).databases.map((entry) => entry.id);
+  const mit = ['Permission is hereby granted, free of charge', 'The above copyright notice and this permission notice shall be included', 'THE SOFTWARE IS PROVIDED "AS IS"'];
+  const need = {
+    chinook: ['Copyright (c) 2008-2024 Luis Rocha', ...mit],
+    northwind: ['Copyright (c) 2016 JP White', ...mit],
+    pubs: ['Copyright Microsoft, Inc. 1994 - 2000', 'Copyright (c) Microsoft Corporation', ...mit],
+    adventureworks: ['Copyright (c) Microsoft Corporation', ...mit],
+    sakila: ['Copyright (c) 2006, 2026, Oracle and/or its affiliates.', 'Redistributions of source code must retain the above copyright notice', 'Redistributions in binary form must reproduce the above copyright', 'Neither the name of Oracle', 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS'],
+    employees: ['Copyright (C) 2007,2008, MySQL AB', 'Fusheng Wang and Carlo Zaniolo', 'Giuseppe Maxia', 'Patrick Crews', 'http://creativecommons.org/licenses/by-sa/3.0/', 'https://github.com/datacharmer/test_db', 'Adaptation:', 'https://creativecommons.org/licenses/by-sa/3.0/legalcode'],
+  };
+  assert.deepEqual(Object.keys(need).sort(), [...ids].sort());
+  for (const id of ids) {
+    const text = await readFile(join(root, 'config/dialect-notices', `${id}.txt`), 'utf8');
+    assert.ok(text.endsWith('\n') && !text.includes('\r') && !text.includes('\0'), `${id}: LF text`);
+    for (const phrase of need[id]) assert.ok(text.includes(phrase), `${id}: the notice carries "${phrase}"`);
+  }
 });

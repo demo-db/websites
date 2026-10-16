@@ -27,6 +27,12 @@
       "marker": "_demodb_import"
     }
   },
+  "notice": {
+    "enabled": false,
+    "dir": "config/dialect-notices",
+    "param": null,
+    "note": "Staged. The full licence notice of each dataset (config/dialect-notices/<id>.txt, from the upstream licence files) goes into every script header once the pinned datatug release can write a multi-line notice: set param to its exporter parameter, enable, and run generate."
+  },
   "planned": {
     "sqlserver": "datatug dialect=mssql is in review and arrives in a later datatug release; adding it here is a change of this file, the matrix and a regeneration, nothing else.",
     "oracle": "No generator exists yet."

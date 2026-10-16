@@ -41,11 +41,48 @@ licence, the attribution, the dialect and the dataset name. When it is unchanged
 regenerates, and if the decoded script is the same as before it keeps the stored bytes and the recorded verification, so a different zlib never
 rewrites a provider repository. A recorded verification belongs to one script: `check` fails when it names another one.
 
-## Order of changes
+## Order of changes, the pins and the merge method
 
-1. The provider pull requests add `dialect-scripts/` (nothing else changes in a provider; the contract, the checksums and the model are untouched).
-2. After they land, `config/databases.json` pins each provider's new commit in this repository (the contract SHA-256 does not change), and `config/derived-exports.lock.json` already holds the decoded hashes.
-3. A new datatug release (for example the one carrying `dialect=mssql`) is a change of `config/dialect-scripts.json`, then `generate` in each provider, then new pins.
+1. The provider pull requests add `dialect-scripts/`. Nothing else changes in a provider (contract, checksums and model untouched, so the `contractSha256` pins stay valid).
+2. The websites pull request pins each provider's **pull request head** in `config/databases.json` so that its CI can run before the providers land. Until then
+   `dialect-scripts.mjs check-pins` only warns on the pull request (`DEMODB_PIN_MODE=warn-ahead`).
+3. The providers land first. On the push to `main` the same step runs strict: every pinned commit must be on that provider's `main` (GitHub compare of `main...<commit>` says
+   `identical` or `behind`; `ahead`, `diverged` and an API error fail), so nothing deploys from a commit nobody merged.
+4. **Merge commit or fast-forward push**: the pinned head is now in `main`'s history, nothing to do. **Squash or rebase**: the pinned head is not on `main`, the strict check fails, and
+   you re-pin each affected `commit` to the commit `main` now has (the tree is the same: no `contractSha256` or lock change), push, and wait for CI again before landing.
+5. A new datatug release (for example the one carrying `dialect=mssql`, or the multi-line licence notice below) is a change of `config/dialect-scripts.json`, then `generate` and a
+   verification record in each provider, then new pins.
+
+`record-verification` stamps the numbers of a cross-engine verifier run onto the stored script (`node scripts/dialect-scripts.mjs record-verification --provider <checkout> --tables N --rows N --values N --differences 0 --warnings N`).
+It refuses a run with differences, and `check` refuses a script whose manifest has no clean verification of exactly its bytes: a regenerated script is not publishable until one is recorded.
+
+## What `check` refuses
+
+Besides the hashes, `check` lints the committed script the way the mysql client reads it, so that a re-hashed manifest cannot hide an edit: no CR, BOM or NUL; every line starts with a token the exporter writes
+(an indented line is a column or key definition); no backslash outside a `--` comment line; no `#`, `/*` or mid-line `--` comment; no raw line break inside a string or a quoted name; nothing after a semicolon
+on its line (`COMMIT; \! cmd`); the contract-edition label, the dataset, the licence of the provider manifest, the attribution, the datatug release and the SQLite SHA-256 in the header; the marker table first and
+its row last. It also hashes the provider's SQLite file when the file is present. The comments in the header are free text and the client ignores a comment line.
+
+## Licence notices in the headers (staged)
+
+Today the header carries the SPDX identifier, the copyright and the provider-written attribution. The full notice each licence asks to travel with a copy (MIT: the copyright line, the permission notice and the
+disclaimer; BSD-3-Clause for Sakila: the copyright, the three conditions and the disclaimer; CC BY-SA 3.0 for Employees: the verbatim copyright, credits, title, source, the adaptation and the licence URI) is staged in
+`config/dialect-notices/<id>.txt`, written verbatim from the upstream licence files (only trailing spaces at line ends removed). They were compared with the upstream repositories at the pinned revisions: Chinook (`lerocha/chinook-database` at 7f67772),
+Northwind (`jpwhite3/northwind-SQLite3` at 4f56e7f) and the Microsoft repository (`microsoft/sql-server-samples` at beaab06, Pubs and AdventureWorks) are byte for byte the retained `data-source/` licence files; Sakila's header is
+identical to `sakila-schema.sql` of the archive with the pinned SHA-256; Employees is the header of `employees.sql` at e324b56 (note `Copyright (C) 2007,2008, MySQL AB` exactly as upstream writes it, which the retained
+`UPSTREAM-NOTICE.txt` respaces).
+
+They are switched on by `notice.enabled` and `notice.param` in `config/dialect-scripts.json` once the pinned datatug release can write a multi-line notice from a file: then the notice joins the inputs hash
+(`noticeSha256`), `generate` passes the file, and `check` requires every notice line in the header as a `-- ` comment line. Until then nothing changes, and no script byte does.
+
+For the provider re-run, the Employees attribution input in `dialect-scripts/manifest.json` should read (the notice file carries the rest):
+`Employees sample database, Copyright (C) 2007,2008, MySQL AB, original data by Fusheng Wang and Carlo Zaniolo, current schema by Giuseppe Maxia, data conversion from XML to relational by Patrick Crews, https://github.com/datacharmer/test_db. Adapted by DemoDB: reduced 1,024-employee subset, converted to SQLite and to MySQL by DataTug. CC BY-SA 3.0 Unported, https://creativecommons.org/licenses/by-sa/3.0/legalcode`.
+Providers should also add `dialect-scripts/** -text` to their `.gitattributes` in that run: with `core.autocrlf=true` a checkout would otherwise turn LF into CRLF and `check` would fail.
+
+## `corpus.json` compatibility
+
+`corpus.json` stays `demodb-corpus/draft-1` and the change is additive: `formatAvailability` gains the format `oracle`, the state `planned` and the origin `provider-script`, and `exports` gains the formats `mysql`
+(for every dataset) and `upstream-mysql` (Chinook). A consumer must ignore formats, states and origins it does not know; the existing keys and meanings are unchanged. If a consumer cannot, bump the draft with the same change.
 
 ## Adding SQL Server later
 
@@ -57,9 +94,9 @@ Until then the matrix says `planned`, and the pages say "Planned", never "availa
 ## Chinook
 
 Chinook ships lerocha's upstream scripts. The generated, verified MySQL script is at the canonical URL `/data/chinook.mysql.sql`. The upstream MySQL script
-moved, unchanged, to `/data/upstream/chinook.mysql.sql` and is labelled "MySQL script, upstream (unverified, drops database)": it starts with
-`DROP DATABASE IF EXISTS` and is not checked against the pinned fixture. The upstream PostgreSQL and SQL Server scripts keep their URLs and are
-still the provider's files.
+moved, unchanged, to `/data/upstream/chinook.mysql.sql`. All three upstream scripts (MySQL, PostgreSQL, SQL Server) are labelled "upstream (unverified, drops database)" on the pages: each starts by dropping and creating the
+`Chinook` database and none is checked against the pinned fixture. The upstream PostgreSQL and SQL Server scripts keep their URLs. The published `/data/metadata/checksums.json` is rewritten at build time to match what is
+served (the upstream script under `upstream/`, the generated files added), and a test compares every entry of every published checksums.json with the served bytes.
 
 ## Loading
 
@@ -67,6 +104,6 @@ still the provider's files.
 mysql --default-character-set=utf8mb4 --skip-commands --skip-system-command --database <empty database> < <id>.mysql.sql
 ```
 
-Requires MySQL 8.0.16 or later (CHECK constraints are enforced there); verified on MySQL 8.4 LTS. The first statement creates the marker table
+Verified on MySQL 8.4 LTS (8.4.11). The exporter's header states 8.0.16 as the minimum (where CHECK constraints are enforced); that has not been tested here, only 8.4. The first statement creates the marker table
 `_demodb_import` and the last fills it: a row there means the load completed, and a second load into the same database stops at once. MySQL commits DDL, so a failed load
 is not rolled back: drop the database and load again. `--skip-commands` needs mysql 8.4.6 or later and is a second line of defence: no data byte can start a script line.

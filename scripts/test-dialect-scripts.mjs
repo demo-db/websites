@@ -429,19 +429,21 @@ test('a notice input changes the inputs hash and the header must carry every not
 test('the staged licence notices exist for every dataset and carry the text each licence asks to travel', async () => {
   const root = new URL('..', import.meta.url).pathname;
   const ids = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8')).databases.map((entry) => entry.id);
-  const mit = ['Permission is hereby granted, free of charge', 'The above copyright notice and this permission notice shall be included', 'THE SOFTWARE IS PROVIDED "AS IS"'];
+  // The last words of each licence are in the list on purpose: a notice cut at a line end (a bad whitespace strip once removed trailing letters) must fail.
+const mit = ['Permission is hereby granted, free of charge', 'The above copyright notice and this permission notice shall be included', 'THE SOFTWARE IS PROVIDED "AS IS"', 'OTHER DEALINGS IN THE', 'SOFTWARE.'];
   const need = {
     chinook: ['Copyright (c) 2008-2024 Luis Rocha', ...mit],
     northwind: ['Copyright (c) 2016 JP White', ...mit],
     pubs: ['Copyright Microsoft, Inc. 1994 - 2000', 'Copyright (c) Microsoft Corporation', ...mit],
     adventureworks: ['Copyright (c) Microsoft Corporation', ...mit],
-    sakila: ['Copyright (c) 2006, 2026, Oracle and/or its affiliates.', 'Redistributions of source code must retain the above copyright notice', 'Redistributions in binary form must reproduce the above copyright', 'Neither the name of Oracle', 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS'],
-    employees: ['Copyright (C) 2007,2008, MySQL AB', 'Fusheng Wang and Carlo Zaniolo', 'Giuseppe Maxia', 'Patrick Crews', 'http://creativecommons.org/licenses/by-sa/3.0/', 'https://github.com/datacharmer/test_db', 'Adaptation:', 'https://creativecommons.org/licenses/by-sa/3.0/legalcode'],
+    sakila: ['Copyright (c) 2006, 2026, Oracle and/or its affiliates.', 'Redistributions of source code must retain the above copyright notice', 'Redistributions in binary form must reproduce the above copyright', 'Neither the name of Oracle', 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS', 'EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.'],
+    employees: ['Copyright (C) 2007,2008, MySQL AB', 'Fusheng Wang and Carlo Zaniolo', 'Giuseppe Maxia', 'Patrick Crews', 'http://creativecommons.org/licenses/by-sa/3.0/', 'https://github.com/datacharmer/test_db', 'Adaptation:', 'Any similarity to existing people is purely coincidental.', 'https://creativecommons.org/licenses/by-sa/3.0/legalcode'],
   };
   assert.deepEqual(Object.keys(need).sort(), [...ids].sort());
   for (const id of ids) {
     const text = await readFile(join(root, 'config/dialect-notices', `${id}.txt`), 'utf8');
     assert.ok(text.endsWith('\n') && !text.includes('\r') && !text.includes('\0'), `${id}: LF text`);
     for (const phrase of need[id]) assert.ok(text.includes(phrase), `${id}: the notice carries "${phrase}"`);
+    assert.ok(text.split('\n').every((line) => line === line.trimEnd()), `${id}: no trailing whitespace`);
   }
 });

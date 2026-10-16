@@ -1,0 +1,36 @@
+---
+import SiteLayout from '../../../../../layouts/SiteLayout.astro';
+import { databases } from '../../../../../data/db';
+import { ORDERS_EVIDENCE_REVISION, ORDERS_EVIDENCE_ASSETS } from '../../../../../../scripts/northwind-orders-evidence.mjs';
+
+const db = databases.find((item) => item.id === 'northwind');
+if (!db) throw new Error('Northwind is absent from the provider registry');
+const provider = `https://github.com/demo-db/northwind/tree/${ORDERS_EVIDENCE_REVISION}`;
+const readme = ORDERS_EVIDENCE_ASSETS['README-public-orders-evidence.md'];
+const receipt = ORDERS_EVIDENCE_ASSETS['public-orders-evidence-2026-10-16.json'];
+const rights = ORDERS_EVIDENCE_ASSETS['source-rights.json'];
+---
+<SiteLayout db={db} title="Northwind Orders public evidence | DemoDB" description="Pinned provider evidence comparing the public Northwind SQLite and PostgreSQL Orders responses at one observation time." canonical="/evidence/public-orders/">
+  <section class="page-intro shell">
+    <p class="eyebrow">Northwind · reproducible observation</p>
+    <h1>Public Orders evidence.</h1>
+    <p>A provider-owned receipt records a read-only comparison of all 830 Northwind Orders rows and 14 fields from the public SQLite and PostgreSQL DTQL endpoints on 16 October 2026. It records response shape, source identifiers and browser CORS observations at that time.</p>
+  </section>
+  <section class="shell section about-grid">
+    <article class="prose">
+      <h2>Inspect the pinned files.</h2>
+      <p><a class="text-link" href="/evidence/public-orders/public-orders-evidence-2026-10-16.json">Read receipt JSON →</a> <small>{receipt.bytes.toLocaleString()} bytes · SHA-256 {receipt.sha256}</small></p>
+      <p><a class="text-link" href="/evidence/public-orders/source-rights.json">Read DemoDB SQLite Orders rights declaration →</a> <small>{rights.bytes.toLocaleString()} bytes · SHA-256 {rights.sha256}</small></p>
+      <p><a class="text-link" href="/evidence/public-orders/README.md">Read provider explanation →</a> <small>{readme.bytes.toLocaleString()} bytes · SHA-256 {readme.sha256}</small></p>
+      <p><a class="text-link" href={`${provider}/scripts/verify-public-orders.py`}>Inspect the provider verifier ↗</a></p>
+      <p><a class="text-link" href={`${provider}/data-source/LICENSE.md`}>Read the upstream MIT notice included by the provider ↗</a></p>
+    </article>
+    <aside class="content-card licence-card">
+      <p class="eyebrow">Scope and attribution</p>
+      <h2>A recorded comparison.</h2>
+      <p>Provider revision <a class="text-link" href={provider}><code>{ORDERS_EVIDENCE_REVISION.slice(0, 12)}</code> ↗</a> is the immutable source of these files. The site build checks their byte counts and SHA-256 hashes against that revision’s checksum manifest and this publication pin.</p>
+      <p>The provider attributes its source to <a class="text-link" href="https://github.com/jpwhite3/northwind-SQLite3">jpwhite3/northwind-SQLite3</a> under MIT. The receipt reports an observed match for Orders; it does not prove other tables, future API state, private hosting configuration, or a signed live API rights envelope.</p>
+      <p>The DemoDB publisher declares MIT terms for its own SQLite Orders recordset. A client must verify a fresh, complete 830-row result against the pinned full-row digest before applying that declaration. The separately owned PostgreSQL API is outside its scope.</p>
+    </aside>
+  </section>
+</SiteLayout>

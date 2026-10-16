@@ -10,6 +10,7 @@ import { materializeProviderExports } from './provider-exports.mjs';
 import { LOCK_FORMAT, LOCK_PATH, SQL_SCRIPT_FORMATS, deriveDatasetExports, serializeLock } from './derived-exports.mjs';
 import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
+import { publishNorthwindOrdersEvidence } from './northwind-orders-evidence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
@@ -80,6 +81,10 @@ for (const entry of registry.databases) {
   await mkdir(dirname(schemaPath), { recursive: true });
   await writeFile(schemaPath, `${JSON.stringify(db.schema, null, 2)}\n`);
 }
+
+// Publish the separately reviewed, immutable Northwind Orders observation.
+// It is evidence about public responses at one time, not a live rights envelope.
+await publishNorthwindOrdersEvidence({ outputDir: join(internalAssets, 'northwind/evidence/public-orders') });
 
 const databaseEntries = new Map(registry.databases.map((entry) => [entry.id, entry]));
 const comparisonAssets = await materializeComparisonFixtures(

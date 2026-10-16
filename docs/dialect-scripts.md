@@ -9,7 +9,7 @@ it holds the same tables and rows as the SQLite, CSV and JSON downloads, and wha
 
 | What | Where |
 |---|---|
-| The generator pin | `config/dialect-scripts.json`: datatug release tag `v0.97.1` (never `latest`), the SHA-256 of the checksums file and of every platform asset, the edition label, the dialects |
+| The generator pin | `config/dialect-scripts.json`: datatug release tag `v0.100.0` (never `latest`), the SHA-256 of the checksums file and of every platform asset, the edition label, the dialects |
 | The scripts | each provider repository, `dialect-scripts/<id>.mysql.sql` (plain up to 25 MiB; above that deterministic gzip `.sql.gz`, and `.gz.part-NNNN` pieces above 25 MiB again, exactly like the provider exports) |
 | What decides the bytes | `dialect-scripts/manifest.json` of the provider: the provider-written `attribution`, the recorded `inputs` (decoded SQLite SHA-256, datatug pin, edition, licence from `manifest.json` `source.license`, attribution), their hash `inputsSha256`, the stored files with their SHA-256, the decoded size and SHA-256, the exporter's report and the verification run |
 | The exporter's report | `dialect-scripts/<id>.mysql.report.json`: every warning (what was not carried exactly), without any local path |
@@ -63,21 +63,26 @@ Besides the hashes, `check` lints the committed script the way the mysql client 
 on its line (`COMMIT; \! cmd`); the contract-edition label, the dataset, the licence of the provider manifest, the attribution, the datatug release and the SQLite SHA-256 in the header; the marker table first and
 its row last. It also hashes the provider's SQLite file when the file is present. The comments in the header are free text and the client ignores a comment line.
 
-## Licence notices in the headers (staged)
+## Licence notices in the headers
 
-Today the header carries the SPDX identifier, the copyright and the provider-written attribution. The full notice each licence asks to travel with a copy (MIT: the copyright line, the permission notice and the
-disclaimer; BSD-3-Clause for Sakila: the copyright, the three conditions and the disclaimer; CC BY-SA 3.0 for Employees: the verbatim copyright, credits, title, source, the adaptation and the licence URI) is staged in
-`config/dialect-notices/<id>.txt`, written verbatim from the upstream licence files (only trailing spaces at line ends removed). They were compared with the upstream repositories at the pinned revisions: Chinook (`lerocha/chinook-database` at 7f67772),
+A script travels without the site that carries its licence, so every header carries the whole notice its licence asks for: MIT (Chinook, Northwind, Pubs, AdventureWorks) the copyright line, the permission notice and the
+disclaimer; BSD-3-Clause (Sakila) the copyright, the three conditions and the disclaimer; CC BY-SA 3.0 (Employees) the verbatim copyright, credits, title, source, the adaptation statement and the licence URI.
+The text is in `config/dialect-notices/<id>.txt`, written verbatim from the upstream licence files (only trailing spaces at line ends removed). It was compared with the upstream repositories at the pinned revisions: Chinook (`lerocha/chinook-database` at 7f67772),
 Northwind (`jpwhite3/northwind-SQLite3` at 4f56e7f) and the Microsoft repository (`microsoft/sql-server-samples` at beaab06, Pubs and AdventureWorks) are byte for byte the retained `data-source/` licence files; Sakila's header is
 identical to `sakila-schema.sql` of the archive with the pinned SHA-256; Employees is the header of `employees.sql` at e324b56 (note `Copyright (C) 2007,2008, MySQL AB` exactly as upstream writes it, which the retained
 `UPSTREAM-NOTICE.txt` respaces).
 
-They are switched on by `notice.enabled` and `notice.param` in `config/dialect-scripts.json` once the pinned datatug release can write a multi-line notice from a file: then the notice joins the inputs hash
-(`noticeSha256`), `generate` passes the file, and `check` requires every notice line in the header as a `-- ` comment line. Until then nothing changes, and no script byte does.
+`generate` passes the file to datatug as `notice-file=<percent-encoded absolute path>` (datatug v0.100.0, `notice.param` in `config/dialect-scripts.json`). Datatug reads it as UTF-8 (at most 16 KiB, not empty) and writes it after the
+`Licence:` and `Attribution:` lines and a bare `--` line, one `-- ` comment line per notice line. It is verbatim except: CR, CR LF, VT, FF and the other line separators end a line; other control characters, a byte order mark and bidirectional controls become
+spaces; **a tab becomes four spaces**; **`*/` and `/*` get a space between the two characters**; trailing spaces and the blank lines at both ends are dropped (a blank line inside is a bare `--`). A notice line such as `GO` or `\! cmd` therefore stays a comment.
+The notice files here are LF text with no control character except tab (`generate` refuses the rest).
 
-For the provider re-run, the Employees attribution input in `dialect-scripts/manifest.json` should read (the notice file carries the rest):
-`Employees sample database, Copyright (C) 2007,2008, MySQL AB, original data by Fusheng Wang and Carlo Zaniolo, current schema by Giuseppe Maxia, data conversion from XML to relational by Patrick Crews, https://github.com/datacharmer/test_db. Adapted by DemoDB: reduced 1,024-employee subset, converted to SQLite and to MySQL by DataTug. CC BY-SA 3.0 Unported, https://creativecommons.org/licenses/by-sa/3.0/legalcode`.
-Providers should also add `dialect-scripts/** -text` to their `.gitattributes` in that run: with `core.autocrlf=true` a checkout would otherwise turn LF into CRLF and `check` would fail.
+The notice joins the inputs hash (`noticeSha256`), and `check` requires the header to carry it exactly: the line after the `Attribution:` line is `--`, then the expected comment lines one by one. A notice cut short, reordered or changed fails, in the required lane.
+Datatug also **cuts every single header line at 400 bytes and ends it with `...`** (the `Attribution: ` prefix counts) and folds runs of white space; an attribution, licence or edition that long would reach the header shortened without a word, so `generate` and `check` refuse
+one over 400 bytes or with control characters or double spaces. This is why the Employees attribution is a short line and the credits live in the notice.
+
+The Employees attribution line (provider `dialect-scripts/manifest.json`) is `Employees sample database, Copyright (C) 2007,2008, MySQL AB, https://github.com/datacharmer/test_db, CC BY-SA 3.0 Unported. Reduced 1,024-employee subset adapted by DemoDB (full notice below)`;
+the verbatim credits, the adaptation and the licence URI are in its notice. Every provider has `dialect-scripts/** -text` in `.gitattributes`: with `core.autocrlf=true` a checkout would otherwise turn LF into CRLF and `check` would fail.
 
 ## `corpus.json` compatibility
 

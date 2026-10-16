@@ -2,17 +2,29 @@
   "format": "demodb-dialect-scripts-config/v1",
   "generator": {
     "name": "datatug",
-    "tag": "v0.97.1",
-    "sourceRelease": "https://github.com/datatug/datatug-cli/releases/tag/v0.97.1",
-    "downloadBase": "https://github.com/datatug/datatug/releases/download/v0.97.1",
+    "tag": "v0.100.0",
+    "sourceRelease": "https://github.com/datatug/datatug-cli/releases/tag/v0.100.0",
+    "downloadBase": "https://github.com/datatug/datatug/releases/download/v0.100.0",
     "note": "datatug-cli is a private repository; its public binaries are copied unchanged to datatug/datatug. The checksums file is byte for byte the one of the datatug-cli release.",
-    "checksumsFile": "datatug_0.97.1_checksums.txt",
-    "checksumsSha256": "c736ea434e107cdf0189c7f0b82b08e81c1475cb92e593d5aafc6c7b7b434f60",
+    "checksumsFile": "datatug_0.100.0_checksums.txt",
+    "checksumsSha256": "19d91f8ded312b945095bc14e5bda6fad667f0913580c3d0903c582300a4d8db",
     "assets": {
-      "linux-x64": { "name": "datatug_0.97.1_linux_amd64.tar.gz", "sha256": "c08109b215a1d37823dbc444faa8db2a04235fb5c5e5d003a9f3f98d43698037" },
-      "linux-arm64": { "name": "datatug_0.97.1_linux_arm64.tar.gz", "sha256": "9102f61b3d596a36809b33e81d871df7a04b5d74f323971285bccac16401a51d" },
-      "darwin-x64": { "name": "datatug_0.97.1_darwin_amd64.tar.gz", "sha256": "86e7996e44a75df08e86bd8e041fda3e1f653f5619945aa0cf28584a92a8309b" },
-      "darwin-arm64": { "name": "datatug_0.97.1_darwin_arm64.tar.gz", "sha256": "02b6096d462f3ffb99a346f5491fc0ac14a27972b3c5cd790d4c24b377cb419c" }
+      "linux-x64": {
+        "name": "datatug_0.100.0_linux_amd64.tar.gz",
+        "sha256": "8e00633118731f6f1a75655112916ad070d8b6615617e8a50bd071f72c0897f5"
+      },
+      "linux-arm64": {
+        "name": "datatug_0.100.0_linux_arm64.tar.gz",
+        "sha256": "582b92803c5e55255979b58cb3373db55b01950933a385f20c8866c2a3c17ff0"
+      },
+      "darwin-x64": {
+        "name": "datatug_0.100.0_darwin_amd64.tar.gz",
+        "sha256": "210a111cd57de5fa24705c3be9b2576b1fcb451bbee4055a5844d1a436c52550"
+      },
+      "darwin-arm64": {
+        "name": "datatug_0.100.0_darwin_arm64.tar.gz",
+        "sha256": "75f1072c410c9efe978bb7ec4097e4301fdd0a88827d1dc4ee5f08aee7827e39"
+      }
     }
   },
   "edition": "DemoDB contract edition, identical to the SQLite/CSV/JSON",
@@ -28,10 +40,10 @@
     }
   },
   "notice": {
-    "enabled": false,
+    "enabled": true,
     "dir": "config/dialect-notices",
-    "param": null,
-    "note": "Staged. The full licence notice of each dataset (config/dialect-notices/<id>.txt, from the upstream licence files) goes into every script header once the pinned datatug release can write a multi-line notice: set param to its exporter parameter, enable, and run generate."
+    "param": "notice-file",
+    "note": "The full licence notice of each dataset (config/dialect-notices/<id>.txt, from the upstream licence files) is passed to the exporter as notice-file and written into every script header."
   },
   "planned": {
     "sqlserver": "datatug dialect=mssql is in review and arrives in a later datatug release; adding it here is a change of this file, the matrix and a regeneration, nothing else.",

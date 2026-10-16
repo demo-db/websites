@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - config/dialect-scripts.json
+      - config/dialect-notices/**
       - config/databases.json
       - config/format-matrix.json
       - scripts/dialect-scripts.mjs
@@ -21,6 +22,7 @@ on:
     branches: [main]
     paths:
       - config/dialect-scripts.json
+      - config/dialect-notices/**
       - config/databases.json
       - config/format-matrix.json
       - scripts/dialect-scripts.mjs

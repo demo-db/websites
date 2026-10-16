@@ -125,7 +125,7 @@ export function noticeOf(id, config) {
   const path = resolve(root, config.notice.dir ?? 'config/dialect-notices', `${id}.txt`);
   if (!existsSync(path)) throw new Error(`${id}: notice.enabled is set but ${path} does not exist`);
   const text = readFileSync(path, 'utf8');
-  if (text.includes('\r') || text.includes('\0') || !text.endsWith('\n')) throw new Error(`${id}: the notice file must be LF text ending in a line break`);
+  if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\ufeff]/.test(text) || !text.endsWith('\n')) throw new Error(`${id}: the notice file must be LF text (tab allowed, no other control character) ending in a line break`);
   return text;
 }
 
@@ -135,6 +135,12 @@ export function inputsOf({ manifest, config, dialect, attribution }) {
   const license = manifest.source?.license;
   if (typeof license !== 'string' || license.length === 0) throw new Error(`${manifest.id}: manifest.json has no source.license`);
   if (typeof attribution !== 'string' || attribution.length === 0) throw new Error(`${manifest.id}: ${MANIFEST_PATH} has no attribution`);
+  // The exporter writes each of these as ONE comment line, collapses runs of white space and cuts the line at 400 bytes ("Attribution: " included)
+  // with "...": an attribution that long would reach the header shortened, silently. Refuse it here instead.
+  for (const [what, value, prefix] of [['attribution', attribution, 'Attribution: '], ['licence', license, 'Licence: '], ['edition', config.edition, '']]) {
+    if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value) || value !== value.trim().replace(/\s+/g, ' ')) throw new Error(`${manifest.id}: the ${what} must be one line without control characters or runs of white space`);
+    if (Buffer.byteLength(prefix + value) > 400) throw new Error(`${manifest.id}: the ${what} is ${Buffer.byteLength(prefix + value)} bytes with its header prefix; the exporter cuts a header line at 400 bytes`);
+  }
   const notice = noticeOf(manifest.id, config);
   return {
     attribution,
@@ -253,6 +259,28 @@ export function literalProblems(bytes) {
   return problems;
 }
 
+// What the exporter writes for `notice-file` (datatug v0.100.0, docs/db-copy.md "Licence notice"): every line of the file becomes one `-- ` comment
+// line right after the licence and attribution lines and a blank comment line (`--`); a tab becomes four spaces, `*/` and `/*` get a space between the
+// two characters, trailing spaces and the blank lines at both ends are dropped (a blank line inside stays a bare `--`). CRLF and the other line
+// breaks end a line. The notice files here are LF text without other control characters (noticeOf refuses the rest), so these are the only rules that apply.
+export function expectedNoticeLines(notice) {
+  const lines = notice.split('\n').map((line) => line.replaceAll('\t', '    ').replaceAll('*/', '* /').replaceAll('/*', '/ *').trimEnd());
+  while (lines.length && lines[0] === '') lines.shift();
+  while (lines.length && lines.at(-1) === '') lines.pop();
+  return lines.map((line) => (line === '' ? '--' : `-- ${line}`));
+}
+
+export function noticeProblems(lines, notice, attribution) {
+  const expected = expectedNoticeLines(notice);
+  const at = lines.indexOf(`-- Attribution: ${attribution}`);
+  if (at === -1) return ['the header has no attribution line to anchor the licence notice'];
+  if (lines[at + 1] !== '--') return ['the licence notice does not follow the attribution after a blank comment line'];
+  for (const [index, line] of expected.entries()) {
+    if (lines[at + 2 + index] !== line) return [`the header lacks the licence notice line ${index + 1} (${JSON.stringify(line.slice(0, 60))}); the notice must follow the attribution line by line`];
+  }
+  return [];
+}
+
 export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   const problems = [];
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) problems.push('the script starts with a byte order mark');
@@ -261,7 +289,8 @@ export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   const text = bytes.toString('utf8');
   if (Buffer.byteLength(text, 'utf8') !== bytes.length || text.includes('�')) problems.push('the script is not valid UTF-8');
   const lines = text.split('\n');
-  const header = lines.slice(0, 40);
+  // The header is the leading block of comment lines (a long licence notice makes it long).
+  const header = lines.slice(0, Math.max(1, lines.findIndex((line) => !line.startsWith('--'))));
   const expectHeader = (prefix, value, what) => {
     if (!header.some((line) => line === `${prefix}${value}`)) problems.push(`the header lacks ${what}`);
   };
@@ -269,12 +298,7 @@ export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   expectHeader('-- Dataset: ', id, 'the dataset name');
   expectHeader('-- Licence: ', inputs.license, 'the licence of the provider manifest');
   expectHeader('-- Attribution: ', inputs.attribution, 'the attribution of the provider');
-  if (inputs.noticeSha256) {
-    const block = [];
-    for (const line of lines) { if (!line.startsWith('--')) break; block.push(line); }
-    const missing = notice.split('\n').filter((line) => line.trim().length > 0).find((line) => !block.includes(`-- ${line.trimEnd()}`));
-    if (missing !== undefined) problems.push(`the header lacks the licence notice line ${JSON.stringify(missing.slice(0, 60))}`);
-  }
+  if (inputs.noticeSha256) problems.push(...noticeProblems(lines, notice, inputs.attribution));
   if (!header.some((line) => line.startsWith(`-- Generated by datatug ${inputs.generator.tag} (`) && line.endsWith(`SHA-256 ${inputs.sqliteSha256}`))) problems.push('the header does not name the pinned datatug release and the SQLite SHA-256');
   if (!header.some((line) => line.includes(spec.clientFlags.split(' ')[1]))) problems.push('the header does not recommend the safe client flags');
   const statements = lines.filter((line) => line.startsWith('CREATE TABLE') || line.startsWith('INSERT INTO `' + spec.marker));
@@ -555,7 +579,7 @@ async function main(argv) {
     await recordVerification({ dir: dirs[0], config, result: {
       tables: number('tables'), rows: number('rows'), valuesCompared: number('values'), differences: number('differences'), verifierWarnings: number('warnings'),
       engine: options.engine ?? 'MySQL 8.4.11 (official mysql:8.4 image)', date: options.date,
-      verifier: options.verifier ?? 'datatug-cli internal/crossverify TestJourneyMySQL at v0.97.1, run locally over this exact script; reads source and target through Go drivers',
+      verifier: options.verifier ?? `datatug-cli internal/crossverify TestJourneyMySQL at ${config.generator.tag}, run locally over this exact script, loaded with the header's client flags and again with the plain client; reads source and target through Go drivers`,
     } });
     console.log(`${dirs[0]}: verification recorded`);
     return 0;

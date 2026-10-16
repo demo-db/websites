@@ -4,7 +4,8 @@
 //   node scripts/verify-mysql-live.mjs --providers <directory of provider checkouts named by dataset id> [--only id,id]
 //
 // What it proves, per dataset, with the server and the client of the digest-pinned image in config/dialect-scripts.json:
-//   * the script loads with the recommended client flags (--skip-commands --skip-system-command, stop at the first error);
+//   * the script loads with the recommended client flags (--skip-commands --skip-system-command, stop at the first error), and again, into a
+//     second database, with the plain client (no flags), the way a person who ignored the header would load it;
 //   * a second load stops at the marker table and changes nothing;
 //   * the marker row names the dataset, the SQLite SHA-256, the datatug release, the table count and the row count;
 //   * the table set, the column names and their order, the primary key columns, the foreign key count and the row count of
@@ -57,9 +58,10 @@ function query(database, sql) {
 }
 
 // Streams a script into the client the way a person loads it and reports the exit status and what the client printed.
-function load(database, bytes) {
+function load(database, bytes, plain = false) {
   return new Promise((done, fail) => {
-    const child = spawn('docker', mysqlArgs('--skip-commands', '--skip-system-command', '--database', database), { stdio: ['pipe', 'ignore', 'pipe'] });
+    // `plain` is the client of a person who ignored the header: no --skip-commands, no --skip-system-command.
+    const child = spawn('docker', mysqlArgs(...(plain ? [] : ['--skip-commands', '--skip-system-command']), '--database', database), { stdio: ['pipe', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', fail);
@@ -86,29 +88,30 @@ const fail = (id, message) => { failures.push(`${id}: ${message}`); console.erro
 start();
 await ready();
 console.log(`server ${query(null, 'select version()')[0][0]} (${spec.serverImage})`);
-console.log(`${'dataset'.padEnd(15)} ${'tables'.padEnd(7)} ${'rows'.padEnd(9)} result`);
+console.log(`${'dataset'.padEnd(30)} ${'tables'.padEnd(7)} ${'rows'.padEnd(9)} result`);
 
-for (const id of ids) {
+for (const [id, plain] of ids.flatMap((item) => [[item, false], [item, true]])) {
   const dir = join(providers, id);
   const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8'));
   const dialectManifest = JSON.parse(await readFile(join(dir, MANIFEST_PATH), 'utf8'));
   const record = dialectManifest.scripts.mysql;
   const script = await readStoredScript(record, (path) => readFile(join(dir, path)));
   const report = JSON.parse(await readFile(join(dir, record.report.path), 'utf8'));
-  const database = `live_${id}`;
+  const database = `${plain ? 'plain' : 'live'}_${id}`;
+  const label = plain ? `${id} (plain client)` : id;
   query(null, `DROP DATABASE IF EXISTS \`${database}\`; CREATE DATABASE \`${database}\` CHARACTER SET utf8mb4`);
-  const first = await load(database, script);
-  if (first.code !== 0) { fail(id, `the script stopped at an error: ${first.stderr.replace(/.*Using a password.*\n/, '').slice(0, 400)}`); continue; }
-  const second = await load(database, script);
-  if (second.code === 0 || !second.stderr.includes(spec.marker)) { fail(id, 'a second load did not stop at the marker table'); continue; }
+  const first = await load(database, script, plain);
+  if (first.code !== 0) { fail(label, `the script stopped at an error: ${first.stderr.replace(/.*Using a password.*\n/, '').slice(0, 400)}`); continue; }
+  const second = await load(database, script, plain);
+  if (second.code === 0 || !second.stderr.includes(spec.marker)) { fail(label, 'a second load did not stop at the marker table'); continue; }
 
   const { db, scratch } = await sqliteOf(id, dir, manifest);
   try {
     const sqliteTables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
     const renamed = report.warnings.filter((warning) => warning.kind === 'name-renamed' || warning.kind === 'fk-not-carried' || warning.kind === 'fk-violations-in-source');
-    if (renamed.length) { fail(id, `the report names renamed tables or dropped foreign keys (${renamed.length}), which this check does not model`); continue; }
+    if (renamed.length) { fail(label, `the report names renamed tables or dropped foreign keys (${renamed.length}), which this check does not model`); continue; }
     const mysqlTables = query(database, `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${database}' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME <> '${spec.marker}' ORDER BY TABLE_NAME`).map((row) => row[0]);
-    if (JSON.stringify([...mysqlTables].sort()) !== JSON.stringify([...sqliteTables].sort())) { fail(id, `table sets differ: ${mysqlTables.join(',')} != ${sqliteTables.join(',')}`); continue; }
+    if (JSON.stringify([...mysqlTables].sort()) !== JSON.stringify([...sqliteTables].sort())) { fail(label, `table sets differ: ${mysqlTables.join(',')} != ${sqliteTables.join(',')}`); continue; }
     const columnsByTable = new Map();
     for (const [table, column] of query(database, `SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '${database}' ORDER BY TABLE_NAME, ORDINAL_POSITION`)) {
       if (!columnsByTable.has(table)) columnsByTable.set(table, []);
@@ -135,13 +138,13 @@ for (const id of ids) {
       if (JSON.stringify(pkByTable.get(table) ?? []) !== JSON.stringify(expectedPk)) problems.push('primary key');
       if ((fkByTable.get(table) ?? 0) !== expectedFk) problems.push(`foreign keys ${fkByTable.get(table) ?? 0} != ${expectedFk}`);
       if (actualRows !== expectedRows) problems.push(`rows ${actualRows} != ${expectedRows}`);
-      if (problems.length) { fail(id, `${table}: ${problems.join(', ')} differ from the SQLite fixture`); bad = true; }
+      if (problems.length) { fail(label, `${table}: ${problems.join(', ')} differ from the SQLite fixture`); bad = true; }
     }
     if (bad) continue;
     const [marker] = query(database, `SELECT dataset, source_sha256, datatug_version, tables_count, rows_count FROM \`${spec.marker}\``);
     const expected = [id, sqliteSha256Of(manifest), config.generator.tag, String(sqliteTables.length), String(rows)];
-    if (JSON.stringify(marker) !== JSON.stringify(expected)) { fail(id, `marker row ${JSON.stringify(marker)} != ${JSON.stringify(expected)}`); continue; }
-    console.log(`${id.padEnd(15)} ${String(sqliteTables.length).padEnd(7)} ${String(rows).padEnd(9)} PASS`);
+    if (JSON.stringify(marker) !== JSON.stringify(expected)) { fail(label, `marker row ${JSON.stringify(marker)} != ${JSON.stringify(expected)}`); continue; }
+    console.log(`${label.padEnd(30)} ${String(sqliteTables.length).padEnd(7)} ${String(rows).padEnd(9)} PASS`);
   } finally {
     db.close();
     await rm(scratch, { recursive: true, force: true });

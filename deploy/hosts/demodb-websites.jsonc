@@ -1,8 +1,11 @@
 // Assets-only (no `main`): every request is served by Workers static assets and never runs a Worker script.
+// The catalogue keeps the existing script name demodb-websites: this deploy replaces the retired Worker's code with
+// static assets instead of creating a new Worker. It deploys LAST (scripts/deploy-hosts.mjs): Wrangler replaces the
+// script's whole custom-domain set with this config's single route, so every other host must have moved first.
 // Generated layout: scripts/build-hosts.mjs writes dist-hosts/demodb.dev/ including _headers and _redirects.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "demodb-catalogue",
+  "name": "demodb-websites",
   "compatibility_date": "2026-10-04",
   "workers_dev": false,
   "preview_urls": false,

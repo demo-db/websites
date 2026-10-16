@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -36,15 +37,19 @@ async function serve(config) {
   const deadline = Date.now() + 120_000;
   while (!output.includes('Ready on') && child.exitCode === null && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 200));
   assert.ok(output.includes('Ready on'), `wrangler dev ${config} did not start:\n${output}`);
+  // Wrangler parses _redirects/_headers at startup and reports (then ignores) any rule it rejects.
+  assert.doesNotMatch(output, /invalid (redirect|header)s? rules?|Ignoring duplicate/i, `wrangler rejected rules in ${config}:\n${output}`);
   test.after(async () => { child.kill('SIGTERM'); await once(child, 'exit').catch(() => {}); });
   return (path, method = 'GET', init = {}) => fetch(`http://127.0.0.1:${port}${path}`, { method, redirect: 'manual', ...init });
 }
 
 // Started one after another: concurrent starts race for workerd's helper ports.
-const catalogue = await serve('deploy/hosts/demodb-catalogue.jsonc');
+const catalogue = await serve('deploy/hosts/demodb-websites.jsonc');
 const chinook = await serve('deploy/hosts/demodb-chinook.jsonc');
 const adventureworks = await serve('deploy/hosts/demodb-adventureworks.jsonc');
-const alias = await serve('deploy/hosts/demodb-chinookdb-com.jsonc');
+// chinookdb.com is deployed only while its own config exists (see deploy/hosts/); test it when it does.
+const aliasConfig = 'deploy/hosts/demodb-chinookdb-com.jsonc';
+const alias = existsSync(join(root, aliasConfig)) ? await serve(aliasConfig) : null;
 
 const receipts = [];
 async function probe(label, client, path, method = 'GET') {
@@ -152,7 +157,7 @@ test('AdventureWorks: only chunks and a manifest, joined and decoded to the pinn
   assert.equal((await probe('adventureworks', adventureworks, '/data/adventureworks.ingitdb.zip')).response.headers.get('content-type'), 'application/zip');
 });
 
-test('chinookdb.com: every path redirects with 308, preserving path, query and method', async () => {
+test('chinookdb.com: every path redirects with 308, preserving path, query and method', { skip: !alias && 'no chinookdb.com config' }, async () => {
   const page = await probe('chinookdb.com', alias, '/tables/Artist/?q=1');
   assert.equal(page.response.status, 308);
   assert.equal(page.response.headers.get('location'), 'https://chinook.demodb.dev/tables/Artist/?q=1');

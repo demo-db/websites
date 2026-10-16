@@ -54,7 +54,8 @@ test('workflow checks pins against the exact PR base or previous push commit', (
 test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
   const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
   assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
-  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'chinookdb.com', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  // chinookdb.com is optional: it lives in its own config so it can be dropped by deleting that one file.
+  assert.deepEqual(patterns.filter((pattern) => pattern !== 'chinookdb.com').sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
   for (const { file, config } of hosts) {
     assert.equal(config.main, undefined, `${file} has no Worker script`);
     assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);
@@ -63,7 +64,8 @@ test('every public hostname is bound to exactly one assets-only config, with no 
     assert.equal(config.routes[0].custom_domain, true);
     assert.equal(config.assets.directory, `../../dist-hosts/${config.routes[0].pattern}`);
     assert.equal(config.workers_dev, false);
-    assert.notEqual(config.name, 'demodb-websites', 'the retired Worker name is not reused');
+    if (config.routes[0].pattern === 'demodb.dev') assert.equal(config.name, 'demodb-websites', 'the catalogue replaces the existing script instead of adding a Worker');
+    else assert.match(config.name, /^demodb-[a-z0-9-]+$/);
   }
 });
 

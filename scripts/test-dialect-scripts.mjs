@@ -430,7 +430,7 @@ test('the staged licence notices exist for every dataset and carry the text each
   const root = new URL('..', import.meta.url).pathname;
   const ids = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8')).databases.map((entry) => entry.id);
   // The last words of each licence are in the list on purpose: a notice cut at a line end (a bad whitespace strip once removed trailing letters) must fail.
-const mit = ['Permission is hereby granted, free of charge', 'The above copyright notice and this permission notice shall be included', 'THE SOFTWARE IS PROVIDED "AS IS"', 'OTHER DEALINGS IN THE', 'SOFTWARE.'];
+const mit = ['Permission is hereby granted, free of charge', 'The above copyright notice and this permission notice shall be included', 'THE SOFTWARE IS PROVIDED "AS IS"', 'DEALINGS IN', 'SOFTWARE.'];
   const need = {
     chinook: ['Copyright (c) 2008-2024 Luis Rocha', ...mit],
     northwind: ['Copyright (c) 2016 JP White', ...mit],

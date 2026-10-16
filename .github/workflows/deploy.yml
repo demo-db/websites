@@ -144,21 +144,22 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build provider-backed pages and verify types
         run: pnpm build
-      - name: Test registry, similarity, Worker routing, and build marker
+      - name: Test registry, similarity, static host bundles, and build marker
         run: pnpm test
       - name: TypeScript check
         run: pnpm typecheck
-      - name: Validate Worker and static asset configuration
+      - name: Validate every assets-only host configuration
         run: pnpm run deploy:dry-run
       - name: Deploy skipped because credentials are unavailable
         if: github.event_name == 'push' && env.HAS_CREDENTIALS != 'true'
         run: echo "::notice::Build passed; Cloudflare deploy skipped because CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unavailable."
-      - name: Deploy Worker and static assets
+      # Every DemoDB host is an assets-only Worker (no script): requests never count against the Workers quota.
+      - name: Deploy static host bundles
         if: github.event_name == 'push' && env.HAS_CREDENTIALS == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm run deploy:worker
+        run: pnpm run deploy:hosts
       - name: Verify the deployed commit and public routes
         if: github.event_name == 'push' && env.HAS_CREDENTIALS == 'true'
         env:

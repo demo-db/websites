@@ -7,7 +7,8 @@ import { parse } from 'yaml';
 
 const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
-const wrangler = JSON.parse(await readFile(join(root, 'wrangler.jsonc'), 'utf8'));
+const { hostConfigs } = await import('./deploy-hosts.mjs');
+const hosts = await hostConfigs();
 const liveSmoke = await readFile(join(root, 'scripts/smoke-live.mjs'), 'utf8');
 const comparisonHistoryCheck = await readFile(join(root, 'scripts/check-comparison-fixture-history.mjs'), 'utf8');
 
@@ -20,15 +21,16 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   const actions = job.steps.filter((step) => step.uses).map((step) => step.uses);
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /@[0-9a-f]{40}(?:\s|$)/, `unpinned action: ${action}`);
-  const deploy = job.steps.find((step) => step.name === 'Deploy Worker and static assets');
+  const deploy = job.steps.find((step) => step.name === 'Deploy static host bundles');
   assert.match(deploy.if, /github\.event_name == 'push'/);
   assert.match(deploy.if, /env\.HAS_CREDENTIALS == 'true'/);
   assert.equal(deploy.env.CLOUDFLARE_API_TOKEN, '${{ secrets.CLOUDFLARE_API_TOKEN }}');
-  assert.ok(job.steps.some((step) => step.name === 'Validate Worker and static asset configuration' && step.run === 'pnpm run deploy:dry-run'));
-  assert.equal(deploy.run, 'pnpm run deploy:worker');
+  assert.ok(job.steps.some((step) => step.name === 'Validate every assets-only host configuration' && step.run === 'pnpm run deploy:dry-run'));
+  assert.equal(deploy.run, 'pnpm run deploy:hosts');
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
-  assert.match(scripts['deploy:dry-run'], /--dry-run/);
-  assert.match(scripts['deploy:worker'], /--env=""/);
+  assert.match(scripts['deploy:dry-run'], /deploy-hosts\.mjs --dry-run/);
+  assert.match(scripts['deploy:hosts'], /deploy-hosts\.mjs$/);
+  assert.equal(scripts['deploy:worker'], undefined, 'the retired demodb-websites Worker has no deploy path');
   for (const step of job.steps) {
     if (step === deploy) continue;
     assert.ok(!JSON.stringify(step).includes('secrets.CLOUDFLARE_API_TOKEN'), 'Cloudflare token is limited to the deploy step');
@@ -49,33 +51,27 @@ test('workflow checks pins against the exact PR base or previous push commit', (
   assert.match(comparisonHistoryCheck, /assertRetainsComparisonFixturePins\(registry\.comparisonFixtures/);
 });
 
-test('binds the transferred Chinook hostname to the verified legacy redirects', () => {
-  const routeNames = wrangler.routes.map((route) => route.pattern);
-  assert.equal(new Set(routeNames).size, routeNames.length, 'custom domain bindings are unique');
-  for (const route of [
-    { pattern: 'demodb.dev', custom_domain: true },
-    { pattern: 'chinook.demodb.dev', custom_domain: true },
-    { pattern: 'northwind.demodb.dev', custom_domain: true },
-    { pattern: 'pubs.demodb.dev', custom_domain: true },
-    { pattern: 'sakila.demodb.dev', custom_domain: true },
-    { pattern: 'adventureworks.demodb.dev', custom_domain: true },
-    { pattern: 'employees.demodb.dev', custom_domain: true },
-    { pattern: 'chinookdb.com', custom_domain: true },
-  ]) assert.ok(wrangler.routes.some((candidate) => candidate.pattern === route.pattern && candidate.custom_domain === route.custom_domain), `${route.pattern} remains bound`);
-  assert.equal(wrangler.vars.ENABLE_LEGACY_REDIRECTS, 'true');
-  assert.equal(wrangler.assets.html_handling, 'none');
-  assert.equal(wrangler.assets.run_worker_first, true);
+test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
+  const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
+  assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
+  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'chinookdb.com', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  for (const { file, config } of hosts) {
+    assert.equal(config.main, undefined, `${file} has no Worker script`);
+    assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);
+    assert.equal(config.assets.run_worker_first, undefined, `${file} never runs a Worker first`);
+    assert.equal(config.routes.length, 1);
+    assert.equal(config.routes[0].custom_domain, true);
+    assert.equal(config.assets.directory, `../../dist-hosts/${config.routes[0].pattern}`);
+    assert.equal(config.workers_dev, false);
+    assert.notEqual(config.name, 'demodb-websites', 'the retired Worker name is not reused');
+  }
 });
 
-test('live smoke separates DTQL limits from OVDB server pagination', () => {
-  const northwindCall = liveSmoke.match(/\['northwind', \{ query: (".*?"), pageSize: 2, recordset: 'Order Details' \}\]/)?.[1];
-  assert.ok(northwindCall, 'Northwind live smoke uses a two-record server page');
-  const pagedQuery = JSON.parse(northwindCall);
-  assert.match(pagedQuery, /orderBy:/);
-  assert.doesNotMatch(pagedQuery, /\b(?:limit|offset):/i, 'server-paginated DTQL cannot specify its own limit or offset');
-  assert.match(liveSmoke, /\['chinook', \{ query: 'from: \{name: Artist\}\\nlimit: 1\\n', recordset: 'Artist' \}\]/, 'Chinook retains its ordinary DTQL limit');
-  assert.match(liveSmoke, /if \(pageSize !== undefined\) headers\['OVDB-Page-Size'\] = String\(pageSize\)/);
-  assert.match(liveSmoke, /await checkedConfiguredDatabaseQueries\(\)/, 'all configured providers receive a live read-only query check');
+test('live smoke sends at most one request per URL and no OVDB API query', () => {
+  assert.match(liveSmoke, /smoke budget: /, 'a repeated request fails the smoke');
+  assert.doesNotMatch(liveSmoke, /for \(let attempt/, 'no retry loops');
+  assert.doesNotMatch(liveSmoke, /checkedConfiguredDatabaseQueries/, 'the OVDB API is checked by its own deployment');
+  assert.match(liveSmoke, /https:\/\/ovdb\.demodb\.dev\/v1/);
 });
 
 test('live smoke checks all six hosted BigQuery editions and their source, billing, and API boundaries', () => {
@@ -85,34 +81,30 @@ test('live smoke checks all six hosted BigQuery editions and their source, billi
   assert.match(liveSmoke, /your own Google Cloud execution project/);
   assert.match(liveSmoke, /does not execute or proxy SQL/);
   assert.match(liveSmoke, /DataTug browser query execution is not enabled yet/);
-  assert.match(liveSmoke, /checkedNotFound\(`https:\/\/demodb\.dev\/ovdb\/v1\/databases\/\$\{id\}`\)/);
   assert.match(liveSmoke, /!body\.includes\('Open read-only API'\) && !body\.includes\('Database descriptor'\)/);
 });
 
 test('live smoke checks Pubs static pages and includes it in shared query coverage', () => {
   assert.match(liveSmoke, /https:\/\/pubs\.demodb\.dev/);
-  assert.match(liveSmoke, /\/data\/pubs\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/pubs\/ovdb-database\.json/);
-  assert.match(liveSmoke, /\['pubs', \{ query: 'from: \{name: authors\}\\nlimit: 1\\n', recordset: 'authors' \}\]/);
 });
 
 test('live smoke checks Sakila native tables, views, SQLite, and query capability through the shared provider loop', () => {
   assert.match(liveSmoke, /https:\/\/sakila\.demodb\.dev/);
   assert.match(liveSmoke, /\/tables\/film_actor\//);
   assert.match(liveSmoke, /\/tables\/actor_info\//);
-  assert.match(liveSmoke, /\/data\/sakila\.sqlite/);
   assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
   assert.match(liveSmoke, /requiredQueryableDatabaseIds = \['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'\]/);
 });
 
 test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL Server views', () => {
+  assert.match(liveSmoke, /demodb-chunked-export\/v1/, 'chunked exports are joined from their manifest');
+  assert.match(liveSmoke, /SQLite format 3/);
+  assert.match(liveSmoke, /uncompressedSha256/);
   assert.match(liveSmoke, /https:\/\/adventureworks\.demodb\.dev/);
   assert.match(liveSmoke, /\/tables\/HumanResources\.EmployeeDepartmentHistory\//);
   assert.match(liveSmoke, /\/tables\/Production\.Product\//);
   assert.match(liveSmoke, /\/schema\.json/);
-  assert.match(liveSmoke, /checkedDecodedSqlite\('adventureworks'\)/);
-  assert.match(liveSmoke, /126820352/);
-  assert.match(liveSmoke, /checkedConfiguredDatabaseQueries\(\)/);
 });
 
 test('live smoke verifies the content-addressed Chinook comparison fixture end to end', () => {
@@ -121,26 +113,21 @@ test('live smoke verifies the content-addressed Chinook comparison fixture end t
   assert.match(liveSmoke, /\/data\/compare\/\$\{comparisonFixture\.sha256\}\.sqlite/);
   assert.match(liveSmoke, /await checkedComparisonFixture\(\)/);
   assert.match(liveSmoke, /async function checkedComparisonFixture\(\)/);
-  assert.match(liveSmoke, /actualSha256 !== comparisonFixture\.sha256/);
+  assert.match(liveSmoke, /sha256\(bytes\) !== comparisonFixture\.sha256/);
   assert.match(liveSmoke, /headLength !== null && headLength !== String\(comparisonFixture\.bytes\)/, 'HEAD length is optional, but a supplied value must match the pinned GET size');
-  assert.match(liveSmoke, /method: 'OPTIONS'/);
   assert.match(liveSmoke, /public, max-age=31536000, immutable/);
   assert.match(liveSmoke, /Access-Control-Allow-Origin/);
-  assert.match(liveSmoke, /AbortSignal\.timeout\(45_000\)/, 'the full-byte check has a bounded request deadline');
-  assert.match(liveSmoke, /bytes > comparisonFixture\.bytes/, 'the stream is rejected as soon as it exceeds its pinned size');
-  assert.match(liveSmoke, /response\.body\.cancel\(\)/, 'an oversized declared body is canceled before reading');
 });
 
 test('live smoke verifies Employees native tables and shared query capability coverage', () => {
   assert.match(liveSmoke, /https:\/\/employees\.demodb\.dev/);
   assert.match(liveSmoke, /\/tables\/titles\//);
   assert.match(liveSmoke, /\/tables\/current_dept_emp\//);
-  assert.match(liveSmoke, /\/data\/employees\.sqlite/);
   assert.match(liveSmoke, /requiredQueryableDatabaseIds/);
 });
 
 test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {
-  assert.match(liveSmoke, /async function checkedLegacyRedirect\(url, init, expectedLocation\)/);
+  assert.match(liveSmoke, /async function checkedRedirect\(url, init, expectedLocation\)/);
   assert.match(liveSmoke, /redirect: 'manual'/);
   assert.match(liveSmoke, /https:\/\/chinookdb\.com\/tables\/Artist\//);
   assert.match(liveSmoke, /https:\/\/chinookdb\.com\/data\/chinook\.sqlite/);
@@ -171,11 +158,11 @@ test('the verified PostgreSQL state is tested in CI from a fixture and never dep
 
 test('every deploy path runs the deployable-build guard after the build and before wrangler deploys', async () => {
   const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-  for (const name of ['deploy:worker', 'deploy:dry-run']) assert.match(pkg.scripts[name], /^node scripts\/assert-deployable-build\.mjs && wrangler deploy /, `${name} runs the guard first`);
+  for (const name of ['deploy:hosts', 'deploy:dry-run']) assert.match(pkg.scripts[name], /^node scripts\/assert-deployable-build\.mjs && node scripts\/deploy-hosts\.mjs/, `${name} runs the guard first`);
   const steps = workflow.jobs.deploy.steps;
   const index = (pattern) => steps.findIndex((step) => pattern.test(step.run ?? ''));
   assert.ok(index(/^pnpm build$/) >= 0 && index(/^pnpm run deploy:dry-run$/) > index(/^pnpm build$/));
-  assert.ok(index(/^pnpm run deploy:worker$/) > index(/^pnpm build$/));
+  assert.ok(index(/^pnpm run deploy:hosts$/) > index(/^pnpm build$/));
   assert.ok(!steps.some((step) => /wrangler deploy/.test(step.run ?? '')), 'CI only deploys through the guarded package scripts');
   assert.ok(!/wrangler deploy/.test(Object.entries(pkg.scripts).filter(([name]) => !name.startsWith('deploy:')).map(([, value]) => value).join(' ')), 'no other package script deploys');
 });

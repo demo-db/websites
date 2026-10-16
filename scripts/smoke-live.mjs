@@ -275,6 +275,41 @@ async function checkedDecodedSqlite(localId) {
   }
 }
 
+// Every complete-database download the corpus advertises is fetched and compared with its declared decoded
+// size and SHA-256, and every format the corpus declares unavailable is stated as such on the downloads page
+// and has no file behind it. A format the site advertises but cannot serve fails the deploy check.
+async function checkedCompleteExports() {
+  const corpus = await (await fetch('https://demodb.dev/corpus.json', { cache: 'no-store' })).json();
+  let files = 0;
+  for (const database of corpus.databases) {
+    const availability = database.formatAvailability;
+    if (!Array.isArray(availability)) throw new Error(`${database.localId}: corpus metadata lacks formatAvailability`);
+    for (const item of availability.filter((entry) => entry.state === 'download')) {
+      if (!database.exports.some((file) => file.format === item.format)) throw new Error(`${database.localId}: ${item.format} is declared as a download but the corpus lists no such export`);
+    }
+    for (const file of database.exports) {
+      const response = await fetch(file.url, { redirect: 'manual', cache: 'no-store' });
+      if (response.status !== 200 || !response.body) throw new Error(`${file.url}: HTTP ${response.status}`);
+      const hash = createHash('sha256');
+      let bytes = 0;
+      for await (const chunk of response.body) { const part = Buffer.from(chunk); bytes += part.length; hash.update(part); }
+      const expectedBytes = file.decodedBytes ?? file.bytes;
+      const expectedSha256 = file.decodedSha256 ?? file.sha256;
+      if (bytes !== expectedBytes || hash.digest('hex') !== expectedSha256) throw new Error(`${file.url}: download differs from corpus metadata (declared ${expectedBytes} bytes ${expectedSha256}, received ${bytes} bytes)`);
+      files += 1;
+    }
+    const missing = availability.filter((entry) => entry.state === 'unavailable');
+    if (missing.length) {
+      const page = await (await fetch(`https://${database.localId}.demodb.dev/downloads/`, { cache: 'no-store' })).text();
+      for (const entry of missing) {
+        if (!page.includes('Not available:') || !page.includes(entry.label)) throw new Error(`${database.localId}: the downloads page does not state that ${entry.label} is not available`);
+        if (database.exports.some((file) => file.format === entry.format)) throw new Error(`${database.localId}: ${entry.format} is declared unavailable but the corpus lists an export`);
+      }
+    }
+  }
+  return files;
+}
+
 async function checkedComparisonFixture() {
   const url = `https://chinook.demodb.dev${comparisonFixturePath}`;
   const signal = AbortSignal.timeout(45_000);
@@ -350,4 +385,5 @@ await checkedLegacyRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtq
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
 }, 'https://demodb.dev/ovdb/v1/databases/chinook/dtql?smoke=query');
-console.log(`Live DemoDB pages, typed manifests, discovery, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);
+const completeExportCount = await checkedCompleteExports();
+console.log(`Live DemoDB pages, typed manifests, discovery, ${completeExportCount} complete-database downloads checked against the corpus, full AdventureWorks SQLite download, read-only OVDB queries, and Chinook legacy redirects serve ${commit}.`);

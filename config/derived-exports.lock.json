@@ -1,0 +1,107 @@
+{
+  "format": "demodb-derived-exports-lock/v1",
+  "datasets": {
+    "adventureworks": {
+      "ingitdb": {
+        "contentSha256": "76b534204b9b26e3c4d0f236d14392ff249f32eb1796241988d0f50b35785394",
+        "fileCount": 148,
+        "rowCount": 759240
+      },
+      "json": {
+        "bytes": 218424194,
+        "sha256": "7cd705ed4bd2ff5501e90feaf4fbecdf5ad863cb623b76de7a87dd28051099c4"
+      },
+      "postgresql": {
+        "bytes": 110241326,
+        "sha256": "55e4f0ec587a2c8e3d500b10491c3e067a2358ea4d46558efcfa1849f9902207"
+      },
+      "yaml": {
+        "bytes": 243068731,
+        "sha256": "2f0e3bc5d0ce55aa312c1acb8296e6f279e32e74308c79b05842405302a208f3"
+      }
+    },
+    "chinook": {
+      "ingitdb": {
+        "contentSha256": "dd2b959dd0bdf04a535d90a89c27859d039ea6713c5fc1236d4beeb562597688",
+        "fileCount": 29,
+        "rowCount": 15607
+      }
+    },
+    "employees": {
+      "ingitdb": {
+        "contentSha256": "b56053bbb5c10749636d8a46e4a7d5b21b989df264b435be3ce21d6bf701bb5f",
+        "fileCount": 17,
+        "rowCount": 13584
+      },
+      "json": {
+        "bytes": 1242925,
+        "sha256": "54eb530f9a8fbc9985e3b11ecf181333df4e80095cac5f28a1e89573a844d955"
+      },
+      "postgresql": {
+        "bytes": 639087,
+        "sha256": "f6a815412101cdb12943e01616498702dd668d3570e2c94fae62d087e3f84294"
+      },
+      "yaml": {
+        "bytes": 1400430,
+        "sha256": "b4163bbd6fe7a0ee409b7e5fb8398fad8a42fe0df0b09ce068e73296dd46cc78"
+      }
+    },
+    "northwind": {
+      "ingitdb": {
+        "contentSha256": "5304516b0eccdbbe2469d939bc94b278634baa57037626eccbfa7fbe63406ff0",
+        "fileCount": 34,
+        "rowCount": 3310
+      },
+      "json": {
+        "bytes": 941894,
+        "sha256": "020dbc276c06072ce35eff54f438acd6ab7a9f33392d0f7d856d9f77326dd6b1"
+      },
+      "postgresql": {
+        "bytes": 1089450,
+        "sha256": "b6efe271401eba9d4738a2bbea294cc205dd6e02f47864bd3f21e195310afbee"
+      },
+      "yaml": {
+        "bytes": 890335,
+        "sha256": "48bc1d77d52c6f670420790a721a06f5fee605d568c60c5778ed16e326fa3879"
+      }
+    },
+    "pubs": {
+      "ingitdb": {
+        "contentSha256": "a2e91fbca71ff6094f6cfda0f82871fcede69427fcd703b4d0f1e8662a36ab96",
+        "fileCount": 29,
+        "rowCount": 255
+      },
+      "json": {
+        "bytes": 123980,
+        "sha256": "2fca9cfec10cd841ebfaf1c417e3bc69914e5d262a731e0e570fa7fb92b7f568"
+      },
+      "postgresql": {
+        "bytes": 203921,
+        "sha256": "f1673837062391afce66a032cc1d570020f3cef780a048f96aa0fca905759242"
+      },
+      "yaml": {
+        "bytes": 128524,
+        "sha256": "787055998579cf6c6130136cd08baf9030c2513b79aba463f460a16dc106b39f"
+      }
+    },
+    "sakila": {
+      "ingitdb": {
+        "contentSha256": "d348f0c089c956f27a96bfeda8cb8a92ff7bd14ca20c97595a2479fe09a40b2b",
+        "fileCount": 39,
+        "rowCount": 47268
+      },
+      "json": {
+        "bytes": 7546797,
+        "sha256": "e08d311d0cd7b5587abc7ea054b1da6146acae1074b73f900e45be538e7a87b4"
+      },
+      "postgresql": {
+        "bytes": 3723568,
+        "sha256": "ac76c32a7fa39caf62c4e4f894b3c181733bd5a1eb667960a675a9d9af62c134"
+      },
+      "yaml": {
+        "bytes": 8481426,
+        "sha256": "b16451d57b4b05c9c89dfbdfb1182abf3f071bfe4d42eade3537e178805586e2"
+      }
+    }
+  }
+}

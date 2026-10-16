@@ -38,7 +38,7 @@ const contentTypes: Record<string, string> = {
   '.sqlite': 'application/vnd.sqlite3', '.db': 'application/vnd.sqlite3', '.sql': 'application/sql; charset=utf-8',
   '.yaml': 'application/yaml; charset=utf-8', '.yml': 'application/yaml; charset=utf-8',
   '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.hcl': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8',
+  '.zip': 'application/zip', '.hcl': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8',
 };
 
 export default {

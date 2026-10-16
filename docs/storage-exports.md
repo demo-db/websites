@@ -98,3 +98,11 @@ checksum. To verify the downloaded parts before assembly:
 python3 scripts/hosting-tools/research_snapshots.py verify \
   public/research-snapshots/chinook.manifest.json
 ```
+
+## Complete-database downloads per format
+
+The inGitDB directories prepared by `storage_exports.py` are also offered as one deterministic ZIP per dataset
+(`<id>.ingitdb.zip`), packed unchanged from the provider repository at the pinned `ingitdbRevisions` commit by
+`ingitdb_archive.py` after it checks the export manifest against the pinned SQLite fixture. Which formats every
+dataset offers, where each comes from, how it is validated and why any is missing is in
+[format-matrix.md](format-matrix.md).

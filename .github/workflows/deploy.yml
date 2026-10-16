@@ -44,7 +44,73 @@ jobs:
       - name: TypeScript check
         run: pnpm typecheck
 
+  # Release validation of the downloads themselves: builds the asset tree exactly as the deploy job does, loads every
+  # served PostgreSQL script into a throwaway PostgreSQL 17 and compares it with the pinned SQLite fixture, and
+  # compares every served inGitDB archive with the fixture through the independent parity checker. The deploy job
+  # waits for it, so a download that does not match its fixture is never published.
+  served-formats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BUILD_COMMIT: ${{ github.sha }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: throwaway
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --shm-size=512m
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 11.20.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check out provider repositories at their pinned revisions
+        run: |
+          mkdir -p "$RUNNER_TEMP/providers"
+          python3 - <<'PY' > "$RUNNER_TEMP/pins.tsv"
+          import json
+          for d in json.load(open("config/databases.json"))["databases"]:
+              print(d["id"], d["repository"], d["commit"], sep="\t")
+          PY
+          while IFS=$'\t' read -r id repo commit; do
+            dir="$RUNNER_TEMP/providers/$id"
+            git init -q "$dir"
+            git -C "$dir" fetch -q --depth 1 "$repo" "$commit"
+            git -C "$dir" checkout -q FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
+          done < "$RUNNER_TEMP/pins.tsv"
+      - name: Generate and verify the derived downloads against their lock
+        run: pnpm prepare:databases
+      - name: Load every served PostgreSQL script, parse the YAML with PyYAML, and check every inGitDB archive against its fixture
+        env:
+          DEMODB_LIVE_POSTGRES_URL: postgresql://postgres:throwaway@127.0.0.1:5432/postgres
+          DEMODB_LIVE_POSTGRES_ALLOW_DROP: "1"
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -r scripts/hosting-tools/requirements-live.txt
+          # The inGitDB CLI at a pinned release and checksum validates every served archive too.
+          curl -fsSL -o "$RUNNER_TEMP/ingitdb.tar.gz" https://github.com/ingitdb/ingitdb-cli/releases/download/v0.70.2/ingitdb_0.70.2_linux_amd64.tar.gz
+          echo "763e4e6bebc5a7997b60bb09307e1be6db9dbae201e4c235851bcaf4ea0fb44b  $RUNNER_TEMP/ingitdb.tar.gz" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/ingitdb-cli" && tar -xzf "$RUNNER_TEMP/ingitdb.tar.gz" -C "$RUNNER_TEMP/ingitdb-cli"
+          INGITDB_CLI="$RUNNER_TEMP/ingitdb-cli/ingitdb" "$RUNNER_TEMP/venv/bin/python" scripts/hosting-tools/validate_served_formats.py --providers "$RUNNER_TEMP/providers"
+
   deploy:
+    needs: served-formats
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

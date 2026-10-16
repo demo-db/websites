@@ -3,6 +3,7 @@
 // checks the cross-origin resource policy on successful per-dataset downloads.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -68,4 +69,18 @@ test('single gzip SQL asset decodes to its source bytes', async () => {
   assert.equal(body.length, sql.decodedBytes, 'decoded length matches the pinned SQL export');
   assert.notDeepEqual(body.subarray(0, 2), Buffer.from([0x1f, 0x8b]), 'the response is not still gzip');
   assert.match(headers, /^cross-origin-resource-policy: cross-origin$/im);
+});
+
+// Every complete-database download of the largest dataset, including the generated JSON, YAML, PostgreSQL script and
+// inGitDB archive, is served once-decoded with exactly the size and SHA-256 that corpus.json declares.
+test('every complete AdventureWorks download is served with its declared decoded size and SHA-256', async () => {
+  const complete = adventureworks.exports.filter((file) => file.table === null && file.format !== 'metadata');
+  assert.deepEqual(complete.map((file) => file.format).sort(), ['ingitdb', 'json', 'postgresql', 'sql', 'sqlite', 'yaml']);
+  for (const file of complete) {
+    const [body, headers] = await fetchDecoded(`all-${file.format}`, `/data/${file.publicPath}`);
+    assert.equal(body.length, file.decodedBytes ?? file.bytes, `${file.publicPath}: decoded length`);
+    assert.equal(createHash('sha256').update(body).digest('hex'), file.decodedSha256 ?? file.sha256, `${file.publicPath}: decoded SHA-256`);
+    assert.match(headers, /^HTTP\/[\d.]+ 200/m, file.publicPath);
+    if (file.format === 'ingitdb') assert.match(headers, /^content-type: application\/zip$/im, 'the archive is served as a ZIP');
+  }
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { databases } from '../src/data/db';
+import { datatugLocalLimitLines, datatugLocalLimits } from '../src/data/datatug-limits';
 import { exploreActions } from '../src/data/explore';
 import { postgresqlApiProvenance, postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
 import postgresqlApi from '../src/data/generated/postgresql-api.json';
@@ -66,4 +67,25 @@ test('verified PostgreSQL copies link to the cloud OpenVaultDB endpoint', () => 
   assert.equal(publicApi.apiUrl, 'https://cloud.openvaultdb.com/v1/databases/chinook-postgresql');
   assert.equal(publicApi.id, 'chinook-postgresql');
   assert.equal(publicApi.engine, 'PostgreSQL');
+});
+
+test('DataTug local limits are computed from each dataset, not written per page', () => {
+  const counts = Object.fromEntries(databases.map((db) => {
+    const limits = datatugLocalLimits(db.tables);
+    return [db.id, [limits.readOnlyTables.length, limits.tables, limits.views]];
+  }));
+  assert.deepEqual(counts.chinook, [1, 11, 0]);
+  assert.deepEqual(counts.employees, [4, 6, 2]);
+  assert.deepEqual(counts.adventureworks, [23, 71, 11]);
+  assert.deepEqual(datatugLocalLimits(databases.find((db) => db.id === 'chinook')!.tables).readOnlyTables, ['PlaylistTrack']);
+  const lines = datatugLocalLimitLines(datatugLocalLimits(databases.find((db) => db.id === 'employees')!.tables)).join(' ');
+  assert.match(lines, /4 of 6 tables/);
+  assert.match(lines, /first 100 rows/);
+  assert.match(lines, /Views are not listed/);
+});
+
+test('the Employees subset is not described as a browser edition', () => {
+  const employees = databases.find((db) => db.id === 'employees')!;
+  assert.equal(employees.name, 'Employees (reduced subset)');
+  assert.doesNotMatch(JSON.stringify({ name: employees.name, description: employees.description, source: employees.source, queries: employees.queries }), /browser[- ](edition|sized)/i);
 });

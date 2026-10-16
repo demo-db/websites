@@ -27,8 +27,12 @@ test('the built Northwind evidence route contains exactly pinned provider bytes'
   assert.match(page, /\/evidence\/public-orders\/README\.md/);
   const receipt = JSON.parse(await readFile(join(published, receiptName), 'utf8'));
   const rights = JSON.parse(await readFile(join(published, 'source-rights.json'), 'utf8'));
+  const descriptor = JSON.parse(await readFile(join(root, 'dist/northwind/ovdb-database.json'), 'utf8'));
+  assert.ok(descriptor.recordsets.some((recordset: { name: string }) => recordset.name === 'Orders'));
+  const expectedSource = { serverId: descriptor.serverId, databaseId: descriptor.localId, recordset: 'Orders' };
+  const expectedSourceId = `ovdb:${encodeURIComponent(descriptor.serverId)}/${encodeURIComponent(descriptor.localId)}/Orders`;
   assert.equal(rights.format, 'demodb-observed-source-rights/v1');
-  assert.deepEqual(rights.usedSourceIds, ['ovdb:demodb.dev/northwind/Orders']);
+  assert.deepEqual(rights.usedSourceIds, [expectedSourceId]);
   assert.equal(rights.admission.endpoint, receipt.sources.sqlite.endpoint);
   assert.equal(rights.admission.querySha256, receipt.sources.sqlite.querySha256);
   assert.equal(rights.admission.canonicalRowsSha256, receipt.sources.sqlite.canonicalRowsSha256);
@@ -37,6 +41,7 @@ test('the built Northwind evidence route contains exactly pinned provider bytes'
   assert.equal(rights.admission.executionSourcesPresent, false);
   assert.deepEqual(rights.admission.fields, receipt.sources.sqlite.fields);
   assert.equal(rights.sourceRights[0].sourceId, rights.usedSourceIds[0]);
+  assert.deepEqual(rights.sourceRights[0].source, expectedSource);
   assert.deepEqual(rights.sourceRights[0].declaredAt, rights.sourceRights[0].source);
   assert.equal(rights.sourceRights[0].evidenceOrigin, 'publisher-verified');
   assert.equal(rights.sourceRights[0].declaration.spdx, 'MIT');

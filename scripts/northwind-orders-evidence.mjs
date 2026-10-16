@@ -4,12 +4,12 @@ import { join } from 'node:path';
 
 // This publication pin is independent of the older Northwind export-contract
 // pin in config/databases.json. Only these three reviewed evidence files ship.
-export const ORDERS_EVIDENCE_REVISION = '9af760ec3b7d9088567b7b716bcdd2a7e97b91dd';
+export const ORDERS_EVIDENCE_REVISION = '83ea600a7eae8b35ad33bf4c53bab6440d697850';
 export const ORDERS_EVIDENCE_PATH = 'artifacts/hosting-imports/';
 export const ORDERS_EVIDENCE_ASSETS = Object.freeze({
-  'README-public-orders-evidence.md': { name: 'README.md', bytes: 2838, sha256: '3ec1f5f72e3a4aaa823aa217ed9581e18782c175e0ccf40c9127c2da517d6483' },
+  'README-public-orders-evidence.md': { name: 'README.md', bytes: 2913, sha256: '9a2993d0f9463747cff2817d51ed8f7a805adac3dba910ee5362df19c836b8a7' },
   'public-orders-evidence-2026-10-16.json': { name: 'public-orders-evidence-2026-10-16.json', bytes: 5940, sha256: '2f3bf872421d645d8c3f4274b52b2ed8da64a490f1f69dd6812b01157fb61010' },
-  'source-rights.json': { name: 'source-rights.json', bytes: 4379, sha256: 'b51b2cc489f267bd049e3302ff05587851caac00ee8715f194d6fd7b9a064773' },
+  'source-rights.json': { name: 'source-rights.json', bytes: 4447, sha256: '50454d5f30db615178fcd0c6a846854f9434f4f93bb44835cc75fdad4af52e30' },
 });
 
 const MAX_PROVIDER_BYTES = 64 * 1024;

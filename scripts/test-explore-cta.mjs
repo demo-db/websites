@@ -22,6 +22,23 @@ for (const { id, file } of pages) {
     assert.ok(anchors[0].includes('button-primary'), 'CTA is the primary button');
     assert.doesNotMatch(anchors[0], /wasm/i, 'CTA text never mentions WASM');
   });
+
+  test(`${file.replace(root, '')} offers the PostgreSQL DataTug action only as a verified secondary action`, async () => {
+    const html = await readFile(file, 'utf8');
+    const anchors = [...html.matchAll(/<a\b[^>]*>Explore PostgreSQL in DataTug<\/a>/g)].map((match) => match[0]);
+    if (!postgresqlApi.publicApiVerified) {
+      assert.deepEqual(anchors, [], 'a pending PostgreSQL edition is never advertised');
+      assert.doesNotMatch(html, /datatug-limits-postgresql/);
+      return;
+    }
+    assert.equal(anchors.length, 1, 'exactly one PostgreSQL CTA');
+    assert.ok(anchors[0].includes(`href="https://datatug.app/demo/ovdb/${id}-postgresql"`), 'links the dataset PostgreSQL route');
+    assert.ok(anchors[0].includes('button-quiet') && !anchors[0].includes('button-primary'), 'secondary visual weight');
+    assert.doesNotMatch(anchors[0], /wasm/i);
+    assert.ok(html.indexOf('Explore SQLite in DataTug</a>') < html.indexOf('Explore PostgreSQL in DataTug</a>'), 'after the primary SQLite CTA');
+    assert.match(html, /data-datatug-limits-postgresql/);
+    assert.match(html, /read-only by design/);
+  });
 }
 
 async function* htmlFiles(dir) {

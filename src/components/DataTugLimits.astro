@@ -1,10 +1,19 @@
 ---
-import { datatugLocalLimitLines, datatugLocalLimits, type LimitsSubject } from '../data/datatug-limits';
+import { datatugLocalLimitLines, datatugLocalLimits, datatugPostgresqlLimitLines, type LimitsSubject } from '../data/datatug-limits';
+import type { ExploreActions } from '../data/explore';
 
-const { recordsets } = Astro.props as { recordsets: readonly LimitsSubject[] };
-const lines = datatugLocalLimitLines(datatugLocalLimits(recordsets));
+const { recordsets, actions } = Astro.props as { recordsets: readonly LimitsSubject[]; actions: ExploreActions };
+const offered = [actions.primary, ...actions.secondary].filter((action) => action !== null);
+const hasSqlite = offered.some((action) => action.engine === 'SQLite');
+const hasPostgresql = offered.some((action) => action.engine === 'PostgreSQL');
+const sqliteLines = hasSqlite ? datatugLocalLimitLines(datatugLocalLimits(recordsets)) : [];
+const postgresqlLines = hasPostgresql ? datatugPostgresqlLimitLines() : [];
 ---
-<section class="shell section datatug-limits" data-datatug-limits>
+{hasSqlite && <section class="shell section datatug-limits" data-datatug-limits>
   <div class="section-heading compact"><div><p class="eyebrow">Explore SQLite in DataTug</p><h2>Known limits.</h2></div></div>
-  <ul class="muted">{lines.map((line) => <li>{line}</li>)}</ul>
-</section>
+  <ul class="muted">{sqliteLines.map((line) => <li>{line}</li>)}</ul>
+</section>}
+{hasPostgresql && <section class="shell section datatug-limits" data-datatug-limits-postgresql>
+  <div class="section-heading compact"><div><p class="eyebrow">Explore PostgreSQL in DataTug</p><h2>Read-only.</h2></div></div>
+  <ul class="muted">{postgresqlLines.map((line) => <li>{line}</li>)}</ul>
+</section>}

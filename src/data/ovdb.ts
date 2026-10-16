@@ -107,6 +107,14 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
       verificationUrl: 'https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json' },
   ],
 }));
+// The hosted PostgreSQL edition DataTug can open for a dataset, or null. Offered only
+// when config/postgresql-api.json is verified AND the dataset's PostgreSQL storage
+// entry is publicly served; the id is that entry's own id.
+export function postgresqlDataTugEditionId(localId: string): string | null {
+  const entry = storageGroups.find((group) => group.database.localId === localId)?.storages
+    .find((storage) => storage.engine === 'PostgreSQL');
+  return postgresqlPublicApiVerified && entry?.readiness === 'public-api' ? entry.id : null;
+}
 export const storageEntryCount = storageGroups.reduce((sum, group) => sum + group.storages.length, 0);
 export const storageEngineCount = new Set(storageGroups.flatMap((group) => group.storages.map((storage) => storage.engine))).size;
 export const publicOvdbApiCount = storageGroups.reduce((sum, group) => sum + group.storages.filter((storage) => storage.readiness === 'public-api').length, 0);

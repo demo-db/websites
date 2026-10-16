@@ -187,3 +187,9 @@ test('the verified-state fixture matches the committed config format', async () 
   assert.equal(fixture.publicApiVerified, true);
   assert.equal(fixture.format, committed.format);
 });
+
+test('live smoke checks every rendered PostgreSQL DataTug link against the datatug-apps catalogue fixture', () => {
+  assert.match(liveSmoke, /datatug-postgresql-catalog\.json/);
+  assert.match(liveSmoke, /Explore PostgreSQL in DataTug/);
+  assert.match(liveSmoke, /checkedDataTugPostgresqlLinks\(\)/);
+});

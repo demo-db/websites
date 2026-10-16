@@ -298,14 +298,6 @@ async function checkedRedirect(url, init, expectedLocation) {
   }
 }
 
-await checkedRedirect('https://chinookdb.com/tables/Artist/?smoke=legacy', { method: 'GET' }, 'https://chinook.demodb.dev/tables/Artist/?smoke=legacy');
-await checkedRedirect('https://chinookdb.com/data/chinook.sqlite?download=1', { method: 'HEAD' }, 'https://chinook.demodb.dev/data/chinook.sqlite?download=1');
-await checkedRedirect('https://chinookdb.com/ovdb/dbs/chinook?smoke=profile', { method: 'GET' }, 'https://demodb.dev/chinook/?smoke=profile');
-await checkedRedirect('https://chinookdb.com/ovdb/v1/databases/chinook/dtql?smoke=query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ query: 'from: {name: Artist}\nlimit: 1\n' }),
-}, `${OVDB_API}/databases/chinook/dtql?smoke=query`);
 await checkedRedirect('https://demodb.dev/ovdb/v1/databases/chinook?smoke=api', { method: 'GET' }, `${OVDB_API}/databases/chinook?smoke=api`);
 await checkedRedirect('https://demodb.dev/ovdb/dbs/chinook', { method: 'GET' }, 'https://demodb.dev/chinook/');
 for (const path of ['/_db/chinook/index.html', '/data/adventureworks.sqlite']) {

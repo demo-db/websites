@@ -54,8 +54,7 @@ test('workflow checks pins against the exact PR base or previous push commit', (
 test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
   const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
   assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
-  // chinookdb.com is optional: it lives in its own config so it can be dropped by deleting that one file.
-  assert.deepEqual(patterns.filter((pattern) => pattern !== 'chinookdb.com').sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
   for (const { file, config } of hosts) {
     assert.equal(config.main, undefined, `${file} has no Worker script`);
     assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);
@@ -128,13 +127,11 @@ test('live smoke verifies Employees native tables and shared query capability co
   assert.match(liveSmoke, /requiredQueryableDatabaseIds/);
 });
 
-test('live smoke verifies old-host page, download, canonical profile, and POST redirects without following them', () => {
+test('live smoke verifies redirects without following them and never touches chinookdb.com', () => {
   assert.match(liveSmoke, /async function checkedRedirect\(url, init, expectedLocation\)/);
   assert.match(liveSmoke, /redirect: 'manual'/);
-  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/tables\/Artist\//);
-  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/data\/chinook\.sqlite/);
-  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/dbs\/chinook/);
-  assert.match(liveSmoke, /https:\/\/chinookdb\.com\/ovdb\/v1\/databases\/chinook\/dtql/);
+  assert.match(liveSmoke, /https:\/\/demodb\.dev\/ovdb\/v1\/databases\/chinook/);
+  assert.doesNotMatch(liveSmoke, /chinookdb\.com/, 'chinookdb.com is not deployed from this repository');
 });
 
 test('live smoke checks every dataset\'s served model files and model page', () => {

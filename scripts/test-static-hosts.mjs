@@ -65,11 +65,8 @@ const urlOf = (file) => `/${file}`.replace(/(^|\/)index\.html$/, '$1');
 
 test('every host config points at a built bundle, and every bundle respects the static asset limits', async () => {
   const configs = await hostConfigs();
-  // Every built dataset and catalogue host has a config. A legacy alias (chinookdb.com) is built but deployed only
-  // while its own config file exists, so dropping it is one file deletion.
-  const configured = configs.map(({ config }) => config.routes[0].pattern);
-  for (const host of manifest.hosts.filter((entry) => entry.kind !== 'alias')) assert.ok(configured.includes(host.host), `${host.host} has a deploy config`);
-  for (const pattern of configured) assert.ok(manifest.hosts.some((host) => host.host === pattern), `${pattern} has a built bundle`);
+  assert.deepEqual(configs.map(({ config }) => config.routes[0].pattern).sort(), manifest.hosts.map((host) => host.host).sort());
+  assert.ok(!manifest.hosts.some((host) => host.host === 'chinookdb.com'), 'chinookdb.com is not part of this deployment');
   for (const { config } of configs) {
     const dir = join(out, config.routes[0].pattern);
     assert.ok((await stat(dir)).isDirectory());
@@ -188,10 +185,6 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   assert.deepEqual(redirect(chinook, '/ovdb/dbs/chinook/collections/Artist'), { to: 'https://cloud.openvaultdb.com/ovdb/dbs/chinook/collections/Artist', status: 308 });
   assert.deepEqual(redirect(chinook, '/ovdb/v1/databases/chinook/dtql'), { to: `${OVDB_API}/databases/chinook/dtql`, status: 308 });
   assert.equal(redirect(chinook, '/data/chinook.sqlite'), null);
-  const alias = await rules('chinookdb.com');
-  assert.deepEqual(redirect(alias, '/tables/Artist/'), { to: 'https://chinook.demodb.dev/tables/Artist/', status: 308 });
-  assert.deepEqual(redirect(alias, '/ovdb/dbs/chinook'), { to: 'https://demodb.dev/chinook/', status: 308 });
-  assert.deepEqual(redirect(alias, '/ovdb/v1/databases/chinook/dtql'), { to: `${OVDB_API}/databases/chinook/dtql`, status: 308 });
   for (const host of manifest.hosts) {
     const lines = await rules(host.host).catch(() => []);
     const dynamic = lines.filter((line) => /[*:]/.test(line.split(' ')[0])).length;

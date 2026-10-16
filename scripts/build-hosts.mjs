@@ -7,7 +7,7 @@
 //
 //   dist-hosts/<host>/            the asset directory for that host
 //   dist-hosts/<host>/_headers    CORS, nosniff, content types and cache policy
-//   dist-hosts/<host>/_redirects  legacy OVDB, alias and API redirects (308, method and query preserved)
+//   dist-hosts/<host>/_redirects  legacy OVDB and API redirects (308, method and query preserved)
 //   dist-hosts/manifest.json      the host list and every chunked export, for tests and the live smoke
 //
 // The matching assets-only Wrangler configs are committed under deploy/hosts/ and read by the tests.
@@ -293,27 +293,8 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
     hosts.push({ host, name: workerName(host), kind: 'dataset', id: db.id, chunked });
   }
 
-  // --- legacy alias hosts (chinookdb.com) -----------------------------------------------------------------
-  for (const [host, id] of Object.entries(runtime.legacyAliases)) {
-    const target = index.databases.find((database) => database.id === id);
-    if (!target) throw new Error(`Legacy alias ${host} names unknown dataset ${id}`);
-    const dir = join(output, host);
-    await mkdir(dir, { recursive: true });
-    await cp(join(dist, 'build-info.json'), join(dir, 'build-info.json'));
-    await writeFile(join(dir, '_headers'), headersFile([['/*', [...SECURITY, ...REDIRECT_HEADERS]]]));
-    await writeFile(join(dir, '_redirects'), redirectsFile([
-      ...ovdbIds.flatMap((ovdbId) => ['dbs', 'db'].flatMap((kind) => [
-        [`/ovdb/${kind}/${ovdbId}`, `https://demodb.dev/${ovdbId}/`, 308],
-        [`/ovdb/${kind}/${ovdbId}/`, `https://demodb.dev/${ovdbId}/`, 308],
-      ])),
-      ...ovdbIds.flatMap((ovdbId) => [
-        [`/ovdb/v1/databases/${ovdbId}`, `${OVDB_API}/databases/${ovdbId}`, 308],
-      ]),
-      ...ovdbIds.map((ovdbId) => [`/ovdb/v1/databases/${ovdbId}/*`, `${OVDB_API}/databases/${ovdbId}/:splat`, 308]),
-      ['/*', `https://${target.siteHost}/:splat`, 308],
-    ]));
-    hosts.push({ host, name: workerName(host), kind: 'alias', target: target.siteHost, chunked: [] });
-  }
+  // chinookdb.com (runtime.legacyAliases) is deliberately not built: the founder dropped it from this cutover
+  // (2026-10-16), and the datatug/chinookdb repository declares that domain for its own Worker.
 
   await writeFile(join(output, 'manifest.json'), `${JSON.stringify({ format: 'demodb-static-hosts/v1', hosts }, null, 2)}\n`);
   return hosts;

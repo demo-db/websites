@@ -7,7 +7,7 @@
 // Order matters for custom domains. In CI (no TTY) Wrangler moves a custom domain that another script holds
 // to the config that names it (override_existing_origin), and it REPLACES a script's whole custom-domain set
 // with the routes of the config being deployed (changeset `replace_state=true`, PUT `override_scope: true`).
-// The catalogue config keeps the existing script name `demodb-websites`, which today holds all eight domains,
+// The catalogue config keeps the existing script name `demodb-websites`, which today holds every DemoDB custom domain,
 // so it deploys LAST: by then every other host has moved its domain away, and its replace leaves demodb.dev.
 //
 // Before a real deploy, a preflight lists the account's Workers through the Cloudflare API and fails, before
@@ -31,7 +31,7 @@ export async function hostConfigs(dir = hostsDir) {
     const config = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
     configs.push({ file: join('deploy/hosts', file), config });
   }
-  // Dataset hosts, then other hosts (legacy aliases), then the catalogue script that holds every domain today.
+  // Dataset hosts, then any other host, then the catalogue script that holds every domain today.
   const rank = ({ config }) => config.name === CATALOGUE_SCRIPT ? 2 : config.routes.some((route) => route.pattern.endsWith('.demodb.dev')) ? 0 : 1;
   return configs.sort((a, b) => rank(a) - rank(b) || a.file.localeCompare(b.file));
 }

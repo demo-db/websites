@@ -43,9 +43,9 @@ test('preflight passes when the new scripts fit and sends the token to the accou
 });
 
 test('preflight fails before any deploy when the account would exceed its Workers limit', async () => {
-  const names = [CATALOGUE_SCRIPT, 'demodb-chinook', 'demodb-northwind', 'demodb-pubs', 'demodb-sakila', 'demodb-adventureworks', 'demodb-employees', 'demodb-chinookdb-com'];
+  const names = [CATALOGUE_SCRIPT, 'demodb-chinook', 'demodb-northwind', 'demodb-pubs', 'demodb-sakila', 'demodb-adventureworks', 'demodb-employees'];
   await assert.rejects(preflight({ names, env, fetch: mockFetch([scripts(100, [CATALOGUE_SCRIPT])]) }),
-    /the account has 100 Workers and this deploy would create 7 more .*107 in total, above the limit of 100\. Nothing was deployed\. Free 7 Worker slot/);
+    /the account has 100 Workers and this deploy would create 6 more .*106 in total, above the limit of 100\. Nothing was deployed\. Free 6 Worker slot/);
 });
 
 test('the limit is configurable through DEMODB_WORKERS_LIMIT', async () => {

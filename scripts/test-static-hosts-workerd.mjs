@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -47,9 +46,6 @@ async function serve(config) {
 const catalogue = await serve('deploy/hosts/demodb-websites.jsonc');
 const chinook = await serve('deploy/hosts/demodb-chinook.jsonc');
 const adventureworks = await serve('deploy/hosts/demodb-adventureworks.jsonc');
-// chinookdb.com is deployed only while its own config exists (see deploy/hosts/); test it when it does.
-const aliasConfig = 'deploy/hosts/demodb-chinookdb-com.jsonc';
-const alias = existsSync(join(root, aliasConfig)) ? await serve(aliasConfig) : null;
 
 const receipts = [];
 async function probe(label, client, path, method = 'GET') {
@@ -155,20 +151,4 @@ test('AdventureWorks: only chunks and a manifest, joined and decoded to the pinn
     assert.equal((await probe('adventureworks', adventureworks, path)).response.status, 404, `${path}: no single-file URL`);
   }
   assert.equal((await probe('adventureworks', adventureworks, '/data/adventureworks.ingitdb.zip')).response.headers.get('content-type'), 'application/zip');
-});
-
-test('chinookdb.com: every path redirects with 308, preserving path, query and method', { skip: !alias && 'no chinookdb.com config' }, async () => {
-  const page = await probe('chinookdb.com', alias, '/tables/Artist/?q=1');
-  assert.equal(page.response.status, 308);
-  assert.equal(page.response.headers.get('location'), 'https://chinook.demodb.dev/tables/Artist/?q=1');
-  const root = await probe('chinookdb.com', alias, '/');
-  assert.equal(root.response.headers.get('location'), 'https://chinook.demodb.dev/');
-  const head = await probe('chinookdb.com', alias, '/data/chinook.sqlite?download=1', 'HEAD');
-  assert.equal(head.response.headers.get('location'), 'https://chinook.demodb.dev/data/chinook.sqlite?download=1');
-  assert.equal((await probe('chinookdb.com', alias, '/ovdb/dbs/chinook?p=1')).response.headers.get('location'), 'https://demodb.dev/chinook/?p=1');
-  const post = await alias('/ovdb/v1/databases/chinook/dtql?q=1', 'POST', { body: '{}', headers: { 'Content-Type': 'application/json' } });
-  assert.equal(post.status, 308);
-  assert.equal(post.headers.get('location'), `${OVDB_API}/databases/chinook/dtql?q=1`);
-  const options = await probe('chinookdb.com', alias, '/data/chinook.sqlite', 'OPTIONS');
-  assert.equal(options.response.status, 308, 'redirect rules run before the method check');
 });

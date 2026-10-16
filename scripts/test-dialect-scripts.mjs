@@ -173,6 +173,13 @@ for (const [name, edit] of [
   ['a conditional comment', (text) => text.replace('(1);', '(1) /*! x */;')],
   ['a raw line break inside a string', (text) => text.replace('(1);', "('a\nb');")],
   ['an unterminated string', (text) => text.replace('(1);', "('a);")],
+  // `--` is a comment for the mysql client only when white space or the end of the line follows it: these are not comments, and the plain client runs the first one.
+  ['a --\\! command line', (text) => text.replace('(1);', '(1);\n--\\! touch /tmp/pwn_dash')],
+  ['a --source line', (text) => text.replace('(1);', '(1);\n--source /etc/passwd')],
+  ['a --<tab> command line', (text) => text.replace('(1);', '(1);\n--\tsource /etc/passwd')],
+  ['a --; line', (text) => text.replace('(1);', '(1);\n--;')],
+  ['a --\\! line inside the header', (text) => text.replace('-- Dataset: demo', '--\\! touch /tmp/pwn_header\n-- Dataset: demo')],
+  ['a --\\! line between header and statements', (text) => text.replace('\nSET NAMES', '\n--\\! touch /tmp/pwn_gap\nSET NAMES')],
 ]) {
   test(`the required check refuses ${name}, even when the manifest is re-hashed and carries no verification`, async () => {
     const { dir, script, inputs } = await syntheticProvider();
@@ -190,6 +197,13 @@ for (const [name, edit] of [
     assert.match(problems, /line \d+: |starts with something/, 'the script itself is refused, not only the missing verification');
   });
 }
+
+test('only `-- ` and a bare `--` are comment lines', () => {
+  const lint = (text) => literalProblems(Buffer.from(text)).join('\n');
+  assert.equal(lint('-- ok \\! fine\n--\nSELECT 1;\n'), '');
+  for (const hostile of ['--\\! x', '--source x', '--\tx', '--;', '--x']) assert.match(lint(`${hostile}\nSELECT 1;\n`), /not followed by a space or the end of the line/, hostile);
+  assert.match(lint('SELECT 1;\n--\\! x\n'), /not followed by a space/);
+});
 
 test('a clean script with strings, quoted names and doubled quotes passes the literal lint', () => {
   const ok = Buffer.from("-- c \\ # /* \nINSERT INTO `a``b` VALUES\n(1, 'it''s -- not a comment; \u00e9', _utf8mb4 X'5c21'),\n(2, NULL);\n");

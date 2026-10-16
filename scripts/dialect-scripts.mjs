@@ -212,7 +212,9 @@ export async function readStoredScript(record, read) {
 // --- the script itself ------------------------------------------------------------------------------------
 // Tokens the exporter emits at the start of a script line. No data byte can start a line (a value with a line break is written as
 // hex), so a line starting with anything else is a script that someone edited. An indented line is a column or key definition.
-const LINE_START = [/^$/, /^--/, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^\)/,
+// A comment line is `-- ` and text, or a bare `--`: the mysql client reads `--` as a comment only when white space or the end of the line follows, so `--\! cmd` is not one.
+const COMMENT_LINE = /^--( |$)/;
+const LINE_START = [/^$/, COMMENT_LINE, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^\)/,
   /^ {2}(`|PRIMARY KEY|UNIQUE KEY|UNIQUE |KEY |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/];
 
 // Walks the script as the mysql client does and reports the first thing no exporter output contains:
@@ -237,7 +239,7 @@ export function literalProblems(bytes) {
       state = 0; line += 1; atLineStart = true;
       continue;
     }
-    if (state === 0 && atLineStart && c === 0x2d && bytes[i + 1] === 0x2d) {
+    if (state === 0 && atLineStart && c === 0x2d && bytes[i + 1] === 0x2d && (bytes[i + 2] === 0x20 || bytes[i + 2] === 0x0a || i + 2 >= n)) {
       const end = bytes.indexOf(0x0a, i);
       if (end === -1) break;
       i = end - 1;
@@ -252,7 +254,7 @@ export function literalProblems(bytes) {
     else if (c === 0x60) state = 2;
     else if (c === 0x23) report('a # comment');
     else if (c === 0x2f && bytes[i + 1] === 0x2a) report('a /* comment');
-    else if (c === 0x2d && bytes[i + 1] === 0x2d && !wasLineStart) report('a -- comment inside a line');
+    else if (c === 0x2d && bytes[i + 1] === 0x2d) report(wasLineStart ? 'a -- that is not followed by a space or the end of the line (the client does not read it as a comment)' : 'a -- comment inside a line');
     else if (c === 0x3b && i + 1 < n && bytes[i + 1] !== 0x0a) report('text after a semicolon on the same line');
   }
   if (state !== 0) report('the script ends inside a literal or a quoted name');
@@ -290,7 +292,7 @@ export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   if (Buffer.byteLength(text, 'utf8') !== bytes.length || text.includes('�')) problems.push('the script is not valid UTF-8');
   const lines = text.split('\n');
   // The header is the leading block of comment lines (a long licence notice makes it long).
-  const header = lines.slice(0, Math.max(1, lines.findIndex((line) => !line.startsWith('--'))));
+  const header = lines.slice(0, Math.max(1, lines.findIndex((line) => !COMMENT_LINE.test(line))));
   const expectHeader = (prefix, value, what) => {
     if (!header.some((line) => line === `${prefix}${value}`)) problems.push(`the header lacks ${what}`);
   };

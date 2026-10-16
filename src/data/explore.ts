@@ -6,34 +6,44 @@ const dataTugDemoOrigin = 'https://datatug.app/demo';
 // editions can be offered. Only editions published in that metadata appear.
 export type ExploreSubject = { id: string; exports: Pick<ExportFile, 'format' | 'table'>[] };
 
-export type ExploreAction = { engine: 'SQLite'; label: string; href: string };
+export type ExploreAction = { engine: 'SQLite' | 'PostgreSQL'; label: string; href: string };
 export type ExploreActions = { primary: ExploreAction | null; secondary: ExploreAction[] };
+
+// The DataTug route of the hosted read-only PostgreSQL edition. `editionId` is the
+// storage id the catalogue publishes (`<dataset>-postgresql`); datatug-apps serves
+// `/demo/ovdb/<editionId>` (its demo-postgresql-catalog `route`). The one place this URL is built.
+export function datatugPostgresqlHref(editionId: string): string {
+  return `${dataTugDemoOrigin}/ovdb/${encodeURIComponent(editionId)}`;
+}
 
 type Edition = {
   engine: ExploreAction['engine'];
-  path: string;
-  available: (subject: ExploreSubject) => boolean;
+  href: (subject: ExploreSubject, postgresqlEditionId: string | null) => string | null;
 };
 
-// Ordered by preference. A future edition, such as PostgreSQL, is added here
-// only once its availability is published in the generated metadata.
+// Ordered by preference; the first available edition is the primary action. An edition
+// is offered only when its availability is published: SQLite by the dataset's generated
+// metadata, PostgreSQL by a verified public API (config/postgresql-api.json) plus a
+// hosted PostgreSQL storage entry for the dataset (`postgresqlEditionId`, see ovdb.ts).
 const editions: Edition[] = [
   {
     engine: 'SQLite',
-    path: 'sqlite',
-    available: (subject) => subject.exports.some((file) => file.format === 'sqlite' && file.table === null),
+    href: (subject) => subject.exports.some((file) => file.format === 'sqlite' && file.table === null)
+      ? `${dataTugDemoOrigin}/sqlite/${encodeURIComponent(subject.id)}`
+      : null,
+  },
+  {
+    engine: 'PostgreSQL',
+    href: (_subject, postgresqlEditionId) => postgresqlEditionId ? datatugPostgresqlHref(postgresqlEditionId) : null,
   },
 ];
 
-export function exploreActions(subject: ExploreSubject | undefined): ExploreActions {
+export function exploreActions(subject: ExploreSubject | undefined, postgresqlEditionId: string | null = null): ExploreActions {
   if (!subject) return { primary: null, secondary: [] };
-  const actions = editions
-    .filter((edition) => edition.available(subject))
-    .map((edition): ExploreAction => ({
-      engine: edition.engine,
-      label: `Explore ${edition.engine} in DataTug`,
-      href: `${dataTugDemoOrigin}/${edition.path}/${encodeURIComponent(subject.id)}`,
-    }));
+  const actions = editions.flatMap((edition): ExploreAction[] => {
+    const href = edition.href(subject, postgresqlEditionId);
+    return href ? [{ engine: edition.engine, label: `Explore ${edition.engine} in DataTug`, href }] : [];
+  });
   const [primary = null, ...secondary] = actions;
   return { primary, secondary };
 }

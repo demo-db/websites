@@ -1,0 +1,13 @@
+{
+  "source": "datatug/datatug-apps libs/datatug/main/src/lib/demo-postgresql/demo-postgresql-catalog.ts",
+  "commit": "3e97d5b3b16b91773b6ce6c8e9918e57c867984c",
+  "note": "Vendored {dataset, route} pairs of demoPostgresqlCatalog (datatug-apps#334). The drift test in scripts/test-explore.ts compares the links this site generates with them; refresh from the source commit when the catalogue changes.",
+  "entries": [
+    { "dataset": "chinook", "route": "/demo/ovdb/chinook-postgresql" },
+    { "dataset": "northwind", "route": "/demo/ovdb/northwind-postgresql" },
+    { "dataset": "pubs", "route": "/demo/ovdb/pubs-postgresql" },
+    { "dataset": "sakila", "route": "/demo/ovdb/sakila-postgresql" },
+    { "dataset": "adventureworks", "route": "/demo/ovdb/adventureworks-postgresql" },
+    { "dataset": "employees", "route": "/demo/ovdb/employees-postgresql" }
+  ]
+}

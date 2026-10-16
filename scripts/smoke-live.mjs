@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
+import datatugCatalog from './fixtures/datatug-postgresql-catalog.json' with { type: 'json' };
 import { decodedExportBytes } from './corpus-exports.mjs';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
@@ -159,6 +160,7 @@ for (const id of storageIds) {
         : body.includes('Open read-only API')));
   if (id.endsWith('-bigquery') || id.endsWith('-postgresql')) await checkedNotFound(`https://demodb.dev/ovdb/v1/databases/${id}`);
 }
+await checkedDataTugPostgresqlLinks();
 await checkedServedModels();
 await checkedConfiguredDatabaseQueries();
 await checkedComparisonFixture();
@@ -173,6 +175,30 @@ await checkedDecodedSqlite('adventureworks');
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length !== expectedSqlBytes) throw new Error(`adventureworks: SQL download decoded to ${bytes.length} bytes, expected ${expectedSqlBytes}`);
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error('adventureworks: SQL download is still gzip after decoding');
+}
+
+// Every "Explore PostgreSQL in DataTug" link the live pages render must open the SPA on
+// datatug.app. The links are read from the live dataset and OVDB database pages, so a link
+// that is rendered but not served fails here; the set must equal datatug-apps' catalogue
+// routes (the vendored fixture), and a pending flag must render none. Tolerant by design:
+// the SPA answers every route with its shell (HTTP 200), so this proves deployment of the
+// route, while the table list and rows were verified in a real browser when the CTA landed.
+async function checkedDataTugPostgresqlLinks() {
+  const expected = new Map(datatugCatalog.entries.map(({ dataset, route }) => [dataset, `https://datatug.app${route}`]));
+  assert.deepEqual([...expected.keys()].sort(), [...requiredQueryableDatabaseIds].sort(), 'the catalogue fixture covers every dataset');
+  for (const id of requiredQueryableDatabaseIds) {
+    for (const page of [`https://${id}.demodb.dev/`, `https://demodb.dev/ovdb/db/${id}/`]) {
+      let rendered = [];
+      await checked(page, (body) => {
+        rendered = [...body.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>Explore PostgreSQL in DataTug<\/a>/g)].map((match) => match[1]);
+        if (!postgresqlApi.publicApiVerified) return rendered.length === 0 || 'a pending PostgreSQL edition is advertised';
+        return rendered.length === 1 && rendered[0] === expected.get(id) || `rendered ${JSON.stringify(rendered)}, expected ${expected.get(id)}`;
+      });
+      for (const href of rendered) {
+        await checked(href, (body, response) => response.status === 200 && /<title>DataTug\.app<\/title>/.test(body) && /<base href="\/">/.test(body));
+      }
+    }
+  }
 }
 
 // Every dataset's model files and model page, in the current ModelSpec spelling.

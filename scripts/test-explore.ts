@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { databases } from '../src/data/db';
-import { datatugLocalLimitLines, datatugLocalLimits } from '../src/data/datatug-limits';
-import { exploreActions } from '../src/data/explore';
-import { postgresqlApiProvenance, postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
+import { datatugLocalLimitLines, datatugLocalLimits, datatugPostgresqlLimitLines } from '../src/data/datatug-limits';
+import { datatugPostgresqlHref, exploreActions } from '../src/data/explore';
+import { postgresqlApiProvenance, postgresqlDataTugEditionId, postgresqlPublicApiVerified, postgresqlStorageEntry, storageGroups } from '../src/data/ovdb';
 import postgresqlApi from '../src/data/generated/postgresql-api.json';
 import committedPostgresqlApi from '../config/postgresql-api.json';
+import datatugCatalog from './fixtures/datatug-postgresql-catalog.json' with { type: 'json' };
 
 const sqlite = { format: 'sqlite', table: null };
 
@@ -22,12 +23,17 @@ test('exploreActions offers nothing without a database-level SQLite file', () =>
   assert.deepEqual(exploreActions(undefined), { primary: null, secondary: [] });
 });
 
-test('every registered dataset gets a SQLite primary action and no user-facing WASM text', () => {
+test('every registered dataset gets a SQLite primary action, a PostgreSQL secondary action when verified, and no user-facing WASM text', () => {
   for (const database of databases) {
     const actions = exploreActions(database);
     assert.equal(actions.primary?.label, 'Explore SQLite in DataTug', `${database.id} primary label`);
     assert.equal(actions.primary?.href, `https://datatug.app/demo/sqlite/${database.id}`, `${database.id} href`);
-    assert.deepEqual(actions.secondary, [], `${database.id} offers no secondary edition yet`);
+    const editionId = postgresqlDataTugEditionId(database.id);
+    assert.equal(editionId, postgresqlPublicApiVerified ? `${database.id}-postgresql` : null, `${database.id} PostgreSQL edition follows the verified flag`);
+    const withPostgres = exploreActions(database, editionId);
+    assert.deepEqual(withPostgres.primary, actions.primary, 'PostgreSQL never displaces the SQLite primary action');
+    assert.deepEqual(withPostgres.secondary, editionId ? [{ engine: 'PostgreSQL', label: 'Explore PostgreSQL in DataTug', href: `https://datatug.app/demo/ovdb/${database.id}-postgresql` }] : []);
+    assert.doesNotMatch(JSON.stringify(withPostgres), /wasm/i);
     assert.doesNotMatch(JSON.stringify(actions), /wasm/i);
   }
 });
@@ -88,4 +94,35 @@ test('the Employees subset is not described as a browser edition', () => {
   const employees = databases.find((db) => db.id === 'employees')!;
   assert.equal(employees.name, 'Employees (reduced subset)');
   assert.doesNotMatch(JSON.stringify({ name: employees.name, description: employees.description, source: employees.source, queries: employees.queries }), /browser[- ](edition|sized)/i);
+});
+
+test('the PostgreSQL DataTug action needs a verified API and a hosted edition', () => {
+  const chinook = databases.find((db) => db.id === 'chinook')!;
+  assert.deepEqual(exploreActions(chinook, null).secondary, [], 'no edition id, no link');
+  assert.equal(exploreActions(chinook, 'chinook-postgresql').secondary[0]?.href, datatugPostgresqlHref('chinook-postgresql'));
+  // Without a SQLite file the PostgreSQL action is still honest: it becomes the only action.
+  const noSqlite = exploreActions({ id: 'x', exports: [] }, 'x-postgresql');
+  assert.equal(noSqlite.primary?.engine, 'PostgreSQL');
+  assert.deepEqual(noSqlite.secondary, []);
+  assert.equal(postgresqlDataTugEditionId('missing'), null);
+});
+
+test('generated PostgreSQL DataTug links equal the datatug-apps catalogue routes', () => {
+  assert.match(datatugCatalog.commit, /^[0-9a-f]{40}$/, 'the fixture records its source commit');
+  assert.deepEqual(datatugCatalog.entries.map((entry) => entry.dataset).sort(), databases.map((db) => db.id).sort(), 'same datasets as the registry');
+  for (const { dataset, route } of datatugCatalog.entries) {
+    assert.equal(datatugPostgresqlHref(`${dataset}-postgresql`), `https://datatug.app${route}`);
+    if (postgresqlPublicApiVerified) {
+      assert.equal(exploreActions(databases.find((db) => db.id === dataset), postgresqlDataTugEditionId(dataset)).secondary[0]?.href, `https://datatug.app${route}`);
+    }
+  }
+});
+
+test('the PostgreSQL limits say read-only, DTQL, 100 rows and never imply editing it', () => {
+  const lines = datatugPostgresqlLimitLines().join(' ');
+  assert.match(lines, /read-only by design/);
+  assert.match(lines, /DTQL/);
+  assert.match(lines, /first 100 rows/);
+  assert.match(lines, /editable local SQLite copy/);
+  assert.doesNotMatch(lines, /wasm/i);
 });

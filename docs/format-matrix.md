@@ -17,7 +17,7 @@ dataset and download pages print "Not available: <reason>" for every gap.
 | Pubs | yes (provider file) | yes (generated here) | yes (generated here) | yes (generated here) | yes (archive of the pinned inGitDB edition) | not available | not available |
 | Sakila | yes (provider file) | yes (generated here) | yes (generated here) | yes (generated here) | yes (archive of the pinned inGitDB edition) | not available | not available |
 | AdventureWorks OLTP | yes (provider file) | yes (generated here) | yes (generated here) | yes (generated here) | yes (archive of the pinned inGitDB edition) | not available | not available |
-| Employees (browser edition) | yes (provider file) | yes (generated here) | yes (generated here) | yes (generated here) | yes (archive of the pinned inGitDB edition) | not available | not available |
+| Employees (reduced subset) | yes (provider file) | yes (generated here) | yes (generated here) | yes (generated here) | yes (archive of the pinned inGitDB edition) | not available | not available |
 
 Every dataset also offers the SQLite-dialect SQL dump (`sql`, labelled "SQL (SQLite dialect)": it is SQLite syntax, not PostgreSQL, MySQL or SQL Server),
 per-table JSON and CSV files, the schema, model and meaning files, and a research snapshot ZIP. Those are outside the matrix.
@@ -33,7 +33,7 @@ Initial is origin/main at `25946a8`, read from the live corpus on 2026-10-16; fi
 | Pubs | served → served | Neon copy only → served | per-table only → served | missing → served | GitHub link only → served | missing → not available | missing → not available |
 | Sakila | served → served | Neon copy only → served | per-table only → served | missing → served | GitHub link only → served | missing → not available | missing → not available |
 | AdventureWorks OLTP | served → served | Neon copy only → served | per-table only → served | missing → served | GitHub link only → served | missing → not available | missing → not available |
-| Employees (browser edition) | served → served | Neon copy only → served | per-table only → served | missing → served | GitHub link only → served | missing → not available | missing → not available |
+| Employees (reduced subset) | served → served | Neon copy only → served | per-table only → served | missing → served | GitHub link only → served | missing → not available | missing → not available |
 
 ## Not available, and why
 
@@ -45,8 +45,8 @@ Initial is origin/main at `25946a8`, read from the live corpus on 2026-10-16; fi
 - **Sakila, SQL Server script.** The pinned upstream source has no SQL Server edition of Sakila. DemoDB has no generator that writes a SQL Server script from the pinned SQLite fixture and CI has no SQL Server instance to load one into, so an unchecked script is not published. Follow-up: Add a T-SQL dialect to the shared generator and load every dataset into a SQL Server container in CI before publishing.
 - **AdventureWorks OLTP, MySQL script.** The pinned upstream source has no MySQL edition of AdventureWorks. DemoDB has no generator that writes a MySQL script from the pinned SQLite fixture and CI has no MySQL server to load one into, so an unchecked script is not published. Follow-up: Add a MySQL dialect to the shared generator (scripts/hosting-tools/postgres_samples.py) and load every dataset into a mysql:8 service container in CI before publishing.
 - **AdventureWorks OLTP, SQL Server script.** Microsoft's AdventureWorks installer needs SQL Server features and 68 BULK INSERT files and is not a single script; the pinned fixture is its SQLite conversion. DemoDB has no generator that writes a SQL Server script from the pinned SQLite fixture and CI has no SQL Server instance to load one into, so an unchecked script is not published. Follow-up: Add a T-SQL dialect to the shared generator and load every dataset into a SQL Server container in CI before publishing.
-- **Employees (browser edition), MySQL script.** The upstream MySQL dump is the full Employees dataset, while the pinned fixture is a documented 1,024-employee subset, so the original script is not the pinned data. DemoDB has no generator that writes a MySQL script from the pinned SQLite fixture and CI has no MySQL server to load one into, so an unchecked script is not published. Follow-up: Add a MySQL dialect to the shared generator (scripts/hosting-tools/postgres_samples.py) and load every dataset into a mysql:8 service container in CI before publishing.
-- **Employees (browser edition), SQL Server script.** The pinned upstream source has no SQL Server edition of Employees. DemoDB has no generator that writes a SQL Server script from the pinned SQLite fixture and CI has no SQL Server instance to load one into, so an unchecked script is not published. Follow-up: Add a T-SQL dialect to the shared generator and load every dataset into a SQL Server container in CI before publishing.
+- **Employees (reduced subset), MySQL script.** The upstream MySQL dump is the full Employees dataset, while the pinned fixture is a documented 1,024-employee subset, so the original script is not the pinned data. DemoDB has no generator that writes a MySQL script from the pinned SQLite fixture and CI has no MySQL server to load one into, so an unchecked script is not published. Follow-up: Add a MySQL dialect to the shared generator (scripts/hosting-tools/postgres_samples.py) and load every dataset into a mysql:8 service container in CI before publishing.
+- **Employees (reduced subset), SQL Server script.** The pinned upstream source has no SQL Server edition of Employees. DemoDB has no generator that writes a SQL Server script from the pinned SQLite fixture and CI has no SQL Server instance to load one into, so an unchecked script is not published. Follow-up: Add a T-SQL dialect to the shared generator and load every dataset into a SQL Server container in CI before publishing.
 
 ## Size and hosting
 
@@ -61,7 +61,7 @@ No download in this matrix is partial. Sizes are decoded sizes.
 | Pubs | 0.2 MiB | 0.2 MiB | 0.1 MiB | 0.1 MiB | ZIP, 29 files, 255 rows |
 | Sakila | 4.7 MiB | 3.6 MiB | 7.2 MiB | 8.1 MiB | ZIP, 39 files, 47,268 rows |
 | AdventureWorks OLTP | 121 MiB (served gzip-encoded) | 105 MiB (served gzip-encoded) | 208 MiB (served gzip-encoded) | 232 MiB (served gzip-encoded) | ZIP, 148 files, 759,240 rows |
-| Employees (browser edition) | 0.8 MiB | 0.6 MiB | 1.2 MiB | 1.3 MiB | ZIP, 17 files, 13,584 rows |
+| Employees (reduced subset) | 0.8 MiB | 0.6 MiB | 1.2 MiB | 1.3 MiB | ZIP, 17 files, 13,584 rows |
 
 The AdventureWorks inGitDB archive is the one download close to the limit; the build fails, rather than publish a partial file, if it ever exceeds it.
 

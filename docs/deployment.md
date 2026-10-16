@@ -9,7 +9,7 @@
 
 `scripts/build-hosts.mjs` (the last step of `pnpm build`) writes each bundle with its `_headers`, `_redirects` and a top-level `404.html` (without one, Pages serves `index.html` with 200 for every missing path). `scripts/deploy-hosts.mjs` deploys (`pnpm run deploy:hosts`; `--dry-run` in CI validates the bundles without network):
 
-1. **Preflight**, before anything changes: existing Pages projects plus the ones this run creates must fit `DEMODB_PAGES_LIMIT` (default 100). The account's Worker list is recorded; after the run any new Worker fails the run.
+1. **Preflight**, before anything changes: existing Pages projects plus the ones this run creates must fit `DEMODB_PAGES_LIMIT` (default 100). No zone Worker route on `demodb.dev` may match a DemoDB host (Pages refuses a domain a Worker route is on). The account's Worker list is recorded; after the run any new Worker fails the run.
 2. **Per host, dataset hosts first and `demodb.dev` last**, every step idempotent so a re-run resumes:
    1. `wrangler pages project create <project> --production-branch main` if the project does not exist;
    2. `wrangler pages deploy dist-hosts/<host> --project-name <project> --branch main`;
@@ -17,11 +17,13 @@
    4. add it to the project (`POST /accounts/:acct/pages/projects/:project/domains`);
    5. create a proxied `CNAME <host> -> <project subdomain>.pages.dev` in the `demodb.dev` zone, using the subdomain Pages assigned (it can differ from the project name). Any other A, AAAA or CNAME record on the name stops the run instead of being overwritten;
    6. poll the Pages domain every 15 s until it is `active` (timeout `DEMODB_DOMAIN_TIMEOUT_SECONDS`, default 1200; a re-run keeps waiting).
+
+   If step 4 or 5 fails after step 3, the run removes the Pages domain (if added) and re-attaches the Worker custom domain to `demodb-websites` (`PUT /accounts/:acct/workers/domains`) before failing, so the host goes back to the old Worker instead of staying dark. If that rollback also fails, the error says how to re-attach the domain in the dashboard. The deploy job's timeout is 90 minutes so it outlasts seven activations.
 3. **Cleanup is manual.** The run prints `pnpm exec wrangler delete --name demodb-websites` once that Worker has no custom domains left. It never deletes it.
 
 A host is unavailable from step 3 until step 6 finishes, while Pages validates the hostname and issues its certificate. Cloudflare does not document a duration; the run logs both times and the gap for each host. The hosts were already failing with Error 1027 when this cutover was written.
 
-The token in `CLOUDFLARE_API_TOKEN` needs Account > Cloudflare Pages: Edit, Account > Workers Scripts: Edit (list Workers, detach their custom domains), and Zone > DNS: Edit plus Zone: Read on `demodb.dev`.
+The token in `CLOUDFLARE_API_TOKEN` needs Account > Cloudflare Pages: Edit, Account > Workers Scripts: Edit (list Workers, detach and re-attach their custom domains), and on `demodb.dev` Zone > Workers Routes: Edit (custom domain changes and the route preflight), Zone > DNS: Edit and Zone: Read.
 
 What the Worker computed per request is now produced at build time:
 

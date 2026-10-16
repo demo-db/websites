@@ -15,7 +15,7 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   assert.deepEqual(workflow.on.push.branches, ['main']);
   assert.ok(!workflow.on.schedule);
   const job = workflow.jobs.deploy;
-  assert.ok(job['timeout-minutes'] > 0);
+  assert.ok(job['timeout-minutes'] >= 90, 'the deploy job outlasts seven Pages domain activations');
   const actions = job.steps.filter((step) => step.uses).map((step) => step.uses);
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /@[0-9a-f]{40}(?:\s|$)/, `unpinned action: ${action}`);

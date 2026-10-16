@@ -15,11 +15,14 @@
 //   1. ensure the Pages project exists          wrangler pages project create <project> --production-branch main
 //   2. upload the bundle                        wrangler pages deploy dist-hosts/<host> --project-name <project> --branch main
 //   3. detach the hostname from its Worker      DELETE /accounts/:acct/workers/domains/:id   (Pages cannot add a
-//                                               custom domain while a Worker is routed on it)
+//                                               custom domain while a Worker is routed on it; zone Worker routes on
+//                                               any host fail the preflight instead)
 //   4. attach it to the Pages project           POST /accounts/:acct/pages/projects/:project/domains {name}
 //   5. point DNS at the project                 proxied CNAME <host> -> <project subdomain>.pages.dev
 //   6. wait until the Pages domain is active    GET .../domains/:host until status "active"
-// The host is unavailable from step 3 until step 6 completes; the run prints both times.
+// The host is unavailable from step 3 until step 6 completes; the run prints both times. If step 4 or 5 fails
+// after step 3, the run removes the Pages domain again and re-attaches the Worker custom domain
+// (PUT /accounts/:acct/workers/domains) before failing, so the host goes back to the old Worker.
 //
 // After a successful run it prints, but does not run, the command that deletes the retired, now domainless
 // demodb-websites Worker.
@@ -98,6 +101,9 @@ export function cloudflare({ fetch: fetchImpl = globalThis.fetch, token, account
     getPagesDomain: async (name, domain) => (await call('GET', `${account}/pages/projects/${name}/domains/${domain}`)).result,
     listWorkerDomains: async (hostname) => (await call('GET', `${account}/workers/domains?hostname=${encodeURIComponent(hostname)}`)).result,
     listServiceDomains: async (service) => (await call('GET', `${account}/workers/domains?service=${encodeURIComponent(service)}`)).result,
+    attachWorkerDomain: async (domain) => (await call('PUT', `${account}/workers/domains`, domain)).result,
+    deletePagesDomain: async (name, domain) => call('DELETE', `${account}/pages/projects/${name}/domains/${domain}`),
+    listZoneRoutes: async (zoneId) => (await call('GET', `/zones/${zoneId}/workers/routes`)).result,
     deleteWorkerDomain: async (id) => call('DELETE', `${account}/workers/domains/${id}`),
     zoneId: async (name) => {
       const zones = (await call('GET', `/zones?name=${encodeURIComponent(name)}&account.id=${encodeURIComponent(accountId)}`)).result;
@@ -135,31 +141,25 @@ export async function cutover({ cf, host, project, zoneId, log, sleep, now, time
   const domains = await cf.listPagesDomains(project);
   const attached = domains.find((domain) => domain.name === host);
   let detachedAt = null;
-  if (!attached) {
-    for (const domain of (await cf.listWorkerDomains(host)).filter((item) => item.hostname === host)) {
-      await cf.deleteWorkerDomain(domain.id);
-      detachedAt ??= now();
-      log(`${host}: detached from Worker ${domain.service} at ${new Date(detachedAt).toISOString()} (the host is down until its Pages domain is active)`);
-    }
-    await cf.addPagesDomain(project, host);
-    log(`${host}: added to Pages project ${project}`);
-  } else log(`${host}: already a custom domain of ${project} (status ${attached.status})`);
-
-  const records = await cf.listDnsRecords(zoneId, host);
-  const cname = records.find((record) => record.type === 'CNAME' && record.name === host);
-  if (cname && cname.content === target) log(`${host}: CNAME -> ${target} already present`);
-  else if (cname || records.some((record) => ['A', 'AAAA', 'CNAME'].includes(record.type))) {
-    throw new Error(`${host}: DNS already has ${records.map((record) => `${record.type} ${record.content}`).join(', ')}; expected only a proxied CNAME to ${target}. Fix the record in the dashboard and re-run.`);
-  } else {
-    try {
-      await cf.createCname(zoneId, host, target);
-      log(`${host}: created proxied CNAME -> ${target}`);
-    } catch (error) {
-      // Pages may have created the record itself in the meantime; accept it if it is the right one.
-      const again = await cf.listDnsRecords(zoneId, host);
-      if (!again.some((record) => record.type === 'CNAME' && record.content === target)) throw error;
-      log(`${host}: CNAME -> ${target} present`);
-    }
+  const detached = [];
+  try {
+    if (!attached) {
+      for (const domain of (await cf.listWorkerDomains(host)).filter((item) => item.hostname === host)) {
+        await cf.deleteWorkerDomain(domain.id);
+        detached.push(domain);
+        detachedAt ??= now();
+        log(`${host}: detached from Worker ${domain.service} at ${new Date(detachedAt).toISOString()} (the host is down until its Pages domain is active)`);
+      }
+      await cf.addPagesDomain(project, host);
+      log(`${host}: added to Pages project ${project}`);
+    } else log(`${host}: already a custom domain of ${project} (status ${attached.status})`);
+    await ensureCname({ cf, host, zoneId, target, log });
+  } catch (error) {
+    if (!detached.length) throw error;
+    // Steps 4-5 failed after this run removed the Worker custom domain: put the host back on its Worker
+    // instead of leaving it dark, then fail the run.
+    await rollback({ cf, host, project, detached, log, error });
+    throw new Error(`${host}: cutover failed and was rolled back to Worker ${detached.map((domain) => domain.service).join(', ')}: ${error.message}`);
   }
 
   const started = now();
@@ -180,10 +180,59 @@ export async function cutover({ cf, host, project, zoneId, log, sleep, now, time
   return { host, target, detachedAt, activeAt };
 }
 
+async function ensureCname({ cf, host, zoneId, target, log }) {
+  const records = await cf.listDnsRecords(zoneId, host);
+  const cname = records.find((record) => record.type === 'CNAME' && record.name === host);
+  if (cname && cname.content === target) { log(`${host}: CNAME -> ${target} already present`); return; }
+  if (cname || records.some((record) => ['A', 'AAAA', 'CNAME'].includes(record.type))) {
+    throw new Error(`${host}: DNS already has ${records.map((record) => `${record.type} ${record.content}`).join(', ')}; expected only a proxied CNAME to ${target}. Fix the record in the dashboard and re-run.`);
+  }
+  try {
+    await cf.createCname(zoneId, host, target);
+    log(`${host}: created proxied CNAME -> ${target}`);
+  } catch (error) {
+    // Pages may have created the record itself in the meantime; accept it if it is the right one.
+    const again = await cf.listDnsRecords(zoneId, host);
+    if (!again.some((record) => record.type === 'CNAME' && record.content === target)) throw error;
+    log(`${host}: CNAME -> ${target} present`);
+  }
+}
+
+// Undoes steps 3-4 for one host: removes the Pages custom domain if it was added, then re-attaches every Worker
+// custom domain this run deleted (PUT /accounts/:acct/workers/domains). If that also fails, says exactly what to do.
+async function rollback({ cf, host, project, detached, log, error }) {
+  log(`${host}: ${error.message}; rolling back to the Worker`);
+  try {
+    if ((await cf.listPagesDomains(project)).some((domain) => domain.name === host)) {
+      await cf.deletePagesDomain(project, host);
+      log(`${host}: removed from Pages project ${project}`);
+    }
+    for (const domain of detached) {
+      await cf.attachWorkerDomain({ hostname: domain.hostname, service: domain.service, environment: domain.environment ?? 'production', zone_id: domain.zone_id });
+      log(`${host}: re-attached to Worker ${domain.service}`);
+    }
+  } catch (rollbackError) {
+    throw new Error(`${host}: cutover failed (${error.message}) AND the rollback failed (${rollbackError.message}). The host has no route. Re-attach it by hand: Workers & Pages > ${detached[0].service} > Settings > Domains & Routes > Add custom domain ${host}, after removing it from Pages project ${project}.`);
+  }
+}
+
+// Zone Worker routes that would catch a host. Pages refuses a custom domain while a Worker route is on it, and a
+// route would keep invoking a Worker, so any match stops the run before anything changes.
+export function routeConflicts(routes, hosts) {
+  const hostOf = (pattern) => pattern.replace(/^https?:\/\//, '').split('/')[0];
+  const matches = (pattern, host) => new RegExp(`^${hostOf(pattern).split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(host);
+  return routes.flatMap((route) => hosts.filter((host) => matches(route.pattern, host)).map((host) => ({ host, pattern: route.pattern, script: route.script })));
+}
+
 export async function deployHosts({ hosts, cf, wrangler, env = process.env, log = console.log, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = Date.now }) {
   const timeoutSeconds = parsePositiveInteger('DEMODB_DOMAIN_TIMEOUT_SECONDS', env.DEMODB_DOMAIN_TIMEOUT_SECONDS, DEFAULT_DOMAIN_TIMEOUT_SECONDS);
   const { workers: before } = await preflight({ cf, hosts, env, log });
   const zoneId = await cf.zoneId(ZONE);
+  const conflicts = routeConflicts(await cf.listZoneRoutes(zoneId), hosts.map((host) => host.host));
+  if (conflicts.length) {
+    throw new Error(`Worker route preflight failed: ${conflicts.map((item) => `route ${item.pattern} (${item.script ?? 'no script'}) matches ${item.host}`).join('; ')}. Pages cannot take a hostname a Worker route is on; remove the route and re-run. Nothing was changed.`);
+  }
+  log(`preflight: no Worker route on the ${ZONE} zone matches a DemoDB host`);
   const projects = new Set(await cf.listPagesProjects());
   const results = [];
   for (const host of orderHosts(hosts)) {

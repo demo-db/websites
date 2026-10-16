@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 import { CHUNKED_FORMAT, IMMUTABLE_CACHE, MAX_ASSET_BYTES, OVDB_API, SHORT_CACHE } from './build-hosts.mjs';
-import { hostConfigs } from './deploy-hosts.mjs';
+import { readHosts } from './deploy-hosts.mjs';
 import { inventoryDiff } from './static-hosts-inventory.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -63,16 +63,18 @@ function headersFor(rules, path) {
 
 const urlOf = (file) => `/${file}`.replace(/(^|\/)index\.html$/, '$1');
 
-test('every host config points at a built bundle, and every bundle respects the static asset limits', async () => {
-  const configs = await hostConfigs();
-  assert.deepEqual(configs.map(({ config }) => config.routes[0].pattern).sort(), manifest.hosts.map((host) => host.host).sort());
+test('every host has a Pages project, a top-level 404.html, and every bundle respects the Pages limits', async () => {
+  const hosts = await readHosts(out);
+  assert.deepEqual(hosts.map((host) => host.host).sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  assert.equal(new Set(hosts.map((host) => host.project)).size, hosts.length, 'one project per host');
+  assert.equal(hosts.find((host) => host.host === 'demodb.dev').project, 'demodb-catalogue');
   assert.ok(!manifest.hosts.some((host) => host.host === 'chinookdb.com'), 'chinookdb.com is not part of this deployment');
-  for (const { config } of configs) {
-    const dir = join(out, config.routes[0].pattern);
-    assert.ok((await stat(dir)).isDirectory());
-    assert.equal(config.name, manifest.hosts.find((host) => host.host === config.routes[0].pattern).name);
+  for (const host of hosts) {
+    const dir = join(out, host.host);
     const files = await walk(dir);
-    assert.ok(files.length < 20000, 'Workers Free allows 20,000 files per version');
+    assert.ok(files.includes('404.html'), `${host.host}: top-level 404.html (Pages otherwise serves index.html for missing paths)`);
+    assert.ok(files.length < 20000, 'a Pages deployment allows 20,000 files');
+    assert.ok(!files.some((file) => file === '_worker.js' || file === '_routes.json' || file.startsWith('functions/')), `${host.host}: no Pages Functions, so no request runs a Worker`);
     for (const file of files) {
       assert.ok((await stat(join(dir, file))).size <= MAX_ASSET_BYTES, `${file} is within 25 MiB`);
       assert.ok(!file.split('/').includes('_db'), `${file}: no private namespace is published`);

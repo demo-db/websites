@@ -1,15 +1,18 @@
-// Serves the built per-host bundles with `wrangler dev` (workerd, the static asset router, local only, no
-// account) and checks status codes and headers as a client sees them. With DEMODB_RECEIPTS=1 it also prints
-// a GET/HEAD/OPTIONS receipt table for the probe paths.
+// Serves every built per-host bundle with `wrangler pages dev` (the Cloudflare Pages asset server, local only, no
+// account) and checks status codes and headers as a client sees them. Every URL of the new URL inventory is
+// requested on its host and must answer 200, so the inventory test also holds against Pages. With
+// DEMODB_RECEIPTS=1 it prints a GET/HEAD/OPTIONS receipt table for the probe paths.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 import { IMMUTABLE_CACHE, OVDB_API, SHORT_CACHE } from './build-hosts.mjs';
+import { newInventory } from './static-hosts-inventory.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -24,10 +27,11 @@ async function freePort() {
   });
 }
 
-async function serve(config) {
+async function serve(host) {
+  const dir = `dist-hosts/${host}`;
   const port = await freePort();
   const inspector = await freePort();
-  const child = spawn(join(root, 'node_modules/.bin/wrangler'), ['dev', '--config', config, '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspector)], {
+  const child = spawn(join(root, 'node_modules/.bin/wrangler'), ['pages', 'dev', dir, '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspector), '--compatibility-date', '2026-10-04'], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
   });
   let output = '';
@@ -35,17 +39,39 @@ async function serve(config) {
   child.stderr.on('data', (chunk) => { output += chunk; });
   const deadline = Date.now() + 120_000;
   while (!output.includes('Ready on') && child.exitCode === null && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 200));
-  assert.ok(output.includes('Ready on'), `wrangler dev ${config} did not start:\n${output}`);
+  assert.ok(output.includes('Ready on'), `wrangler pages dev ${dir} did not start:\n${output}`);
   // Wrangler parses _redirects/_headers at startup and reports (then ignores) any rule it rejects.
-  assert.doesNotMatch(output, /invalid (redirect|header)s? rules?|Ignoring duplicate/i, `wrangler rejected rules in ${config}:\n${output}`);
+  assert.doesNotMatch(output, /invalid (redirect|header)s? rules?|Ignoring duplicate/i, `wrangler rejected rules in ${dir}:\n${output}`);
   test.after(async () => { child.kill('SIGTERM'); await once(child, 'exit').catch(() => {}); });
   return (path, method = 'GET', init = {}) => fetch(`http://127.0.0.1:${port}${path}`, { method, redirect: 'manual', ...init });
 }
 
 // Started one after another: concurrent starts race for workerd's helper ports.
-const catalogue = await serve('deploy/hosts/demodb-websites.jsonc');
-const chinook = await serve('deploy/hosts/demodb-chinook.jsonc');
-const adventureworks = await serve('deploy/hosts/demodb-adventureworks.jsonc');
+const inventory = await newInventory(root);
+const servers = new Map();
+for (const host of [...inventory.keys()].sort()) servers.set(host, await serve(host));
+const catalogue = servers.get('demodb.dev');
+const chinook = servers.get('chinook.demodb.dev');
+const adventureworks = servers.get('adventureworks.demodb.dev');
+
+test('Pages serves every URL of the new inventory with 200, and a real 404 (not the SPA fallback) for a missing file', async () => {
+  let checked = 0;
+  for (const [host, urls] of inventory) {
+    const client = servers.get(host);
+    for (const url of urls) {
+      const path = url.split('/').map(encodeURIComponent).join('/');
+      const response = await client(path, 'HEAD');
+      assert.equal(response.status, 200, `${host}${url}`);
+      checked += 1;
+    }
+    const missing = await client('/data/no-such-file.sqlite');
+    assert.equal(missing.status, 404, `${host}: a missing file is 404`);
+    const body = await missing.text();
+    assert.equal(body, await readFile(join(root, 'dist-hosts', host, '404.html'), 'utf8'), `${host}: the 404 is the bundle's 404.html`);
+    assert.notEqual(body, await readFile(join(root, 'dist-hosts', host, 'index.html'), 'utf8'), `${host}: not the index.html (SPA) fallback`);
+  }
+  assert.ok(checked > 600, `requested ${checked} inventory URLs`);
+});
 
 const receipts = [];
 async function probe(label, client, path, method = 'GET') {
@@ -75,6 +101,7 @@ test('catalogue: pages, public JSON with CORS, API and legacy redirects, no data
   assert.equal(JSON.parse(discovery.body).protocol, 'openvaultdb/0.1');
   const api = await probe('demodb.dev', catalogue, '/ovdb/v1/databases/chinook/dtql?q=1');
   assert.equal(api.response.status, 308);
+  assert.equal(api.response.headers.get('access-control-allow-origin'), '*', 'the redirect carries CORS');
   assert.equal(api.response.headers.get('location'), `${OVDB_API}/databases/chinook/dtql?q=1`);
   const post = await catalogue('/ovdb/v1/databases/chinook/dtql', 'POST', { body: '{}', headers: { 'Content-Type': 'application/json' } });
   assert.equal(post.status, 308, 'a POST is redirected with its method preserved');
@@ -113,10 +140,17 @@ test('dataset host: files at public paths with data headers, no private namespac
   assert.equal(api.response.headers.get('access-control-allow-origin'), '*', 'the redirect carries CORS like the Worker did');
   assert.equal((await probe('chinook', chinook, '/ovdb/')).response.headers.get('location'), 'https://cloud.openvaultdb.com/ovdb/dbs/chinook');
   for (const path of ['/_db/x', '/_db/chinook/index.html', '/no-such-page/']) assert.equal((await probe('chinook', chinook, path)).response.status, 404, path);
-  // An encoded spelling is first normalized by a 307 to its canonical path, which is then 404.
+  // Pages: a directory URL without its slash, or with index.html, is a 308 to the slash form.
+  const bare = await probe('chinook', chinook, '/tables/Artist');
+  assert.equal(bare.response.status, 308);
+  assert.equal(bare.response.headers.get('location'), '/tables/Artist/');
+  const index = await probe('chinook', chinook, '/tables/Artist/index.html');
+  assert.equal(index.response.status, 308);
+  assert.equal(index.response.headers.get('location'), '/tables/Artist/');
+  // An encoded spelling may first be normalized by a redirect to its canonical path, which is then 404.
   const encoded = await probe('chinook', chinook, '/%5Fdb/chinook/index.html');
-  assert.ok([307, 404].includes(encoded.response.status));
-  if (encoded.response.status === 307) assert.equal((await probe('chinook', chinook, new URL(encoded.response.headers.get('location'), 'http://x').pathname)).response.status, 404);
+  assert.ok([307, 308, 404].includes(encoded.response.status));
+  if (encoded.response.status !== 404) assert.equal((await probe('chinook', chinook, new URL(encoded.response.headers.get('location'), 'http://x').pathname)).response.status, 404);
   assert.equal((await chinook('/data/chinook.sqlite', 'POST')).status, 405);
 });
 

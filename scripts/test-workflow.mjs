@@ -7,8 +7,6 @@ import { parse } from 'yaml';
 
 const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
-const { hostConfigs } = await import('./deploy-hosts.mjs');
-const hosts = await hostConfigs();
 const liveSmoke = await readFile(join(root, 'scripts/smoke-live.mjs'), 'utf8');
 const comparisonHistoryCheck = await readFile(join(root, 'scripts/check-comparison-fixture-history.mjs'), 'utf8');
 
@@ -21,11 +19,11 @@ test('workflow only builds pull requests and deploys pushes to main', () => {
   const actions = job.steps.filter((step) => step.uses).map((step) => step.uses);
   assert.ok(actions.length > 0);
   for (const action of actions) assert.match(action, /@[0-9a-f]{40}(?:\s|$)/, `unpinned action: ${action}`);
-  const deploy = job.steps.find((step) => step.name === 'Deploy static host bundles');
+  const deploy = job.steps.find((step) => step.name === 'Deploy static host bundles to Cloudflare Pages');
   assert.match(deploy.if, /github\.event_name == 'push'/);
   assert.match(deploy.if, /env\.HAS_CREDENTIALS == 'true'/);
   assert.equal(deploy.env.CLOUDFLARE_API_TOKEN, '${{ secrets.CLOUDFLARE_API_TOKEN }}');
-  assert.ok(job.steps.some((step) => step.name === 'Validate every assets-only host configuration' && step.run === 'pnpm run deploy:dry-run'));
+  assert.ok(job.steps.some((step) => step.name === 'Validate every static host bundle' && step.run === 'pnpm run deploy:dry-run'));
   assert.equal(deploy.run, 'pnpm run deploy:hosts');
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
   assert.match(scripts['deploy:dry-run'], /deploy-hosts\.mjs --dry-run/);
@@ -51,21 +49,13 @@ test('workflow checks pins against the exact PR base or previous push commit', (
   assert.match(comparisonHistoryCheck, /assertRetainsComparisonFixturePins\(registry\.comparisonFixtures/);
 });
 
-test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
-  const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
-  assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
-  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
-  for (const { file, config } of hosts) {
-    assert.equal(config.main, undefined, `${file} has no Worker script`);
-    assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);
-    assert.equal(config.assets.run_worker_first, undefined, `${file} never runs a Worker first`);
-    assert.equal(config.routes.length, 1);
-    assert.equal(config.routes[0].custom_domain, true);
-    assert.equal(config.assets.directory, `../../dist-hosts/${config.routes[0].pattern}`);
-    assert.equal(config.workers_dev, false);
-    if (config.routes[0].pattern === 'demodb.dev') assert.equal(config.name, 'demodb-websites', 'the catalogue replaces the existing script instead of adding a Worker');
-    else assert.match(config.name, /^demodb-[a-z0-9-]+$/);
-  }
+test('the deploy publishes Pages projects and never deploys a Worker', async () => {
+  const deployer = await readFile(join(root, 'scripts/deploy-hosts.mjs'), 'utf8');
+  assert.match(deployer, /'pages', 'deploy', host\.dir, '--project-name', host\.project, '--branch', 'main'/);
+  assert.match(deployer, /'pages', 'project', 'create', host\.project, '--production-branch', 'main'/);
+  assert.doesNotMatch(deployer, /\['deploy', '--config'|wrangler deploy /, 'no Worker deploy');
+  assert.match(deployer, /Workers check failed/);
+  assert.doesNotMatch(deployer, /'delete', '--name'/, 'the retired Worker is never deleted automatically');
 });
 
 test('live smoke sends at most one request per URL and no OVDB API query', () => {

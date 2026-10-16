@@ -148,13 +148,15 @@ jobs:
         run: pnpm test
       - name: TypeScript check
         run: pnpm typecheck
-      - name: Validate every assets-only host configuration
+      - name: Validate every static host bundle
         run: pnpm run deploy:dry-run
       - name: Deploy skipped because credentials are unavailable
         if: github.event_name == 'push' && env.HAS_CREDENTIALS != 'true'
         run: echo "::notice::Build passed; Cloudflare deploy skipped because CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unavailable."
-      # Every DemoDB host is an assets-only Worker (no script): requests never count against the Workers quota.
-      - name: Deploy static host bundles
+      # Every DemoDB host is a Cloudflare Pages project (direct upload, no Functions): no Worker slot, no Worker
+      # request quota. The token needs Account > Cloudflare Pages: Edit, Account > Workers Scripts: Edit (to list
+      # Workers and detach their custom domains), Zone > DNS: Edit and Zone: Read on demodb.dev.
+      - name: Deploy static host bundles to Cloudflare Pages
         if: github.event_name == 'push' && env.HAS_CREDENTIALS == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

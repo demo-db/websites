@@ -1,7 +1,7 @@
 // Turns the built site (dist/) into one Worker-less static-asset bundle per public hostname.
 //
-// Every DemoDB host is served by Cloudflare Workers static assets with no Worker script (no `main`), so a
-// request never counts against the account's Worker request quota. Files sit at their PUBLIC paths: there is
+// Every DemoDB host is a Cloudflare Pages project (direct upload, no Pages Functions), so a request never runs a
+// Worker script or counts against the account's Worker request quota, and the hosts use no Worker slots. Files sit at their PUBLIC paths: there is
 // no private /_db/<id> namespace and no host-to-directory mapping at request time. Everything the former
 // src/worker.ts computed per request is produced here at build time:
 //
@@ -10,7 +10,8 @@
 //   dist-hosts/<host>/_redirects  legacy OVDB and API redirects (308, method and query preserved)
 //   dist-hosts/manifest.json      the host list and every chunked export, for tests and the live smoke
 //
-// The matching assets-only Wrangler configs are committed under deploy/hosts/ and read by the tests.
+// scripts/deploy-hosts.mjs uploads each bundle to its Pages project (`project` in manifest.json) and moves the
+// hostname onto it. Every bundle has a top-level 404.html: without one Pages serves index.html for missing paths.
 //
 // Exports stored gzip-encoded (all AdventureWorks complete-database files and two large per-table JSON
 // files; each decodes to more than the 25 MiB asset limit) are published ONLY as gzip chunks plus a
@@ -45,15 +46,17 @@ export const DATA_CONTENT_TYPES = {
 };
 // The former Worker's CORS and cache headers on its 308 redirects, so a cross-origin GET can follow them.
 const REDIRECT_HEADERS = ['Access-Control-Allow-Origin: *', 'Access-Control-Allow-Methods: GET, HEAD, OPTIONS, POST', 'Access-Control-Allow-Headers: Content-Type, Accept, OVDB-Page-Size, OVDB-Page-Token, OVDB-Page-Close', 'Access-Control-Max-Age: 86400', 'Cache-Control: public, max-age=300'];
+// Pages itself adds `Access-Control-Allow-Origin: *` to every response (documented default; `wrangler pages dev`
+// keeps it even when a rule detaches it), so pages are CORS-readable too. The content is public and no request
+// carries credentials, so that is accepted rather than fought.
 const SECURITY = ['X-Content-Type-Options: nosniff', 'Referrer-Policy: strict-origin-when-cross-origin'];
 const READONLY_CORS = ['Access-Control-Allow-Origin: *', 'Access-Control-Allow-Methods: GET, HEAD', 'Access-Control-Allow-Headers: Content-Type', 'Access-Control-Max-Age: 86400'];
 // Assets the former Worker served unchanged on every dataset host.
 const SHARED_ASSETS = ['_astro', 'embed/datatug.js', 'embed/exact-decimal.js', 'theme.js', 'favicon.svg', 'build-info.json', '404.html'];
 
-export function workerName(host) {
-  // The catalogue reuses the existing script name, so the cutover replaces demodb-websites' code in place
-  // instead of creating a new Worker (the account is at the Free plan's 100-Worker limit).
-  if (host === CATALOGUE_HOST) return 'demodb-websites';
+// The stable Cloudflare Pages project name of a host.
+export function projectName(host) {
+  if (host === CATALOGUE_HOST) return 'demodb-catalogue';
   const dataset = /^([a-z][a-z0-9-]*)\.demodb\.dev$/.exec(host);
   if (dataset) return `demodb-${dataset[1]}`;
   return `demodb-${host.replace(/[^a-z0-9]+/g, '-')}`;
@@ -191,7 +194,7 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
       ...storageIds.map((id) => [`/ovdb/db/${id}`, `https://demodb.dev/ovdb/db/${id}/`, 308]),
       ['/ovdb/v1/*', `${OVDB_API}/:splat`, 308],
     ]));
-    hosts.push({ host, name: workerName(host), kind: 'catalogue', chunked: [] });
+    hosts.push({ host, project: projectName(host), kind: 'catalogue', chunked: [] });
   }
 
   // --- one host per dataset -------------------------------------------------------------------------------
@@ -290,12 +293,17 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
       [`/ovdb/dbs/${db.id}/*`, `${deployment}/:splat`, 308],
       ['/ovdb/*', `${deployment}/:splat`, 308],
     ] : []));
-    hosts.push({ host, name: workerName(host), kind: 'dataset', id: db.id, chunked });
+    hosts.push({ host, project: projectName(host), kind: 'dataset', id: db.id, chunked });
   }
 
   // chinookdb.com (runtime.legacyAliases) is deliberately not built: the founder dropped it from this cutover
   // (2026-10-16), and the datatug/chinookdb repository declares that domain for its own Worker.
 
+  for (const host of hosts) {
+    if (!(await stat(join(output, host.host, '404.html')).catch(() => null))?.isFile()) throw new Error(`${host.host}: a top-level 404.html is required (Pages otherwise serves index.html for every missing path)`);
+    const files = await walk(join(output, host.host));
+    if (files.length > 20000) throw new Error(`${host.host}: ${files.length} files; a Pages deployment allows 20,000`);
+  }
   await writeFile(join(output, 'manifest.json'), `${JSON.stringify({ format: 'demodb-static-hosts/v1', hosts }, null, 2)}\n`);
   return hosts;
 }

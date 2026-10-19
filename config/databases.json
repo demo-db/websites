@@ -19,7 +19,7 @@
     {
       "id": "northwind",
       "repository": "https://github.com/demo-db/northwind",
-      "commit": "92f44a657bac2b45651a0cbbaa1954e213b198b9",
+      "commit": "89ae4758bcbc1798a5ae268cf697f1b77ae0cf4a",
       "contractSha256": "88a7e21b1ed16b27c3195c8ee10dc60ebef60fba6c70df6f9325d8e4adaaea22"
     },
     {

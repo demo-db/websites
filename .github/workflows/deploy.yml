@@ -96,7 +96,7 @@ jobs:
           done < "$RUNNER_TEMP/pins.tsv"
       - name: Generate and verify the derived downloads against their lock
         run: pnpm prepare:databases
-      - name: Check the MySQL scripts against the provider manifests and the pinned inputs (no Docker, no datatug binary)
+      - name: Check the MySQL, SQL Server and Oracle scripts against the provider manifests and the pinned inputs (no Docker, no datatug binary)
         run: node scripts/dialect-scripts.mjs check --providers "$RUNNER_TEMP/providers"
       - name: Check that every pinned provider commit is on that provider's main (strict on a push to main; a pull request may pin an unlanded head)
         env:

@@ -1,12 +1,14 @@
-name: Served formats live (MySQL)
+name: Served formats live (dialect scripts)
 
 # NOT a required check (it is path-filtered, and the required checks in deploy.yml are unchanged). It proves two things the required lane
 # cannot without Docker and the datatug binary:
-#   1. regenerating every MySQL script with the pinned datatug release (tag and SHA-256 in config/dialect-scripts.json, fail closed on a
+#   1. regenerating every MySQL, SQL Server and Oracle script with the pinned datatug release (tag and SHA-256 in config/dialect-scripts.json, fail closed on a
 #      mismatch) gives byte for byte the script committed in the provider repository;
 #   2. every script loads, with the client flags its header recommends, into the digest-pinned mysql:8.4 image, a second load stops at the
 #      marker table, and tables, columns, primary keys, foreign key counts, row counts and the marker row match the pinned SQLite fixture.
-# The comparison of every value is datatug-cli's own journey-mysql workflow (see docs/dialect-scripts.md).
+# Only MySQL is loaded here. The SQL Server and Oracle loads are run locally by scripts/verify-engines-live.mjs and recorded in each provider's manifest, because a CI leg
+# for them accepts the SQL Server EULA (ACCEPT_EULA=Y) and the Oracle Free Use Terms, which is the owner's decision (see docs/dialect-scripts.md).
+# The comparison of every value is datatug-cli's own journey workflows (see docs/dialect-scripts.md).
 on:
   pull_request:
     paths:
@@ -64,9 +66,9 @@ jobs:
             git -C "$dir" checkout -q FETCH_HEAD
             test "$(git -C "$dir" rev-parse HEAD)" = "$commit"
           done < "$RUNNER_TEMP/pins.tsv"
-      - name: Check every script against its provider manifest and the pinned inputs
+      - name: Check every script (MySQL, SQL Server, Oracle) against its provider manifest and the pinned inputs
         run: node scripts/dialect-scripts.mjs check --providers "$RUNNER_TEMP/providers"
-      - name: Regenerate every script with the pinned datatug release and compare it byte for byte
+      - name: Regenerate every script (MySQL, SQL Server, Oracle) with the pinned datatug release and compare it byte for byte
         run: node scripts/dialect-scripts.mjs regenerate-check --providers "$RUNNER_TEMP/providers" --tools "$RUNNER_TEMP/tools"
       - name: Load every script into the pinned MySQL 8.4 and compare it with the SQLite fixture
         run: node scripts/verify-mysql-live.mjs --providers "$RUNNER_TEMP/providers"

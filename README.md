@@ -30,10 +30,10 @@ A live test (`scripts/hosting-tools/test_postgres_live.py`, CI job `postgres-liv
 
 The Python API exposes `import_database(connection, provider_root)` and `verify_database(connection, provider_root)` for existing psycopg 3 connections, including autocommit connections. AdventureWorks `Production.Document.FileExtension` is the sole storage override: the SQLite `TEXT` values include NUL characters, which PostgreSQL `TEXT` cannot store. The importer maps this column to `BYTEA` and preserves each source string's UTF-8 bytes exactly. The import manifest records the override.
 
-## MySQL scripts
+## MySQL, SQL Server and Oracle scripts
 
-Every dataset's MySQL script is written by the DataTug SQL-script exporter (release pinned by tag and SHA-256 in [`config/dialect-scripts.json`](config/dialect-scripts.json)), checked into the provider repository
-under `dialect-scripts/`, loaded into a real MySQL 8.4 and served as `/data/<id>.mysql.sql`. Generated SQL Server and Oracle scripts are planned and not served (Chinook's existing SQL Server file is lerocha's upstream script, labelled as such). See [`docs/dialect-scripts.md`](docs/dialect-scripts.md).
+Every dataset's MySQL, SQL Server and Oracle scripts are written by the DataTug SQL-script exporter (release pinned by tag and SHA-256 in [`config/dialect-scripts.json`](config/dialect-scripts.json)), checked into the provider repository
+under `dialect-scripts/`, loaded into a real MySQL 8.4, SQL Server 2022 and Oracle Free 23ai, and served as `/data/<id>.mysql.sql`, `/data/<id>.sqlserver.sql` and `/data/<id>.oracle.sql` (Chinook's SQL Server file lerocha wrote is kept at `/data/upstream/chinook.sqlserver.sql`, labelled as upstream). See [`docs/dialect-scripts.md`](docs/dialect-scripts.md).
 
 ## Local development
 

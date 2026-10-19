@@ -13,37 +13,37 @@
     {
       "id": "chinook",
       "repository": "https://github.com/demo-db/chinook",
-      "commit": "9852939370b21739ffc8905c55b4c6d04a72d648",
+      "commit": "e39cca3c83643a629c621cb9dcc9f08653875aae",
       "contractSha256": "576b4ecb21bd3b263b7a3523b6a3c952c8388298eb0fa56a7950b42f63958272"
     },
     {
       "id": "northwind",
       "repository": "https://github.com/demo-db/northwind",
-      "commit": "e8e2b39bb687b3b4e5fca63fb4485aa98034f3ce",
+      "commit": "92f44a657bac2b45651a0cbbaa1954e213b198b9",
       "contractSha256": "88a7e21b1ed16b27c3195c8ee10dc60ebef60fba6c70df6f9325d8e4adaaea22"
     },
     {
       "id": "pubs",
       "repository": "https://github.com/demo-db/pubs",
-      "commit": "39f46ef93f8f8846000800660b893cf4bf7ed94a",
+      "commit": "99fe4e058ff8e8164896940d903ac5a0bb5098ad",
       "contractSha256": "32224efdbecd57962f32a0aad81653bbf5085788df69185be30b2c7c0910d659"
     },
     {
       "id": "sakila",
       "repository": "https://github.com/demo-db/sakila",
-      "commit": "458ff7805aa70bb56388443f72cfdaccf37b7f16",
+      "commit": "6b79638ccb338ed1f53acbc40261d68a72764cdb",
       "contractSha256": "54b74e47ad29e4c1d68866e89add885ee833728f04c4d68c46c2486346882655"
     },
     {
       "id": "adventureworks",
       "repository": "https://github.com/demo-db/adventureworks",
-      "commit": "08038220898bbd48003c0a8550d38b1aec460540",
+      "commit": "81719d51828eceac6ff5ba28d35772209c232e3d",
       "contractSha256": "5b2cb733342ac9e848f2674090e0e534082d48111056ff4e6a3b6d4ef4f693e0"
     },
     {
       "id": "employees",
       "repository": "https://github.com/demo-db/employees",
-      "commit": "03fd1c53ebfa3f860266550b7db9ba43ffa9cecd",
+      "commit": "d1e4246529abcf23c62a783a3d57ff00d9a08c1f",
       "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443",
       "textReplacements": [
         { "from": "Employees (browser edition)", "to": "Employees (reduced subset)" },

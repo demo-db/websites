@@ -65,6 +65,8 @@ It refuses a run with differences, a run of another image than the one pinned in
 
 ## Release: what goes live, and how
 
+**Gate: do not land the websites pull request until the owner confirms that the Cloudflare rate-limit incident on `*.demodb.dev` (Error 1027) is closed.** Landing it triggers `pnpm run deploy:hosts` and then `scripts/smoke-live.mjs` against `*.demodb.dev`, which downloads every complete export listed in the corpus, including two new AdventureWorks sets of about 19 MiB each.
+
 Nothing is published by a pull request. The site is built and deployed by `.github/workflows/deploy.yml` on a push to `main` of this repository (the `deploy` job: `pnpm build`, `pnpm test`, `pnpm run deploy:hosts`, then `node scripts/smoke-live.mjs`),
 so the release is the sequence in the previous section: land the six provider pull requests (each with a merge commit, so that the pinned heads are on `main`), re-pin if one was squashed, then land the websites pull request.
 On that push every host gets its new bundle (`demodb-chinook`, `-northwind`, `-pubs`, `-sakila`, `-adventureworks`, `-employees`, assets-only Workers) and these URLs appear (the same file names on each host):
@@ -73,7 +75,7 @@ On that push every host gets its new bundle (`demodb-chinook`, `-northwind`, `-p
 |---|---|
 | `https://chinook.demodb.dev` | `/data/chinook.sqlserver.sql` (generated; lerocha's upstream script moves to `/data/upstream/chinook.sqlserver.sql`), `/data/chinook.oracle.sql`; `/data/chinook.mysql.sql` is regenerated |
 | `https://northwind.demodb.dev`, `https://pubs.demodb.dev`, `https://sakila.demodb.dev`, `https://employees.demodb.dev` | `/data/<id>.sqlserver.sql`, `/data/<id>.oracle.sql`; `/data/<id>.mysql.sql` is regenerated |
-| `https://adventureworks.demodb.dev` | the same two, stored gzip-encoded (about 19 MiB each) and served with `Content-Encoding: gzip` like its MySQL script |
+| `https://adventureworks.demodb.dev` | the same two, but as chunked gzip like every other AdventureWorks complete-database file: there is **no** `/data/adventureworks.sqlserver.sql` or `.oracle.sql` URL (it answers 404). The manifests are `https://adventureworks.demodb.dev/data/adventureworks.sqlserver.sql.parts.json` and `.../adventureworks.oracle.sql.parts.json` (`demodb-chunked-export/v1`, one gzip part of about 19 MiB each at `/data/adventureworks.<format>.sql.gz.<hash>.part-1`, 105 MB decoded); a client joins the parts and gunzips them. Its MySQL script already works this way (`adventureworks.mysql.sql.parts.json`) |
 
 `/data/<id>.mysql.sql` changes in its release line and marker row only. The corpus (`/data/metadata/corpus.json`, `formatAvailability` and `exports`) lists the two new formats per dataset, and the dataset and download pages show them. The post-deploy `smoke-live.mjs` is the repository's own live check and downloads every complete export listed in the corpus;
 it checks MySQL scripts specifically (and the upstream Chinook MySQL URL), so SQL Server and Oracle are covered there by the generic size and SHA-256 comparison of the corpus only.

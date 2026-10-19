@@ -226,7 +226,7 @@ const LINE_STARTS = {
     /^ {2}(\[|PRIMARY KEY|UNIQUE |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/],
   // SQL*Plus commands (@, @@, /, EXIT, HOST, !, REM, PROMPT, SET ...) start a line: only the generator's own `/` line and the tokens of its SQL and PL/SQL may.
   // A long literal continues on a line that starts with its quote (after `||`), and a CLOB piece with TO_CLOB(.
-  oracle: [/^$/, COMMENT_LINE, /^SET /, /^WHENEVER /, /^ALTER /, /^CREATE /, /^INSERT /, /^DECLARE$/, /^BEGIN$/, /^END;$/, /^COMMIT;$/, /^\/$/, /^\(/, /^\)/, /^'/, /^"/, /^TO_CLOB\(/,
+  oracle: [/^$/, COMMENT_LINE, /^ALTER (TABLE |SESSION SET NLS_COMP = BINARY NLS_SORT = BINARY;$)/, /^CREATE /, /^INSERT /, /^DECLARE$/, /^BEGIN$/, /^END;$/, /^COMMIT;$/, /^\/$/, /^\(/, /^\)/, /^'/, /^"/, /^TO_CLOB\(/,
     /^-?[0-9]/, /^ {2,4}("|PRIMARY KEY|UNIQUE |CONSTRAINT |CHECK |FOREIGN KEY|IF |END IF;|SELECT |INSERT INTO |RETURNING |COMMIT;|RAISE_APPLICATION_ERROR\(|DBMS_LOB\.|DBMS_UTILITY\.|(ver|compat|cs|n|b[0-9]+) )/],
 };
 export const KNOWN_DIALECTS = Object.keys(LINE_STARTS);
@@ -323,10 +323,24 @@ const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 // SQL*Plus refuses a longer line (SP2-0027) and drops a trailing hyphen to join the next line: the generator writes neither.
 export const ORACLE_MAX_LINE = 2300;
 
+// The SQL*Plus preamble the exporter writes, byte for byte, right after the header: nothing else in the script may be a SET or WHENEVER line, and a
+// client that accepted `SET CMDSEP ON` would run `SET ECHO OFF;HOST cmd` as two commands.
+export const ORACLE_PREAMBLE = ['SET DEFINE OFF', 'SET ESCAPE OFF', 'SET CMDSEP OFF', "SET SQLTERMINATOR ';'", 'SET SQLPREFIX #', 'SET ECHO OFF', 'SET FEEDBACK OFF', 'SET VERIFY OFF',
+  'WHENEVER SQLERROR EXIT FAILURE ROLLBACK', 'WHENEVER OSERROR EXIT FAILURE ROLLBACK'];
+
+// The line without its quoted strings and names, for rules about what stands between the quotes of a statement.
+const unquoted = (line) => line.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
+
 function oracleProblems(lines) {
   const problems = [];
   const firstCode = lines.findIndex((line) => line !== '' && !COMMENT_LINE.test(line));
   if (lines[firstCode] !== 'SET DEFINE OFF') problems.push('the first statement is not SET DEFINE OFF (an & in a value would be a prompt)');
+  if (firstCode >= 0 && ORACLE_PREAMBLE.some((line, index) => lines[firstCode + index] !== line)) problems.push('the SQL*Plus preamble (the ten SET and WHENEVER lines) is not exactly the exporter\'s, in order, right after the header');
+  for (const [index, line] of lines.entries()) {
+    if (COMMENT_LINE.test(line) || line === '') continue;
+    const parts = unquoted(line).split(';').slice(1).map((part) => part.trim()).filter(Boolean);
+    if (parts.some((part) => part !== 'END IF')) { problems.push(`line ${index + 1} chains another command after a semicolon (SQL*Plus would read it as one if CMDSEP were on)`); break; }
+  }
   for (const [index, line] of lines.entries()) {
     if ([...line].length > ORACLE_MAX_LINE) { problems.push(`line ${index + 1} is longer than ${ORACLE_MAX_LINE} characters (SQL*Plus refuses it)`); break; }
   }
@@ -390,7 +404,10 @@ export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   }
   if (nonEmpty.at(-1) !== '-- end of script') problems.push('the script does not end with its completion comment');
   if (dialect === 'oracle') problems.push(...oracleProblems(lines));
+  if (dialect === 'mssql' && lines.some((line) => COMMENT_LINE.test(line) && line.includes('$('))) problems.push('a comment line holds $( (the exporter writes $ ( in the header; sqlcmd without -x would substitute it)');
+  const preambleAt = dialect === 'oracle' ? lines.findIndex((line) => line !== '' && !COMMENT_LINE.test(line)) : -1;
   for (const [index, line] of lines.entries()) {
+    if (preambleAt >= 0 && index >= preambleAt && index < preambleAt + ORACLE_PREAMBLE.length && line === ORACLE_PREAMBLE[index - preambleAt]) continue;
     if (!LINE_STARTS[dialect].some((pattern) => pattern.test(line))) { problems.push(`line ${index + 1} starts with something the exporter never writes: ${JSON.stringify(line.slice(0, 40))}`); break; }
   }
   problems.push(...literalProblems(body, dialect));

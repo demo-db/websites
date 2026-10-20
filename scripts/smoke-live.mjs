@@ -13,6 +13,7 @@ import postgresqlApi from '../config/postgresql-api.json' with { type: 'json' };
 import datatugCatalog from './fixtures/datatug-postgresql-catalog.json' with { type: 'json' };
 import derivedLock from '../config/derived-exports.lock.json' with { type: 'json' };
 import dialectConfig from '../config/dialect-scripts.json' with { type: 'json' };
+import { assertNotRateLimited, requestBudget } from './smoke-guard.mjs';
 import { hclProblems, jsonProblems, modelPageProblems, servedModelPaths, servedModels } from './served-model.mjs';
 
 const commit = process.env.BUILD_COMMIT;
@@ -37,11 +38,15 @@ const sites = [
 ];
 const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`, `${id}-bigquery`]);
 
+// Sequential on purpose (every request is awaited before the next; no Promise.all, no timers, no retry), at most one request per URL
+// and method, a hard cap on the total (scripts/smoke-guard.mjs), and the first HTTP 429 or Cloudflare 1027/1015 answer stops the run.
 const requested = new Set();
+const budget = requestBudget();
 function once(method, url) {
   const key = `${method} ${url}`;
   if (requested.has(key)) throw new Error(`smoke budget: ${key} was already requested once in this run`);
   requested.add(key);
+  budget.spend(key);
 }
 
 // One GET per URL: the text body and headers are cached for every later check.
@@ -49,7 +54,11 @@ const pages = new Map();
 function get(url) {
   if (!pages.has(url)) {
     once('GET', url);
-    pages.set(url, fetch(url, { redirect: 'manual', cache: 'no-store' }).then(async (response) => ({ response, body: await response.text() })));
+    pages.set(url, fetch(url, { redirect: 'manual', cache: 'no-store' }).then(async (response) => {
+      const body = await response.text();
+      assertNotRateLimited(url, response.status, body);
+      return { response, body };
+    }));
   }
   return pages.get(url);
 }
@@ -68,7 +77,10 @@ const downloads = new Map();
 async function download(url) {
   once('GET', url);
   const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
-  if (response.status !== 200) throw new Error(`${url}: HTTP ${response.status}`);
+  if (response.status !== 200) {
+    assertNotRateLimited(url, response.status, (await response.text()).slice(0, 4096));
+    throw new Error(`${url}: HTTP ${response.status}`);
+  }
   const result = { response, bytes: Buffer.from(await response.arrayBuffer()) };
   downloads.set(url, result);
   return result;
@@ -287,6 +299,7 @@ async function checkedComparisonFixture() {
   }
   once('HEAD', url);
   const head = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store' });
+  assertNotRateLimited(url, head.status, '');
   const headLength = head.headers.get('Content-Length');
   if (head.status !== 200 || (headLength !== null && headLength !== String(comparisonFixture.bytes)) ||
       head.headers.get('Content-Type') !== 'application/vnd.sqlite3' ||
@@ -301,6 +314,7 @@ async function checkedComparisonFixture() {
 async function checkedRedirect(url, init, expectedLocation) {
   once(init.method, url);
   const response = await fetch(url, { ...init, redirect: 'manual', cache: 'no-store' });
+  assertNotRateLimited(url, response.status, response.status === 429 || response.status >= 403 ? await response.text() : '');
   // The static router may answer with a relative Location; browsers resolve it against the request URL.
   const location = response.headers.get('Location');
   const resolved = location === null ? null : new URL(location, url).href;
@@ -311,10 +325,11 @@ async function checkedRedirect(url, init, expectedLocation) {
 
 await checkedRedirect('https://demodb.dev/ovdb/v1/databases/chinook?smoke=api', { method: 'GET' }, `${OVDB_API}/databases/chinook?smoke=api`);
 await checkedRedirect('https://demodb.dev/ovdb/dbs/chinook', { method: 'GET' }, 'https://demodb.dev/chinook/');
-for (const path of ['/_db/chinook/index.html', '/data/adventureworks.sqlite']) {
+for (const path of ['/_db/chinook/index.html', '/data/adventureworks.sqlite', '/data/adventureworks.sqlserver.sql', '/data/adventureworks.oracle.sql']) {
   const url = `https://${path.includes('adventureworks') ? 'adventureworks' : 'chinook'}.demodb.dev${path}`;
   once('GET', url);
   const response = await fetch(url, { redirect: 'manual', cache: 'no-store' });
+  assertNotRateLimited(url, response.status, response.status === 404 ? '' : await response.text());
   await response.body?.cancel();
   if (response.status !== 404) throw new Error(`${url}: expected 404 (no private namespace, no single-file URL for a chunked export), got ${response.status}`);
 }

@@ -2,28 +2,28 @@
   "format": "demodb-dialect-scripts-config/v1",
   "generator": {
     "name": "datatug",
-    "tag": "v0.100.0",
-    "sourceRelease": "https://github.com/datatug/datatug-cli/releases/tag/v0.100.0",
-    "downloadBase": "https://github.com/datatug/datatug/releases/download/v0.100.0",
+    "tag": "v0.103.4",
+    "sourceRelease": "https://github.com/datatug/datatug-cli/releases/tag/v0.103.4",
+    "downloadBase": "https://github.com/datatug/datatug/releases/download/v0.103.4",
     "note": "datatug-cli is a private repository; its public binaries are copied unchanged to datatug/datatug. The checksums file is byte for byte the one of the datatug-cli release.",
-    "checksumsFile": "datatug_0.100.0_checksums.txt",
-    "checksumsSha256": "19d91f8ded312b945095bc14e5bda6fad667f0913580c3d0903c582300a4d8db",
+    "checksumsFile": "datatug_0.103.4_checksums.txt",
+    "checksumsSha256": "32c36126ec6c8961a7b493c21f18b63ecb0146faff84089d89566a659fd975fd",
     "assets": {
       "linux-x64": {
-        "name": "datatug_0.100.0_linux_amd64.tar.gz",
-        "sha256": "8e00633118731f6f1a75655112916ad070d8b6615617e8a50bd071f72c0897f5"
+        "name": "datatug_0.103.4_linux_amd64.tar.gz",
+        "sha256": "83f603e007c3ddeaa8e960e26b7b73ace7804c14321cd9d9c8b768d5081aae07"
       },
       "linux-arm64": {
-        "name": "datatug_0.100.0_linux_arm64.tar.gz",
-        "sha256": "582b92803c5e55255979b58cb3373db55b01950933a385f20c8866c2a3c17ff0"
+        "name": "datatug_0.103.4_linux_arm64.tar.gz",
+        "sha256": "ac4a3df07cb5bec22fa49155eeb6e7a89364e079b6e3a4fcff88803f0b796bb9"
       },
       "darwin-x64": {
-        "name": "datatug_0.100.0_darwin_amd64.tar.gz",
-        "sha256": "210a111cd57de5fa24705c3be9b2576b1fcb451bbee4055a5844d1a436c52550"
+        "name": "datatug_0.103.4_darwin_amd64.tar.gz",
+        "sha256": "9e8fd5878a330b86b2057cf1b1355b5a1e4e6969ce928b5dee8d0d1998b2d139"
       },
       "darwin-arm64": {
-        "name": "datatug_0.100.0_darwin_arm64.tar.gz",
-        "sha256": "75f1072c410c9efe978bb7ec4097e4301fdd0a88827d1dc4ee5f08aee7827e39"
+        "name": "datatug_0.103.4_darwin_arm64.tar.gz",
+        "sha256": "08fd7b82b4fae990274e4f9bad6302c010d0274d87d1021baa2c83c975efd438"
       }
     }
   },
@@ -36,17 +36,34 @@
       "verifiedOn": "MySQL 8.4 LTS",
       "serverImage": "mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70",
       "clientFlags": "--default-character-set=utf8mb4 --skip-commands --skip-system-command",
-      "marker": "_demodb_import"
+      "marker": "_demodb_import",
+      "headerHint": "--skip-commands"
+    },
+    "mssql": {
+      "format": "sqlserver",
+      "extension": "sqlserver.sql",
+      "minimumServer": "SQL Server 2016",
+      "verifiedOn": "SQL Server 2022 Developer",
+      "serverImage": "mcr.microsoft.com/mssql/server:2022-latest@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718",
+      "clientFlags": "-X -x -b -f 65001 -i",
+      "marker": "_demodb_import",
+      "headerHint": "-X -x -b -f 65001"
+    },
+    "oracle": {
+      "format": "oracle",
+      "extension": "oracle.sql",
+      "minimumServer": "Oracle Database 23ai (COMPATIBLE 23)",
+      "verifiedOn": "Oracle AI Database 26ai Free 23.26.3",
+      "serverImage": "gvenzl/oracle-free:23-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd",
+      "clientFlags": "NLS_LANG=.AL32UTF8 sqlplus -L -S",
+      "marker": "_demodb_import",
+      "headerHint": "NLS_LANG=.AL32UTF8"
     }
   },
   "notice": {
     "enabled": true,
     "dir": "config/dialect-notices",
     "param": "notice-file",
-    "note": "The full licence notice of each dataset (config/dialect-notices/<id>.txt, from the upstream licence files) is passed to the exporter as notice-file and written into every script header."
-  },
-  "planned": {
-    "sqlserver": "datatug dialect=mssql is in review and arrives in a later datatug release; adding it here is a change of this file, the matrix and a regeneration, nothing else.",
-    "oracle": "No generator exists yet."
+    "note": "The full licence notice of each dataset (config/dialect-notices/<id>.txt, from the upstream licence files) is passed to the exporter as notice-file and written into every script header. A dialect whose script needs different words (Employees' adaptation sentence names the script it travels in) has its own <id>.<dialect>.txt, which wins over <id>.txt."
   }
 }

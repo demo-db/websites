@@ -1,6 +1,6 @@
-// Verified SQL scripts of the DemoDB datasets in other database engines (today: MySQL).
+// Verified SQL scripts of the DemoDB datasets in other database engines (MySQL, SQL Server and Oracle).
 //
-// A script is written by the DataTug faithful SQL-script exporter (`datatug db copy --to sqlscript://...?dialect=mysql`,
+// A script is written by the DataTug faithful SQL-script exporter (`datatug db copy --to sqlscript://...?dialect=mysql|mssql|oracle`,
 // pinned in config/dialect-scripts.json by release tag and SHA-256) from the provider's pinned SQLite fixture and is
 // checked into the provider repository under dialect-scripts/, next to a manifest that records everything that decides
 // the bytes. The site serves those bytes (origin `provider-script` in config/format-matrix.json) after this module has
@@ -120,9 +120,12 @@ export const sqliteSha256Of = (manifest) => manifest.source?.databaseSha256 ?? m
 // The licence notice a script header carries in full, written from the upstream licence files (config/dialect-notices/<id>.txt) and
 // switched on in config/dialect-scripts.json (`notice.enabled`, with the exporter parameter that takes it) when the pinned datatug
 // release can write a multi-line notice. Off, it changes no input and no byte.
-export function noticeOf(id, config) {
+// A dialect whose script needs other words has its own `<id>.<dialect>.txt` (Employees' adaptation sentence names the script it travels in), which wins over `<id>.txt`.
+export function noticeOf(id, config, dialect = 'mysql') {
   if (!config.notice?.enabled) return null;
-  const path = resolve(root, config.notice.dir ?? 'config/dialect-notices', `${id}.txt`);
+  const dir = resolve(root, config.notice.dir ?? 'config/dialect-notices');
+  const own = resolve(dir, `${id}.${dialect}.txt`);
+  const path = existsSync(own) ? own : resolve(dir, `${id}.txt`);
   if (!existsSync(path)) throw new Error(`${id}: notice.enabled is set but ${path} does not exist`);
   const text = readFileSync(path, 'utf8');
   if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\ufeff]/.test(text) || !text.endsWith('\n')) throw new Error(`${id}: the notice file must be LF text (tab allowed, no other control character) ending in a line break`);
@@ -141,7 +144,7 @@ export function inputsOf({ manifest, config, dialect, attribution }) {
     if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value) || value !== value.trim().replace(/\s+/g, ' ')) throw new Error(`${manifest.id}: the ${what} must be one line without control characters or runs of white space`);
     if (Buffer.byteLength(prefix + value) > 400) throw new Error(`${manifest.id}: the ${what} is ${Buffer.byteLength(prefix + value)} bytes with its header prefix; the exporter cuts a header line at 400 bytes`);
   }
-  const notice = noticeOf(manifest.id, config);
+  const notice = noticeOf(manifest.id, config, dialect);
   return {
     attribution,
     dialect,
@@ -210,22 +213,47 @@ export async function readStoredScript(record, read) {
 }
 
 // --- the script itself ------------------------------------------------------------------------------------
-// Tokens the exporter emits at the start of a script line. No data byte can start a line (a value with a line break is written as
-// hex), so a line starting with anything else is a script that someone edited. An indented line is a column or key definition.
-// A comment line is `-- ` and text, or a bare `--`: the mysql client reads `--` as a comment only when white space or the end of the line follows, so `--\! cmd` is not one.
+// Tokens the exporter emits at the start of a script line. No data byte can start a line (a value with a line break is written in
+// pieces or as hex), so a line starting with anything else is a script that someone edited. An indented line is a column or key definition.
+// A comment line is `-- ` and text, or a bare `--`: a client reads `--` as a comment only when white space or the end of the line follows
+// (MySQL), so `--\! cmd` is not one.
 const COMMENT_LINE = /^--( |$)/;
-const LINE_START = [/^$/, COMMENT_LINE, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^\)/,
-  /^ {2}(`|PRIMARY KEY|UNIQUE KEY|UNIQUE |KEY |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/];
+const LINE_STARTS = {
+  mysql: [/^$/, COMMENT_LINE, /^SET /, /^CREATE /, /^INSERT /, /^\(/, /^START /, /^COMMIT/, /^ALTER /, /^\)/,
+    /^ {2}(`|PRIMARY KEY|UNIQUE KEY|UNIQUE |KEY |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/],
+  // sqlcmd commands (GO, :r, !!, EXIT, QUIT, RESET, ED) start a line: only the generator's own `GO` line (exactly, no repeat count) and T-SQL tokens may.
+  mssql: [/^$/, COMMENT_LINE, /^SET /, /^GO$/, /^IF /, /^CREATE /, /^INSERT /, /^\(/, /^ALTER /, /^DBCC /, /^COMMIT /, /^BEGIN /, /^\)/,
+    /^ {2}(\[|PRIMARY KEY|UNIQUE |CONSTRAINT |CHECK |FOREIGN KEY|INDEX )/],
+  // SQL*Plus commands (@, @@, /, EXIT, HOST, !, REM, PROMPT, SET ...) start a line: only the generator's own `/` line and the tokens of its SQL and PL/SQL may.
+  // A long literal continues on a line that starts with its quote (after `||`), and a CLOB piece with TO_CLOB(.
+  oracle: [/^$/, COMMENT_LINE, /^ALTER (TABLE |SESSION SET NLS_COMP = BINARY NLS_SORT = BINARY;$)/, /^CREATE /, /^INSERT /, /^DECLARE$/, /^BEGIN$/, /^END;$/, /^COMMIT;$/, /^\/$/, /^\(/, /^\)/, /^'/, /^"/, /^TO_CLOB\(/,
+    /^-?[0-9]/, /^ {2,4}("|PRIMARY KEY|UNIQUE |CONSTRAINT |CHECK |FOREIGN KEY|IF |END IF;|SELECT |INSERT INTO |RETURNING |COMMIT;|RAISE_APPLICATION_ERROR\(|DBMS_LOB\.|DBMS_UTILITY\.|(ver|compat|cs|n|b[0-9]+) )/],
+};
+export const KNOWN_DIALECTS = Object.keys(LINE_STARTS);
 
-// Walks the script as the mysql client does and reports the first thing no exporter output contains:
-//   * a backslash anywhere outside a `--` comment line (the client reads `\` as an escape in a string and as a command start
-//     elsewhere, and the exporter writes a value with a backslash as hex);
-//   * `#` or `/*` outside a string or a quoted name (a comment or a conditional comment the exporter never writes), or `--` after
+// What each client reads as more than data, outside a `--` comment line.
+//   name:       the quote characters of a name (open, close; the close character doubled is a literal one)
+//   backslash:  a backslash is an escape in a MySQL string and a command start elsewhere
+//   hash:       `#` starts a MySQL comment
+//   semicolon:  MySQL runs whatever follows a `;` on its line (`COMMIT; \! cmd`)
+//   dollarParen: sqlcmd replaces `$(NAME)` with an environment variable unless -x is given
+const RULES = {
+  mysql: { name: [0x60, 0x60], backslash: true, hash: true, semicolon: true, dollarParen: false },
+  mssql: { name: [0x5b, 0x5d], backslash: false, hash: false, semicolon: false, dollarParen: true },
+  oracle: { name: [0x22, 0x22], backslash: false, hash: false, semicolon: false, dollarParen: false },
+};
+
+// Walks the script as the client does and reports the first thing no exporter output contains:
+//   * (MySQL) a backslash anywhere outside a `--` comment line;
+//   * `#` (MySQL) or `/*` outside a string or a quoted name (a comment or a conditional comment the exporter never writes), or `--` after
 //     the start of a line;
-//   * a raw line break inside a string or a quoted name (a value with a line break is written as hex);
-//   * anything after a `;` on the same line (`COMMIT; \! cmd` would run a second command).
+//   * `$(` anywhere outside a comment line (SQL Server: sqlcmd's variable substitution);
+//   * a raw line break inside a string or a quoted name (a value with a line break is written in pieces or as hex);
+//   * (MySQL) anything after a `;` on the same line (`COMMIT; \! cmd` would run a second command).
 // `--` comment lines are skipped whole: the header is free text and the client ignores a comment line.
-export function literalProblems(bytes) {
+export function literalProblems(bytes, dialect = 'mysql') {
+  const rules = RULES[dialect];
+  const [nameOpen, nameClose] = rules.name;
   const problems = [];
   const n = bytes.length;
   let state = 0; // 0 statement text, 1 string literal, 2 quoted name
@@ -247,33 +275,40 @@ export function literalProblems(bytes) {
     }
     const wasLineStart = atLineStart;
     atLineStart = false;
-    if (c === 0x5c) { report('a backslash outside a comment line'); continue; }
+    if (rules.backslash && c === 0x5c) { report('a backslash outside a comment line'); continue; }
+    if (rules.dollarParen && c === 0x24 && bytes[i + 1] === 0x28) { report('a $( (sqlcmd would substitute a variable)'); continue; }
     if (state === 1) { if (c === 0x27) { if (bytes[i + 1] === 0x27) i += 1; else state = 0; } continue; }
-    if (state === 2) { if (c === 0x60) { if (bytes[i + 1] === 0x60) i += 1; else state = 0; } continue; }
+    if (state === 2) { if (c === nameClose) { if (bytes[i + 1] === nameClose) i += 1; else state = 0; } continue; }
     if (c === 0x27) state = 1;
-    else if (c === 0x60) state = 2;
-    else if (c === 0x23) report('a # comment');
+    else if (c === nameOpen) state = 2;
+    else if (rules.hash && c === 0x23) report('a # comment');
     else if (c === 0x2f && bytes[i + 1] === 0x2a) report('a /* comment');
     else if (c === 0x2d && bytes[i + 1] === 0x2d) report(wasLineStart ? 'a -- that is not followed by a space or the end of the line (the client does not read it as a comment)' : 'a -- comment inside a line');
-    else if (c === 0x3b && i + 1 < n && bytes[i + 1] !== 0x0a) report('text after a semicolon on the same line');
+    else if (rules.semicolon && c === 0x3b && i + 1 < n && bytes[i + 1] !== 0x0a) report('text after a semicolon on the same line');
   }
   if (state !== 0) report('the script ends inside a literal or a quoted name');
   return problems;
 }
 
-// What the exporter writes for `notice-file` (datatug v0.100.0, docs/db-copy.md "Licence notice"): every line of the file becomes one `-- ` comment
+// What the exporter writes for `notice-file` (docs/db-copy.md "Licence notice" of datatug): every line of the file becomes one `-- ` comment
 // line right after the licence and attribution lines and a blank comment line (`--`); a tab becomes four spaces, `*/` and `/*` get a space between the
-// two characters, trailing spaces and the blank lines at both ends are dropped (a blank line inside stays a bare `--`). CRLF and the other line
-// breaks end a line. The notice files here are LF text without other control characters (noticeOf refuses the rest), so these are the only rules that apply.
-export function expectedNoticeLines(notice) {
-  const lines = notice.split('\n').map((line) => line.replaceAll('\t', '    ').replaceAll('*/', '* /').replaceAll('/*', '/ *').trimEnd());
+// two characters, trailing spaces and the blank lines at both ends are dropped (a blank line inside stays a bare `--`); for `mssql` `$(` becomes `$ (`
+// and for `oracle` `&` becomes `& `. CRLF and the other line breaks end a line. The notice files here are LF text without other control characters
+// (noticeOf refuses the rest), so these are the only rules that apply.
+export function expectedNoticeLines(notice, dialect = 'mysql') {
+  const lines = notice.split('\n').map((line) => {
+    let text = line.replaceAll('\t', '    ').replaceAll('*/', '* /').replaceAll('/*', '/ *');
+    if (dialect === 'mssql') text = text.replaceAll('$(', '$ (');
+    if (dialect === 'oracle') text = text.replaceAll('&', '& ');
+    return text.trimEnd();
+  });
   while (lines.length && lines[0] === '') lines.shift();
   while (lines.length && lines.at(-1) === '') lines.pop();
   return lines.map((line) => (line === '' ? '--' : `-- ${line}`));
 }
 
-export function noticeProblems(lines, notice, attribution) {
-  const expected = expectedNoticeLines(notice);
+export function noticeProblems(lines, notice, attribution, dialect = 'mysql') {
+  const expected = expectedNoticeLines(notice, dialect);
   const at = lines.indexOf(`-- Attribution: ${attribution}`);
   if (at === -1) return ['the header has no attribution line to anchor the licence notice'];
   if (lines[at + 1] !== '--') return ['the licence notice does not follow the attribution after a blank comment line'];
@@ -283,13 +318,57 @@ export function noticeProblems(lines, notice, attribution) {
   return [];
 }
 
+const markerName = { mysql: (name) => `\`${name}\``, mssql: (name) => `[${name}]`, oracle: (name) => `"${name}"` };
+const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+// SQL*Plus refuses a longer line (SP2-0027) and drops a trailing hyphen to join the next line: the generator writes neither.
+export const ORACLE_MAX_LINE = 2300;
+
+// The SQL*Plus preamble the exporter writes, byte for byte, right after the header: nothing else in the script may be a SET or WHENEVER line, and a
+// client that accepted `SET CMDSEP ON` would run `SET ECHO OFF;HOST cmd` as two commands.
+export const ORACLE_PREAMBLE = ['SET DEFINE OFF', 'SET ESCAPE OFF', 'SET CMDSEP OFF', "SET SQLTERMINATOR ';'", 'SET SQLPREFIX #', 'SET ECHO OFF', 'SET FEEDBACK OFF', 'SET VERIFY OFF',
+  'WHENEVER SQLERROR EXIT FAILURE ROLLBACK', 'WHENEVER OSERROR EXIT FAILURE ROLLBACK'];
+
+// The line without its quoted strings and names, for rules about what stands between the quotes of a statement.
+const unquoted = (line) => line.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
+
+function oracleProblems(lines) {
+  const problems = [];
+  const firstCode = lines.findIndex((line) => line !== '' && !COMMENT_LINE.test(line));
+  if (lines[firstCode] !== 'SET DEFINE OFF') problems.push('the first statement is not SET DEFINE OFF (an & in a value would be a prompt)');
+  if (firstCode >= 0 && ORACLE_PREAMBLE.some((line, index) => lines[firstCode + index] !== line)) problems.push('the SQL*Plus preamble (the ten SET and WHENEVER lines) is not exactly the exporter\'s, in order, right after the header');
+  for (const [index, line] of lines.entries()) {
+    if (COMMENT_LINE.test(line) || line === '') continue;
+    const parts = unquoted(line).split(';').slice(1).map((part) => part.trim()).filter(Boolean);
+    if (parts.some((part) => part !== 'END IF')) { problems.push(`line ${index + 1} chains another command after a semicolon (SQL*Plus would read it as one if CMDSEP were on)`); break; }
+  }
+  for (const [index, line] of lines.entries()) {
+    if ([...line].length > ORACLE_MAX_LINE) { problems.push(`line ${index + 1} is longer than ${ORACLE_MAX_LINE} characters (SQL*Plus refuses it)`); break; }
+  }
+  for (const [index, line] of lines.entries()) {
+    if (!COMMENT_LINE.test(line) && line.trimEnd().endsWith('-')) { problems.push(`line ${index + 1} ends in a hyphen (SQL*Plus would join the next line to it)`); break; }
+  }
+  for (const [index, line] of lines.slice(0, Math.max(firstCode, 0)).entries()) {
+    if (/&\S/.test(line)) { problems.push(`line ${index + 1} of the header holds an & before SET DEFINE OFF`); break; }
+  }
+  return problems;
+}
+
 export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   const problems = [];
-  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) problems.push('the script starts with a byte order mark');
+  const dialect = inputs.dialect ?? 'mysql';
+  if (!KNOWN_DIALECTS.includes(dialect)) return [`no script check for the dialect ${dialect}`];
+  const hasBom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  // SQL Server tools expect the byte order mark (sqlcmd -i skips it); every other dialect writes none.
+  if (dialect === 'mssql') {
+    if (!hasBom) problems.push('the script does not start with the byte order mark of a SQL Server script');
+    if (bytes.subarray(3).includes(BOM)) problems.push('the script holds a byte order mark after its first bytes');
+  } else if (hasBom) problems.push('the script starts with a byte order mark');
+  else if (dialect !== 'mysql' && bytes.includes(BOM)) problems.push('the script holds a byte order mark');
+  const body = dialect === 'mssql' && hasBom ? bytes.subarray(3) : bytes;
   if (bytes.includes(0x0d)) problems.push('the script holds a CR byte (LF line ends only)');
   if (bytes.includes(0x00)) problems.push('the script holds a NUL byte');
-  const text = bytes.toString('utf8');
-  if (Buffer.byteLength(text, 'utf8') !== bytes.length || text.includes('�')) problems.push('the script is not valid UTF-8');
+  const text = body.toString('utf8');
+  if (Buffer.byteLength(text, 'utf8') !== body.length || text.includes('�')) problems.push('the script is not valid UTF-8');
   const lines = text.split('\n');
   // The header is the leading block of comment lines (a long licence notice makes it long).
   const header = lines.slice(0, Math.max(1, lines.findIndex((line) => !COMMENT_LINE.test(line))));
@@ -300,19 +379,38 @@ export function scriptProblems(bytes, { id, inputs, spec, notice = null }) {
   expectHeader('-- Dataset: ', id, 'the dataset name');
   expectHeader('-- Licence: ', inputs.license, 'the licence of the provider manifest');
   expectHeader('-- Attribution: ', inputs.attribution, 'the attribution of the provider');
-  if (inputs.noticeSha256) problems.push(...noticeProblems(lines, notice, inputs.attribution));
+  if (inputs.noticeSha256) problems.push(...noticeProblems(lines, notice, inputs.attribution, dialect));
   if (!header.some((line) => line.startsWith(`-- Generated by datatug ${inputs.generator.tag} (`) && line.endsWith(`SHA-256 ${inputs.sqliteSha256}`))) problems.push('the header does not name the pinned datatug release and the SQLite SHA-256');
-  if (!header.some((line) => line.includes(spec.clientFlags.split(' ')[1]))) problems.push('the header does not recommend the safe client flags');
-  const statements = lines.filter((line) => line.startsWith('CREATE TABLE') || line.startsWith('INSERT INTO `' + spec.marker));
-  if (!statements[0]?.startsWith(`CREATE TABLE \`${spec.marker}\``)) problems.push(`the first statement is not the creation of the marker table ${spec.marker}`);
-  const insertMarker = `INSERT INTO \`${spec.marker}\` VALUES ('${id}', `;
-  const last = lines.filter((line) => line.length > 0).at(-2);
-  if (!last?.startsWith(insertMarker) || !last.includes(`'${inputs.sqliteSha256}'`)) problems.push('the last statement does not fill the marker table with the dataset and the SQLite SHA-256');
-  if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') problems.push('the script does not end with its completion comment');
-  for (const [index, line] of lines.entries()) {
-    if (!LINE_START.some((pattern) => pattern.test(line))) { problems.push(`line ${index + 1} starts with something the exporter never writes: ${JSON.stringify(line.slice(0, 40))}`); break; }
+  const hint = spec.headerHint ?? spec.clientFlags.split(' ')[1];
+  if (!header.some((line) => line.includes(hint))) problems.push('the header does not recommend the safe client flags');
+  const quote = markerName[dialect];
+  const statements = lines.filter((line) => line.startsWith('CREATE TABLE'));
+  if (!statements[0]?.startsWith(`CREATE TABLE ${quote(spec.marker)}`)) problems.push(`the first statement is not the creation of the marker table ${spec.marker}`);
+  const nonEmpty = lines.filter((line) => line.length > 0);
+  if (dialect === 'mysql') {
+    const insertMarker = `INSERT INTO \`${spec.marker}\` VALUES ('${id}', `;
+    const last = nonEmpty.at(-2);
+    if (!last?.startsWith(insertMarker) || !last.includes(`'${inputs.sqliteSha256}'`)) problems.push('the last statement does not fill the marker table with the dataset and the SQLite SHA-256');
+  } else if (dialect === 'mssql') {
+    const inserts = lines.filter((line) => line.startsWith('INSERT INTO '));
+    const last = inserts.at(-1);
+    if (!last?.startsWith(`INSERT INTO ${quote(spec.marker)} VALUES (N'${id}', `) || !last.includes(`N'${inputs.sqliteSha256}'`)) problems.push('the last INSERT does not fill the marker table with the dataset and the SQLite SHA-256');
+    if (lines.lastIndexOf('COMMIT TRANSACTION;') < lines.lastIndexOf(last ?? '\0')) problems.push('the transaction is not committed after the marker row');
+  } else {
+    const at = lines.findLastIndex((line) => /^ *INSERT INTO /.test(line));
+    const row = lines[at + 1] ?? '';
+    if (at === -1 || lines[at].trim() !== `INSERT INTO ${quote(spec.marker)} VALUES` || !row.startsWith(`('${id}',`) || !row.includes(`'${inputs.sqliteSha256}'`)) problems.push('the last INSERT does not fill the marker table with the dataset and the SQLite SHA-256');
+    if (!(lines.indexOf('END;', at) > at && lines.indexOf('/', at) > at)) problems.push('the block that fills the marker table is not closed');
   }
-  problems.push(...literalProblems(bytes));
+  if (nonEmpty.at(-1) !== '-- end of script') problems.push('the script does not end with its completion comment');
+  if (dialect === 'oracle') problems.push(...oracleProblems(lines));
+  if (dialect === 'mssql' && lines.some((line) => COMMENT_LINE.test(line) && line.includes('$('))) problems.push('a comment line holds $( (the exporter writes $ ( in the header; sqlcmd without -x would substitute it)');
+  const preambleAt = dialect === 'oracle' ? lines.findIndex((line) => line !== '' && !COMMENT_LINE.test(line)) : -1;
+  for (const [index, line] of lines.entries()) {
+    if (preambleAt >= 0 && index >= preambleAt && index < preambleAt + ORACLE_PREAMBLE.length && line === ORACLE_PREAMBLE[index - preambleAt]) continue;
+    if (!LINE_STARTS[dialect].some((pattern) => pattern.test(line))) { problems.push(`line ${index + 1} starts with something the exporter never writes: ${JSON.stringify(line.slice(0, 40))}`); break; }
+  }
+  problems.push(...literalProblems(body, dialect));
   return problems;
 }
 
@@ -341,7 +439,7 @@ export async function verifyDialectScript({ id, manifest, dialect, config, read,
   let bytes = null;
   try { bytes = await readStoredScript(record, read); } catch (error) { problems.push(`${dialect}: ${error.message}`); }
   if (bytes) {
-    problems.push(...scriptProblems(bytes, { id, inputs, spec, notice: noticeOf(id, config) }).map((problem) => `${dialect}: ${problem}`));
+    problems.push(...scriptProblems(bytes, { id, inputs, spec, notice: noticeOf(id, config, dialect) }).map((problem) => `${dialect}: ${problem}`));
     if (record.verification && record.verification.scriptSha256 !== record.stored.decodedSha256) problems.push(`${dialect}: the recorded verification is for another script (${record.verification.scriptSha256})`);
     if (requireVerification) {
       const v = record.verification;
@@ -404,7 +502,7 @@ export async function runExporter({ dir, manifest, config, dialect, attribution,
     const inputs = inputsOf({ manifest, config, dialect, attribution });
     const enc = (value) => encodeURIComponent(value);
     let destination = `sqlscript://${output}?dialect=${enc(dialect)}&name=${enc(inputs.name)}&license=${enc(inputs.license)}&attribution=${enc(inputs.attribution)}&edition=${enc(inputs.edition)}`;
-    const notice = noticeOf(manifest.id, config);
+    const notice = noticeOf(manifest.id, config, dialect);
     if (notice) {
       const noticePath = join(scratch, 'notice.txt');
       await writeFile(noticePath, notice);
@@ -508,7 +606,18 @@ async function githubJson(url) {
   return response.json();
 }
 
+// The cross-engine verifier a script is recorded against, by dialect (datatug-cli internal/crossverify journey tests).
+export const VERIFIER_TESTS = { mysql: 'TestJourneyMySQL', mssql: 'TestJourneyMSSQL', oracle: 'TestJourneyOracle' };
+export const LOADERS = {
+  mysql: "loaded with the header's client flags and again with the plain client",
+  mssql: 'loaded with sqlcmd -X -x -b -f 65001 -i from the file inside the server container',
+  oracle: 'loaded with NLS_LANG=.AL32UTF8 sqlplus -L -S from the file inside the server container',
+};
+
 // Writes the verification block of one provider script from the numbers of a cross-engine verifier run over exactly that script.
+// `result` may add what makes the run reproducible and comparable: `serverVersion`, `clientVersion`, `image` (the digest actually run, which must
+// be the pinned one), `loadSeconds`, `verifierSeconds` and `tableRows` (the row count of every table read back from the engine; it must be the
+// exporter's own report count).
 export async function recordVerification({ dir, config, dialect = 'mysql', result }) {
   const manifestPath = join(dir, MANIFEST_PATH);
   const dialectManifest = await readJsonFile(manifestPath);
@@ -517,6 +626,13 @@ export async function recordVerification({ dir, config, dialect = 'mysql', resul
   for (const key of ['tables', 'rows', 'valuesCompared', 'differences', 'verifierWarnings']) if (!Number.isInteger(result[key]) || result[key] < 0) throw new Error(`--${key} must be a non-negative integer`);
   if (result.differences !== 0) throw new Error('a verification with differences is not recorded');
   const spec = config.dialects[dialect];
+  if (result.image && result.image !== spec.serverImage) throw new Error(`the run used ${result.image}, not the pinned ${spec.serverImage}`);
+  if (result.tableRows) {
+    const report = JSON.parse(await readFile(join(dir, record.report.path), 'utf8'));
+    const expected = Object.fromEntries(report.tables.map((table) => [table.name, table.rows]));
+    if (canonicalJson(expected) !== canonicalJson(result.tableRows)) throw new Error('the row counts read back from the engine are not the counts of the exporter report');
+  }
+  const optional = (key, value) => (value === undefined || value === null || (typeof value === 'number' && Number.isNaN(value)) ? {} : { [key]: value });
   record.verification = {
     date: result.date ?? new Date().toISOString().slice(0, 10),
     differences: 0,
@@ -530,6 +646,10 @@ export async function recordVerification({ dir, config, dialect = 'mysql', resul
     valuesCompared: result.valuesCompared,
     verifier: result.verifier,
     verifierWarnings: result.verifierWarnings,
+    ...optional('clientVersion', result.clientVersion),
+    ...optional('loadSeconds', result.loadSeconds),
+    ...optional('tableRows', result.tableRows),
+    ...optional('verifierSeconds', result.verifierSeconds),
   };
   await atomicWrite(manifestPath, Buffer.from(serializeJson(dialectManifest)));
 }
@@ -563,10 +683,13 @@ async function main(argv) {
   const toolsDir = resolve(options.tools ?? process.env.DEMODB_TOOLS_DIR ?? join(tmpdir(), 'demodb-tools'));
   const dirs = options.provider ? [resolve(options.provider)] : options.providers ? (await datasetIds()).map((id) => join(resolve(options.providers), id)) : [];
   if (dirs.length === 0 && ['generate', 'check', 'regenerate-check', 'record-verification'].includes(command)) throw new Error('pass --provider <checkout> or --providers <directory of checkouts named by dataset id>');
+  // Every dialect of the config unless --dialect names one.
+  const dialects = options.dialect ? [options.dialect] : Object.keys(config.dialects);
+  for (const dialect of dialects) if (!config.dialects[dialect]) throw new Error(`no ${dialect} dialect in config/dialect-scripts.json (has: ${Object.keys(config.dialects).join(', ')})`);
   if (command === 'generate') {
     let binary = null;
     const getBinary = async () => (binary ??= await ensureDatatug(config, toolsDir));
-    for (const dir of dirs) console.log(`${dir}: ${await generateProvider({ dir, config, force: options.force === true, getBinary })}`);
+    for (const dir of dirs) for (const dialect of dialects) console.log(`${dir} ${dialect}: ${await generateProvider({ dir, config, dialect, force: options.force === true, getBinary })}`);
     return 0;
   }
   if (command === 'check-pins') {
@@ -577,21 +700,27 @@ async function main(argv) {
     return problems.length ? 1 : 0;
   }
   if (command === 'record-verification') {
+    if (!options.dialect) throw new Error('record-verification needs --dialect mysql|mssql|oracle');
+    const [dialect] = dialects;
     const number = (name) => (options[name] === undefined ? NaN : Number(options[name]));
-    await recordVerification({ dir: dirs[0], config, result: {
+    const fromFile = options['result-file'] ? JSON.parse(await readFile(resolve(options['result-file']), 'utf8')) : {};
+    await recordVerification({ dir: dirs[0], config, dialect, result: {
       tables: number('tables'), rows: number('rows'), valuesCompared: number('values'), differences: number('differences'), verifierWarnings: number('warnings'),
       engine: options.engine ?? 'MySQL 8.4.11 (official mysql:8.4 image)', date: options.date,
-      verifier: options.verifier ?? `datatug-cli internal/crossverify TestJourneyMySQL at ${config.generator.tag}, run locally over this exact script, loaded with the header's client flags and again with the plain client; reads source and target through Go drivers`,
+      verifier: options.verifier ?? `datatug-cli internal/crossverify ${VERIFIER_TESTS[dialect]} at ${config.generator.tag}, run locally over this exact script, ${LOADERS[dialect]}; reads source and target through Go drivers`,
+      ...fromFile,
     } });
-    console.log(`${dirs[0]}: verification recorded`);
+    console.log(`${dirs[0]} ${dialect}: verification recorded`);
     return 0;
   }
   if (command === 'check') {
     let failed = 0;
     for (const dir of dirs) {
       const id = (await readJsonFile(join(dir, 'manifest.json'))).id;
-      const problems = await checkProvider(dir, config);
-      if (problems.length) { failed += 1; console.error(`${id}: ${problems.length} problem(s)\n  ${problems.join('\n  ')}`); } else console.log(`${id}: mysql script matches its manifest, the provider manifest and the pinned inputs`);
+      for (const dialect of dialects) {
+        const problems = await checkProvider(dir, config, dialect);
+        if (problems.length) { failed += 1; console.error(`${id} ${dialect}: ${problems.length} problem(s)\n  ${problems.join('\n  ')}`); } else console.log(`${id}: ${dialect} script matches its manifest, the provider manifest and the pinned inputs`);
+      }
     }
     return failed ? 1 : 0;
   }
@@ -601,14 +730,16 @@ async function main(argv) {
     for (const dir of dirs) {
       const manifest = await readJsonFile(join(dir, 'manifest.json'));
       const dialectManifest = await readJsonFile(join(dir, MANIFEST_PATH));
-      const committed = await readStoredScript(dialectManifest.scripts.mysql, fsReader(dir));
-      const { script } = await runExporter({ dir, manifest, config, dialect: 'mysql', attribution: dialectManifest.attribution, binary });
-      if (Buffer.compare(committed, script) === 0) console.log(`${manifest.id}: regeneration is byte for byte the committed script (${script.length} bytes, ${sha256(script)})`);
-      else { failed += 1; console.error(`${manifest.id}: regeneration with datatug ${config.generator.tag} differs from the committed script (${sha256(script)} != ${sha256(committed)})`); }
+      for (const dialect of dialects) {
+        const committed = await readStoredScript(dialectManifest.scripts[dialect], fsReader(dir));
+        const { script } = await runExporter({ dir, manifest, config, dialect, attribution: dialectManifest.attribution, binary });
+        if (Buffer.compare(committed, script) === 0) console.log(`${manifest.id} ${dialect}: regeneration is byte for byte the committed script (${script.length} bytes, ${sha256(script)})`);
+        else { failed += 1; console.error(`${manifest.id} ${dialect}: regeneration with datatug ${config.generator.tag} differs from the committed script (${sha256(script)} != ${sha256(committed)})`); }
+      }
     }
     return failed ? 1 : 0;
   }
-  throw new Error('usage: dialect-scripts.mjs generate|check|regenerate-check|record-verification --provider <dir> | --providers <dir> [--tools <dir>] [--force]; check-pins [--mode strict|warn-ahead]');
+  throw new Error('usage: dialect-scripts.mjs generate|check|regenerate-check|record-verification --provider <dir> | --providers <dir> [--dialect mysql|mssql|oracle] [--tools <dir>] [--force]; check-pins [--mode strict|warn-ahead]');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

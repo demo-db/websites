@@ -13,11 +13,19 @@
       },
       "mysql": {
         "bytes": 102992959,
-        "sha256": "1560bc9a1d1244955eef14a84d90fd2e844a2038dbb35c2472231aa3dca2eda6"
+        "sha256": "097f91755c37f411f249ea85028fb8e604115deade38183403fd3c8e87eeebac"
+      },
+      "oracle": {
+        "bytes": 104812292,
+        "sha256": "dd5cd356b96b6c74b8440db8141ed8087292541d0e2e3d794de02c1f5fa4616b"
       },
       "postgresql": {
         "bytes": 110241326,
         "sha256": "55e4f0ec587a2c8e3d500b10491c3e067a2358ea4d46558efcfa1849f9902207"
+      },
+      "sqlserver": {
+        "bytes": 105504351,
+        "sha256": "677ca4a4a179227f99bea1d80ad583b48264edfe95b5b32f879a3b94eedc956d"
       },
       "yaml": {
         "bytes": 243068731,
@@ -32,7 +40,15 @@
       },
       "mysql": {
         "bytes": 485388,
-        "sha256": "e0780ba21f7868507c58e6da930e8bca2b73aeb472555baa7e5e5d5c4bf9b189"
+        "sha256": "1ea1804ddfc6fa93013146fba97376a47dcfbccb280715bb98443c9d9fcd67a9"
+      },
+      "oracle": {
+        "bytes": 507843,
+        "sha256": "287b5a2ea2c226b72ff1650a476229194db37e60c07086b96738ef794158b6b0"
+      },
+      "sqlserver": {
+        "bytes": 498245,
+        "sha256": "5a42ed5ea10b72bec01b742db0d8867fc4823674257cccaeeaa4f142d7286ac8"
       }
     },
     "employees": {
@@ -47,11 +63,19 @@
       },
       "mysql": {
         "bytes": 597346,
-        "sha256": "ab50b052f3f5e59ff7a0a9e050925e52dc74cc9f13687eb88579e2894ab49352"
+        "sha256": "94be048782227f19a5e3ff0781e16bf84a4c3de790d526de99895336ce8e40fd"
+      },
+      "oracle": {
+        "bytes": 612245,
+        "sha256": "b694ebb699ef4fbc7c24eb902cc0fd81627040831ce1ae1f134d5d183293d89c"
       },
       "postgresql": {
         "bytes": 639087,
         "sha256": "f6a815412101cdb12943e01616498702dd668d3570e2c94fae62d087e3f84294"
+      },
+      "sqlserver": {
+        "bytes": 632602,
+        "sha256": "19d116ff14febd02a05b55e4fcf72286a8e8c14a4f4a26380c9bfbc1664f3264"
       },
       "yaml": {
         "bytes": 1400430,
@@ -70,11 +94,19 @@
       },
       "mysql": {
         "bytes": 630119,
-        "sha256": "030039f4a9448f996ce6da25ad98173f5b9ba4ea4b64bf0f616f9ce2fa3c24cc"
+        "sha256": "56b9178a14240ed71e06268652cc566caa16e7c06c46360b892a034d0a0e38a9"
+      },
+      "oracle": {
+        "bytes": 658395,
+        "sha256": "8ad55ba3b955ce65ec823501e902129e9a57f69c14a985afd441acbb084399b2"
       },
       "postgresql": {
         "bytes": 1089450,
         "sha256": "b6efe271401eba9d4738a2bbea294cc205dd6e02f47864bd3f21e195310afbee"
+      },
+      "sqlserver": {
+        "bytes": 645254,
+        "sha256": "6f44c25b257edf8f6132c915a9b160d810621d0b04e1b595c6f58a5ce4132cc0"
       },
       "yaml": {
         "bytes": 890335,
@@ -93,11 +125,19 @@
       },
       "mysql": {
         "bytes": 206217,
-        "sha256": "a56d1ce7eaf2dd2f5e5ef77f4a7e18700097e7072964ba7263167c465dc2a686"
+        "sha256": "5984838c7e55589ab0ce5653f03a06c012b136cdcea510b0f026c6ff74fa2126"
+      },
+      "oracle": {
+        "bytes": 139485,
+        "sha256": "1c782df8d2a942ab93d2d8a81015b632e291585f1d08fda892c5fdd68a1d8acb"
       },
       "postgresql": {
         "bytes": 203921,
         "sha256": "f1673837062391afce66a032cc1d570020f3cef780a048f96aa0fca905759242"
+      },
+      "sqlserver": {
+        "bytes": 372702,
+        "sha256": "85708725ca9b504ba09cb566c814231a2158a6aab0e0e71593d75f15ac2d2b8d"
       },
       "yaml": {
         "bytes": 128524,
@@ -116,11 +156,19 @@
       },
       "mysql": {
         "bytes": 3455549,
-        "sha256": "5a3d1edde07ad4ec1f5771870bce94bd2ac51669598a5f13cab7e94980b5eef8"
+        "sha256": "d52d8b381aa25e3129a030715548b2540460dcf0021b4d37037975fd468fab52"
+      },
+      "oracle": {
+        "bytes": 3534713,
+        "sha256": "14be936792fb9d80d181c8c06d3b48f1ee1dd42f2c7bb7480eb63c8d5ef778db"
       },
       "postgresql": {
         "bytes": 3723568,
         "sha256": "ac76c32a7fa39caf62c4e4f894b3c181733bd5a1eb667960a675a9d9af62c134"
+      },
+      "sqlserver": {
+        "bytes": 3577264,
+        "sha256": "85850c3d3cf2a4122939ae7f014ecc570c79f7209ce1745872265f04e16ded1a"
       },
       "yaml": {
         "bytes": 8481426,

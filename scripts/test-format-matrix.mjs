@@ -60,7 +60,7 @@ test('validateMatrix rejects a missing cell, an unexplained gap and an unknown d
   assert.throws(() => validateMatrix(matrix, [...ids, 'newdb']), /newdb is registered but not declared/);
 });
 
-test('a planned format needs a reason, has no origin, is never served, and the committed matrix plans SQL Server and Oracle without serving them', () => {
+test('a planned format needs a reason, has no origin and is never served; the committed matrix serves a generated MySQL, SQL Server and Oracle script for every dataset', () => {
   const clone = () => structuredClone(matrix);
   const noReason = clone(); noReason.datasets.pubs.oracle = { state: 'planned', reason: 'soon' };
   assert.throws(() => validateMatrix(noReason, ids), /pubs\/oracle: a planned format needs a specific reason/);
@@ -70,13 +70,11 @@ test('a planned format needs a reason, has no origin, is never served, and the c
   assert.deepEqual(formatAvailability(small, 'x', []).map((item) => [item.format, item.state]), [['oracle', 'planned']]);
   assert.throws(() => formatAvailability(small, 'x', [{ format: 'oracle', table: null, publicPath: 'x.oracle.sql', derived: true }]), /oracle: declared planned but x\.oracle\.sql is served/);
   for (const id of ids) {
-    assert.equal(matrix.datasets[id].oracle.state, 'planned', `${id}: Oracle is planned, not available`);
-    assert.notEqual(matrix.datasets[id].sqlserver.state === 'planned' ? 'x' : matrix.datasets[id].sqlserver.origin === 'provider-script' ? 'served' : 'x', 'served', `${id}: no generated SQL Server script is claimed`);
-    assert.equal(matrix.datasets[id].mysql.state, 'download');
-    assert.equal(matrix.datasets[id].mysql.origin, 'provider-script', `${id}: the MySQL script is the generated one`);
+    for (const format of ['mysql', 'sqlserver', 'oracle']) {
+      assert.equal(matrix.datasets[id][format].state, 'download', `${id}: the ${format} script is served`);
+      assert.equal(matrix.datasets[id][format].origin, 'provider-script', `${id}: the ${format} script is the generated one`);
+    }
   }
-  assert.deepEqual(ids.filter((id) => matrix.datasets[id].sqlserver.state === 'download'), ['chinook'], 'only the upstream Chinook SQL Server script is served');
-  assert.equal(matrix.datasets.chinook.sqlserver.origin, 'provider');
 });
 
 test('an upstream script that a generated one displaced is served outside the matrix', () => {
@@ -103,6 +101,26 @@ test('Chinook: the generated MySQL script owns the canonical URL and lerocha\'s 
   const downloadsPage = decodeHtml(await readFile(join(root, 'dist/_db/chinook/downloads/index.html'), 'utf8'));
   assert.ok(downloadsPage.includes('MySQL script, upstream (unverified, drops database)'), 'the page labels the upstream script');
   assert.ok(downloadsPage.includes('<a href="/data/upstream/chinook.mysql.sql" download>'));
+});
+
+test('Chinook: the generated SQL Server script owns the canonical URL, lerocha\'s upstream script is served apart, and the Oracle script is generated', async () => {
+  const chinook = generated.find((item) => item.id === 'chinook');
+  const [canonical] = completeOf(chinook, 'sqlserver');
+  assert.equal(canonical.publicPath, 'chinook.sqlserver.sql');
+  assert.equal(canonical.derived, true);
+  const upstream = completeOf(chinook, 'upstream-sqlserver');
+  assert.equal(upstream.length, 1);
+  assert.equal(upstream[0].publicPath, 'upstream/chinook.sqlserver.sql');
+  const generatedBytes = await decodedBytesOf(chinook, canonical);
+  assert.deepEqual([...generatedBytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'the SQL Server script starts with the byte order mark sqlcmd -i expects');
+  assert.equal(generatedBytes.subarray(3).toString().split('\n')[0], '-- DemoDB contract edition, identical to the SQLite/CSV/JSON');
+  assert.ok((await decodedBytesOf(chinook, upstream[0])).toString().includes('DROP DATABASE'), 'the upstream script is the one that drops the database');
+  const [oracle] = completeOf(chinook, 'oracle');
+  assert.equal(oracle.publicPath, 'chinook.oracle.sql');
+  assert.equal((await decodedBytesOf(chinook, oracle)).toString().split('\n')[0], '-- DemoDB contract edition, identical to the SQLite/CSV/JSON');
+  const downloadsPage = decodeHtml(await readFile(join(root, 'dist/_db/chinook/downloads/index.html'), 'utf8'));
+  assert.ok(downloadsPage.includes('SQL Server script, upstream (unverified, drops database)'));
+  assert.ok(downloadsPage.includes('<a href="/data/upstream/chinook.sqlserver.sql" download>') && downloadsPage.includes('<a href="/data/chinook.oracle.sql" download>'));
 });
 
 test('every dataset page names the files DemoDB generates, and only those', async () => {

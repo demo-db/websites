@@ -7,6 +7,9 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+import os
+import subprocess
+from unittest.mock import patch
 import generate as shared
 import generate_ingitdb as native
 
@@ -84,5 +87,91 @@ class NativeProviderTest(unittest.TestCase):
                     with self.assertRaises((shared.GenerationError, FileNotFoundError)):
                         native.generate(target)
                     self.assertFalse((target / 'metadata/contract.json').exists())
+    def snapshot(self):
+        import os
+        result = {}
+        for path in self.root.rglob('*'):
+            name = path.relative_to(self.root).as_posix()
+            if path.is_symlink(): result[name] = ('link', os.readlink(path))
+            elif path.is_file(): result[name] = ('file', path.read_bytes())
+            else: result[name] = ('directory',)
+        return result
+
+    def test_all_native_definitions_are_validated_without_row_dependence(self):
+        for kind in ['optional-type', 'empty-type', 'null-type', 'settings-syntax', 'settings-shape', 'language', 'data-dir', 'formula', 'required-shape', 'pk-type', 'record-option']:
+            with self.subTest(kind=kind):
+                self.definition = dict(titles={'en': 'Baseline'}, record_file=dict(name='records.jsonl', type='[]map[string]any', format='jsonl'), primary_key=['event_id'], columns={'event_id': dict(type='string', required=True), 'occurred_at': dict(type='string', required=True), 'synthetic': dict(type='bool', required=True)})
+                raw = self.raw
+                if kind in ('optional-type', 'empty-type', 'null-type'):
+                    self.definition['columns']['unused'] = dict(type='NOT_A_NATIVE_TYPE', required=False)
+                if kind == 'empty-type': raw = b''
+                if kind == 'null-type': raw = raw.replace(b'"synthetic":true', b'"synthetic":true,"unused":null')
+                if kind == 'data-dir': self.definition['data_dir'] = 'not-packaged'
+                if kind == 'formula': self.definition['columns']['synthetic']['formula'] = 'True'
+                if kind == 'required-shape': self.definition['columns']['synthetic']['required'] = 'false'
+                if kind == 'pk-type': self.definition['columns']['event_id']['type'] = 'int'
+                if kind == 'record-option': self.definition['record_file']['records_base_path'] = 'other'
+                self.save()
+                self.put('ingitdb/collections/baseline/records.jsonl', raw)
+                manifest = copy.deepcopy(self.manifest)
+                manifest['source']['files']['baseline'].update(bytes=len(raw), sha256=shared.sha256(raw), rowCount=len(raw.splitlines()))
+                self.put('manifest.json', manifest)
+                if kind == 'settings-syntax': self.put('ingitdb/.ingitdb/settings.yaml', b'not: [valid')
+                elif kind == 'settings-shape': self.put('ingitdb/.ingitdb/settings.yaml', {'languages': [], 'unsupported': True})
+                elif kind == 'language': self.put('ingitdb/.ingitdb/settings.yaml', {'languages': [{'required': 'en'}, {'optional': 'en'}]})
+                else: self.put('ingitdb/.ingitdb/settings.yaml', {'languages': [{'required': 'en'}]})
+                before = self.snapshot()
+                with self.assertRaises((shared.GenerationError, ValueError)):
+                    native.generate(self.root)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_all_output_aliases_refuse_before_any_tree_change(self):
+        for kind in ['inside-source-link', 'external-directory', 'hardlink', 'directory-target', 'reserved-source']:
+            with self.subTest(kind=kind):
+                with tempfile.TemporaryDirectory() as directory:
+                    import shutil
+                    original = self.root
+                    self.root = Path(directory) / 'provider'
+                    shutil.copytree(original, self.root)
+                    try:
+                        source = self.root / 'ingitdb/collections/baseline/records.jsonl'
+                        model = self.root / 'model/logs.modelspec.json'
+                        model.parent.mkdir()
+                        if kind == 'inside-source-link': model.symlink_to('../ingitdb/collections/baseline/records.jsonl')
+                        elif kind == 'external-directory': (self.root / 'metadata').symlink_to(Path(directory), target_is_directory=True)
+                        elif kind == 'hardlink': os.link(source, model)
+                        elif kind == 'directory-target': model.mkdir()
+                        elif kind == 'reserved-source':
+                            manifest = copy.deepcopy(self.manifest)
+                            manifest['dataFile'] = 'metadata/schema.json'
+                            self.put('metadata/schema.json', b'{}')
+                            self.put('manifest.json', manifest)
+                        before = self.snapshot()
+                        with self.assertRaises(shared.GenerationError): native.generate(self.root)
+                        self.assertEqual(self.snapshot(), before)
+                        self.assertEqual(source.read_bytes(), self.raw)
+                    finally:
+                        self.root = original
+
+    def test_publication_io_failure_restores_previous_outputs_and_originals(self):
+        native.generate(self.root)
+        before = self.snapshot()
+        replace = os.replace
+        calls = 0
+        def fail_once(source, destination):
+            nonlocal calls
+            calls += 1
+            if calls == 4: raise OSError('publication refused')
+            return replace(source, destination)
+        with patch.object(native.os, 'replace', side_effect=fail_once):
+            with self.assertRaises(OSError): native.generate(self.root)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_actual_native_archive_reader(self):
+        native.generate(self.root)
+        env = dict(os.environ, NATIVE_PROVIDER_ARCHIVE=str(self.root / 'artifacts/logs.ingitdb.tar.gz'))
+        result = subprocess.run(['go', '-C', str(Path(__file__).parent / 'native-reader'), 'test', '-count=1', './...'], env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 if __name__ == '__main__':
     unittest.main()

@@ -8,6 +8,10 @@ import gzip
 import io
 import json
 import tarfile
+import os
+import re
+import shutil
+import tempfile
 from pathlib import Path
 import generate as shared
 
@@ -22,18 +26,140 @@ def decode(body):
         return result
     return json.loads(body, object_pairs_hook=unique)
 
-def read(root, name):
-    lexical = root / name
-    path = shared.safe_relative(root, name, 'native input')
-    for candidate in [lexical, *lexical.parents]:
+def checked_path(root, name):
+    if not isinstance(name, str) or not name or name.startswith('/') or '\\' in name or any(part in ('', '.', '..') for part in name.split('/')):
+        raise shared.GenerationError('native path must be canonical and relative')
+    path = root / name
+    for candidate in [path, *path.parents]:
         if candidate == root.parent:
             break
         if candidate.is_symlink():
-            raise shared.GenerationError('native inputs cannot be symlinks')
+            raise shared.GenerationError('native paths cannot be symlinks')
+    shared.safe_relative(root, name, 'native path')
+    return path
+
+
+def read(root, name):
+    path = checked_path(root, name)
+    if not path.is_file():
+        raise shared.GenerationError('native input must be a regular file')
     body = path.read_bytes()
     if len(body) > shared.MAX_STATIC_EXPORT_BYTES:
         raise shared.GenerationError('native input exceeds limit')
     return body
+
+
+def object_fields(value, allowed, required, label):
+    if not isinstance(value, dict) or set(value) - set(allowed) or not set(required) <= set(value):
+        raise shared.GenerationError('unsupported ' + label + ' shape')
+
+
+def settings_valid(settings):
+    object_fields(settings, ['languages'], ['languages'], 'native settings')
+    languages = settings['languages']
+    if not isinstance(languages, list) or not languages or len(languages) > 100:
+        raise shared.GenerationError('native languages must be a bounded list')
+    seen = set()
+    for item in languages:
+        if not isinstance(item, dict) or len(item) != 1 or next(iter(item)) not in ('required', 'optional'):
+            raise shared.GenerationError('unsupported native language')
+        code = next(iter(item.values()))
+        if not isinstance(code, str) or not re.fullmatch(r'[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', code) or code in seen:
+            raise shared.GenerationError('invalid native language')
+        seen.add(code)
+
+
+def definition_valid(definition):
+    object_fields(definition, ['titles', 'record_file', 'primary_key', 'columns', 'columns_order'], ['titles', 'record_file', 'primary_key', 'columns'], 'native collection')
+    titles = definition['titles']
+    if not isinstance(titles, dict) or not isinstance(titles.get('en'), str) or not titles['en'].strip() or any(not isinstance(k, str) or not isinstance(v, str) or not v.strip() for k, v in titles.items()):
+        raise shared.GenerationError('invalid native titles')
+    rf = definition['record_file']
+    object_fields(rf, ['name', 'type', 'format'], ['name', 'type', 'format'], 'native record file')
+    if not isinstance(rf['name'], str) or '/' in rf['name'] or rf['name'] in ('', '.', '..') or rf['type'] != '[]map[string]any' or rf['format'] != 'jsonl':
+        raise shared.GenerationError('unsupported native JSONL record file')
+    columns = definition['columns']
+    if not isinstance(columns, dict) or not columns or len(columns) > 256:
+        raise shared.GenerationError('native columns must be bounded')
+    for field, column in columns.items():
+        if not isinstance(field, str) or not field or field == '$ID':
+            raise shared.GenerationError('invalid native field')
+        object_fields(column, ['type', 'required', 'min_length'], ['type'], 'native column')
+        if column['type'] not in ('string', 'int', 'bool') or ('required' in column and not isinstance(column['required'], bool)):
+            raise shared.GenerationError('unsupported declared native type or requirement')
+        if 'min_length' in column and (column['type'] != 'string' or type(column['min_length']) is not int or column['min_length'] < 0):
+            raise shared.GenerationError('unsupported native string constraint')
+    order = definition.get('columns_order', list(columns))
+    if not isinstance(order, list) or any(not isinstance(v, str) for v in order) or len(order) != len(set(order)) or set(order) != set(columns):
+        raise shared.GenerationError('native column order must name every field once')
+    pk = definition['primary_key']
+    if not isinstance(pk, list) or not pk or any(not isinstance(v, str) for v in pk) or len(pk) != len(set(pk)) or any(v not in columns or columns[v]['type'] != 'string' or columns[v].get('required') is not True for v in pk):
+        raise shared.GenerationError('primary key must name distinct required string columns')
+
+
+def publish(root, outputs, inputs):
+    # Validate the COMPLETE set before creating even a staging directory.
+    names = set(outputs)
+    input_names = set(inputs)
+    input_nodes = {(os.stat(checked_path(root, name)).st_dev, os.stat(checked_path(root, name)).st_ino) for name in input_names}
+    def preflight():
+        nodes = set()
+        for name, body in outputs.items():
+            path = checked_path(root, name)
+            if len(body) > shared.MAX_STATIC_EXPORT_BYTES or name in input_names or any(name.startswith(v + '/') or v.startswith(name + '/') for v in names | input_names if v != name):
+                raise shared.GenerationError('native output collides with input/output')
+            if path.exists():
+                if not path.is_file():
+                    raise shared.GenerationError('native output is not a regular file')
+                info = path.stat(); identity = (info.st_dev, info.st_ino)
+                if identity in input_nodes or identity in nodes or info.st_nlink != 1:
+                    raise shared.GenerationError('native output has a file alias')
+                nodes.add(identity)
+            for parent in path.parents:
+                if parent == root:
+                    break
+                if parent.exists() and not parent.is_dir():
+                    raise shared.GenerationError('native output parent is not a directory')
+    preflight()
+    stage = Path(tempfile.mkdtemp(prefix='.native-provider-', dir=root))
+    changed, created_dirs = [], []
+    keep_backup = False
+    try:
+        for name, body in outputs.items():
+            path = stage / 'new' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+        preflight()
+        for name in outputs:
+            destination = root / name
+            for directory in reversed(destination.parents):
+                if directory == root or not directory.is_relative_to(root):
+                    continue
+                if not directory.exists():
+                    directory.mkdir(); created_dirs.append(directory)
+            backup = stage / 'old' / name
+            existed = destination.exists()
+            if existed:
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(destination, backup)
+            changed.append((destination, backup, existed))
+            os.replace(stage / 'new' / name, destination)
+    except BaseException:
+        try:
+            for destination, backup, existed in reversed(changed):
+                if existed:
+                    os.replace(backup, destination)
+                elif destination.exists():
+                    destination.unlink()
+            for directory in reversed(created_dirs):
+                directory.rmdir()
+        except OSError as error:
+            keep_backup = True
+            raise shared.GenerationError('publication rollback failed; backup retained at ' + str(stage)) from error
+        raise
+    finally:
+        if not keep_backup:
+            shutil.rmtree(stage)
 
 def generate(root):
     root = root.resolve()
@@ -41,7 +167,10 @@ def generate(root):
     dbid = manifest['id']
     if not shared.DATABASE_ID_PATTERN.fullmatch(dbid) or manifest.get('storage') != {'engine': 'ingitdb', 'path': 'ingitdb'} or manifest['siteHost'] != dbid + '.demodb.dev':
         raise shared.GenerationError('invalid native provider identity/storage')
+    settings_valid(decode(read(root, 'ingitdb/.ingitdb/settings.yaml')))
     roots = decode(read(root, 'ingitdb/.ingitdb/root-collections.yaml'))
+    if not isinstance(roots, dict):
+        raise shared.GenerationError('native root map must be an object')
     if not roots or len(roots) > 100 or set(roots) != set(manifest['source']['files']):
         raise shared.GenerationError('native source inventory differs from collections')
     inputs = {'ingitdb/.ingitdb/root-collections.yaml': read(root, 'ingitdb/.ingitdb/root-collections.yaml'), 'ingitdb/.ingitdb/settings.yaml': read(root, 'ingitdb/.ingitdb/settings.yaml')}
@@ -52,6 +181,7 @@ def generate(root):
         definition_path = 'ingitdb/' + folder + '/.collection/definition.yaml'
         definition_bytes = read(root, definition_path)
         definition = decode(definition_bytes)
+        definition_valid(definition)
         rf = definition['record_file']
         if rf.get('type') != '[]map[string]any' or rf.get('format') != 'jsonl' or definition.get('source_schema', {}).get('key_mode') or (not definition.get('primary_key')):
             raise shared.GenerationError('native JSONL requires declared source primary key')
@@ -90,6 +220,8 @@ def generate(root):
                     raise shared.GenerationError('unsupported declared native type')
                 if not valid:
                     raise shared.GenerationError('native field type mismatch')
+                if isinstance(value, str) and len(value) < col.get('min_length', 0):
+                    raise shared.GenerationError('native string is too short')
         columns = [dict(name=field, type=col['type'], nullable=not col.get('required', False), primaryKey=field in pk, primaryKeyPosition=pk.index(field) + 1 if field in pk else None, defaultValue=None) for field, col in definition['columns'].items()]
         tables.append(dict(name=name, kind='table', description=definition['titles']['en'], columns=columns, primaryKey=[dict(column=field, position=i + 1) for i, field in enumerate(pk)], foreignKeys=[], uniqueKeys=[], uniqueIndexes=[], rowCount=len(rows), rows=[], modelEntity=name))
         inputs[definition_path] = definition_bytes
@@ -122,10 +254,7 @@ def generate(root):
     outputs['metadata/contract.json'] = shared.canonical_json(dict(contractVersion=1, manifest=manifest, schema=schema, exports=exports))
     checksum_inputs = {**outputs, **inputs, 'manifest.json': read(root, 'manifest.json'), manifest['dataFile']: source_manifest}
     outputs['metadata/checksums.json'] = shared.canonical_json(dict(contractVersion=1, files={path: dict(sha256=shared.sha256(body), bytes=len(body)) for path, body in sorted(checksum_inputs.items())}))
-    for path, body in outputs.items():
-        destination = shared.safe_relative(root, path, 'native output')
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(body)
+    publish(root, outputs, {**inputs, 'manifest.json': checksum_inputs['manifest.json'], manifest['dataFile']: source_manifest})
     print(f'Generated native inGitDB provider {dbid}: {len(tables)} original-file collections; no parsed-row snapshots')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

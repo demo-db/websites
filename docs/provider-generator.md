@@ -177,3 +177,19 @@ archive retains the exact native definitions and original JSONL; metadata rows
 stay empty and `preview: native-api-only` identifies the actual read boundary.
 The deployed native DAL provider supplies record/query reads. A generated
 contract or endpoint address alone is not a deployment verification receipt.
+
+The adapter validates a closed native subset before inspecting row values:
+settings contain only a nonempty `languages` list of required/optional language
+codes; collections contain titles, record-file settings, primary keys, columns
+and optional column order. Columns support `type`, boolean `required` and
+string `min_length`. Unsupported options, including `data_dir`, inheritance and
+formulas, are rejected rather than ignored. This validation also applies to
+empty collections and optional columns containing only nulls.
+
+All output paths are preflighted together before any write. Symlinks, hardlink
+aliases, input/output collisions and non-file destinations are refused. The
+complete generated set is staged, then published with backups; an I/O failure
+restores previous outputs. If restoration itself fails, the error reports the
+retained backup directory for recovery. Publication is not a single atomic
+multi-file filesystem operation. Tests read the generated archive through the
+actual native DAL adapter as well as checking original-byte preservation.

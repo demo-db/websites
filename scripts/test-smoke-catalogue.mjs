@@ -60,3 +60,35 @@ test('both PostgreSQL config states enforce catalogue and detail readiness', () 
     assert.ok(storagePageProblems(detail, { ...entry, readiness: verified ? 'hosted-api-pending' : 'public-api' }).length);
   }
 });
+
+
+test('MySQL live contract accepts honest missing formats and rejects inconsistent corpus, lock, received bytes and page', async () => {
+  const { checkedMysqlScript } = await import('./smoke-mysql.mjs');
+  const { createHash } = await import('node:crypto');
+  const config = { edition: 'test edition', dialects: { mysql: { marker: '_marker' } } };
+  const bytes = Buffer.from("-- test edition\n-- Licence: MIT\nCREATE TABLE `_marker` (id TEXT);\nINSERT INTO `_marker` VALUES ('test', 1);\n-- end of script\n");
+  const pinned = { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+  const available = { localId: 'test', licences: { data: 'MIT' }, formatAvailability: [{ format: 'mysql', state: 'download', label: 'MySQL script' }], exports: [{ format: 'mysql' }] };
+  assert.equal(checkedMysqlScript(available, pinned, bytes, config, ''), 1);
+  for (const change of [Buffer.from(bytes.toString().replace('MIT', 'BAD')), Buffer.from(bytes.toString().replace('CREATE TABLE', 'ALTER TABLE')), Buffer.from(bytes.toString().replace('INSERT INTO', 'REPLACE INTO')), Buffer.from(bytes.toString().replace('-- end of script', '-- incomplete')), Buffer.from(bytes.toString().replace('test edition', 'other edition'))]) {
+    const repinned = { bytes: change.length, sha256: createHash('sha256').update(change).digest('hex') };
+    assert.throws(() => checkedMysqlScript(available, repinned, change, config, ''));
+  }
+  assert.throws(() => checkedMysqlScript(available, { ...pinned, sha256: '0'.repeat(64) }, bytes, config, ''));
+  assert.throws(() => checkedMysqlScript(available, pinned, undefined, config, ''));
+  assert.throws(() => checkedMysqlScript({ ...available, exports: [] }, pinned, bytes, config, ''));
+  for (const id of ['shipping', 'shipping-logs']) {
+    const corpus = JSON.parse(await readFile(new URL('../dist/corpus.json', import.meta.url), 'utf8'));
+    const database = corpus.databases.find((entry) => entry.localId === id);
+    const page = await readFile(new URL(`../dist/_db/${id}/downloads/index.html`, import.meta.url), 'utf8');
+    assert.equal(checkedMysqlScript(database, undefined, undefined, config, page), 0);
+    for (const [db, lock, received, html] of [
+      [database, pinned, undefined, page], [database, undefined, bytes, page],
+      [{ ...database, exports: [{ format: 'mysql' }] }, undefined, undefined, page],
+      [database, undefined, undefined, page.replaceAll('MySQL script', 'Another format')],
+    ]) assert.throws(() => checkedMysqlScript(db, lock, received, config, html));
+    const planned = { ...database, formatAvailability: database.formatAvailability.map((entry) => entry.format === 'mysql' ? { ...entry, state: 'planned' } : entry) };
+    assert.equal(checkedMysqlScript(planned, undefined, undefined, config, page.replace(/Not available:/g, 'Planned:')), 0);
+    assert.throws(() => checkedMysqlScript(planned, undefined, undefined, config, page));
+  }
+});

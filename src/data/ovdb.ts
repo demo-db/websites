@@ -2,6 +2,7 @@ import generated from './generated/ovdb.json';
 import registry from '../../config/databases.json';
 import bigQueryHosting from '../../config/bigquery-hosting.json';
 import postgresqlApi from './generated/postgresql-api.json';
+import generatedIndex from './generated/index.json';
 import type { OVDBDatabase, OVDBServer } from './types';
 
 export { bigQueryHosting };
@@ -49,16 +50,14 @@ if (!provenance || typeof provenance.source !== 'string' || !/^[a-f0-9]{64}$/.te
 export const postgresqlApiProvenance: PostgresqlApiProvenance = provenance as PostgresqlApiProvenance;
 
 const inGitDBRevisions: Record<string, string> = registry.ingitdbRevisions;
-if (Object.keys(inGitDBRevisions).length !== ovdbDatabases.length
-  || ovdbDatabases.some((database) => !/^[a-f0-9]{40}$/.test(inGitDBRevisions[database.localId] ?? ''))) {
-  throw new Error('inGitDB revisions must pin every registered dataset exactly once');
+if (Object.entries(inGitDBRevisions).some(([id, revision]) => !ovdbDatabaseById.has(id) || !/^[a-f0-9]{40}$/.test(revision))) {
+  throw new Error('inGitDB revisions must identify registered datasets with immutable revisions');
 }
 
 const bigQueryEditions = bigQueryHosting.datasets;
 if (bigQueryHosting.format !== 'demodb-bigquery-hosting/v1'
   || bigQueryHosting.projectId !== 'demodb-dev'
   || bigQueryHosting.location !== 'US'
-  || bigQueryEditions.length !== ovdbDatabases.length
   || bigQueryEditions.some((edition) => !ovdbDatabaseById.has(edition.id)
     || edition.datasetId !== edition.id
     || edition.verified !== true
@@ -66,15 +65,12 @@ if (bigQueryHosting.format !== 'demodb-bigquery-hosting/v1'
     || !/^[a-f0-9]{40}$/.test(edition.sourceRevision)
     || !Number.isSafeInteger(edition.tableCount)
     || !Number.isSafeInteger(edition.rowCount))) {
-  throw new Error('BigQuery hosted editions must verify every registered DemoDB dataset');
+  throw new Error('BigQuery hosted editions must be immutable verified registered DemoDB datasets');
 }
-if (new Set(bigQueryEditions.map((edition) => edition.id)).size !== ovdbDatabases.length) {
-  throw new Error('BigQuery hosted editions must identify every registered dataset exactly once');
+if (new Set(bigQueryEditions.map((edition) => edition.id)).size !== bigQueryEditions.length) {
+  throw new Error('BigQuery hosted editions must identify each hosted dataset exactly once');
 }
 
-// Storage IDs identify catalogue entries, while the provider and OVDB manifest
-// IDs remain the stable dataset IDs. Only SQLite is public unless the PostgreSQL
-// flag is verified; the verified copy is served from the cloud OpenVaultDB API.
 export function postgresqlStorageEntry(id: string, publicApiVerified: boolean): StorageEntry {
   return {
     id: `${id}-postgresql`,
@@ -85,28 +81,39 @@ export function postgresqlStorageEntry(id: string, publicApiVerified: boolean): 
   };
 }
 
-export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }[] = ovdbDatabases.map((database) => ({
-  database,
-  storages: [
-    { id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'], readiness: 'public-api' },
-    postgresqlStorageEntry(database.localId, postgresqlPublicApiVerified),
-    { id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
-      repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${inGitDBRevisions[database.localId]}/ingitdb`,
-      manifestUrl: `https://github.com/demo-db/${database.localId}/blob/${inGitDBRevisions[database.localId]}/ingitdb/export-manifest.json`,
-      revision: inGitDBRevisions[database.localId] },
-    { id: `${database.localId}-bigquery`, engine: 'BigQuery', tags: [database.localId, 'bigquery', 'google-cloud'], readiness: 'public-read-user-project-required',
-      sourceProjectId: bigQueryHosting.projectId,
-      datasetId: bigQueryEditions.find((edition) => edition.id === database.localId)!.datasetId,
-      location: bigQueryHosting.location,
-      executionProject: 'user-selected',
-      tableCount: bigQueryEditions.find((edition) => edition.id === database.localId)!.tableCount,
-      rowCount: bigQueryEditions.find((edition) => edition.id === database.localId)!.rowCount,
-      sourceRepository: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceRepository,
-      sourceRevision: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceRevision,
-      sourceSqliteSha256: bigQueryEditions.find((edition) => edition.id === database.localId)!.sourceSqliteSha256,
-      verificationUrl: 'https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json' },
-  ],
-}));
+const websiteById = new Map(generatedIndex.databases.map((database) => [database.id, database]));
+export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }[] = ovdbDatabases.map((database) => {
+  const website = websiteById.get(database.localId);
+  if (!website) throw new Error(`${database.localId}: generated website database is missing`);
+  const available = new Set(website.formatAvailability.filter((item) => item.state === 'download').map((item) => item.format));
+  const storages: StorageEntry[] = [];
+  if (available.has('sqlite')) storages.push({
+    id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'],
+    readiness: website.capabilities?.ovdb?.deploymentVerified === true ? 'public-api' : 'hosted-api-pending',
+  });
+  if (available.has('postgresql')) storages.push(postgresqlStorageEntry(database.localId, postgresqlPublicApiVerified));
+  if (available.has('ingitdb')) {
+    const revision = database.localId === 'shipping-logs' ? website.sourceCommit : inGitDBRevisions[database.localId];
+    if (!revision || !/^[a-f0-9]{40}$/.test(revision)) throw new Error(`${database.localId}: published inGitDB storage needs an immutable repository revision`);
+    storages.push({
+      id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
+      repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${revision}/ingitdb`,
+      manifestUrl: database.localId === 'shipping-logs'
+        ? `https://github.com/demo-db/${database.localId}/blob/${revision}/source-manifest.json`
+        : `https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/export-manifest.json`,
+      revision,
+    });
+  }
+  const edition = bigQueryEditions.find((candidate) => candidate.id === database.localId);
+  if (edition) storages.push({
+    id: `${database.localId}-bigquery`, engine: 'BigQuery', tags: [database.localId, 'bigquery', 'google-cloud'], readiness: 'public-read-user-project-required',
+    sourceProjectId: bigQueryHosting.projectId, datasetId: edition.datasetId, location: bigQueryHosting.location, executionProject: 'user-selected',
+    tableCount: edition.tableCount, rowCount: edition.rowCount, sourceRepository: edition.sourceRepository, sourceRevision: edition.sourceRevision,
+    sourceSqliteSha256: edition.sourceSqliteSha256, verificationUrl: 'https://github.com/demo-db/websites/blob/main/config/bigquery-hosting.json',
+  });
+  if (!storages.length) throw new Error(`${database.localId}: no published storage edition`);
+  return { database, storages };
+});
 // The hosted PostgreSQL edition DataTug can open for a dataset, or null. Offered only
 // when config/postgresql-api.json is verified AND the dataset's PostgreSQL storage
 // entry is publicly served; the id is that entry's own id.

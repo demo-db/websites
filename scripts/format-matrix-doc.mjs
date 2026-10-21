@@ -18,7 +18,8 @@ function sizeCell(db, format, lock) {
   if (!item) return 'none';
   if (format === 'ingitdb') {
     const pinned = lock.datasets?.[db.id]?.ingitdb;
-    return `ZIP, ${pinned.fileCount} files, ${pinned.rowCount.toLocaleString('en-US')} rows`;
+    if (pinned) return `ZIP, ${pinned.fileCount} files, ${pinned.rowCount.toLocaleString('en-US')} rows`;
+    return `native archive, ${mib(item.bytes)}`;
   }
   const decoded = item.decodedBytes ?? item.bytes;
   return `${mib(decoded)}${item.compression === 'gzip' ? ' (served gzip-encoded)' : ''}`;

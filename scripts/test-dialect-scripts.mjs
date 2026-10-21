@@ -2,7 +2,7 @@
 // committed provider files that need neither the datatug binary nor Docker. Runs in `pnpm test` and uses only synthetic providers.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -16,6 +16,7 @@ import {
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const committed = await loadConfig();
+const matrix = JSON.parse(await readFile(new URL('../config/format-matrix.json', import.meta.url), 'utf8'));
 // The synthetic providers below have no notice file: the notice is switched off for them and tested on its own.
 const config = { ...structuredClone(committed), notice: { enabled: false, dir: 'config/dialect-notices', param: null } };
 const spec = config.dialects.mysql;
@@ -497,8 +498,9 @@ const mit = ['Permission is hereby granted, free of charge', 'The above copyrigh
     sakila: ['Copyright (c) 2006, 2026, Oracle and/or its affiliates.', 'Redistributions of source code must retain the above copyright notice', 'Redistributions in binary form must reproduce the above copyright', 'Neither the name of Oracle', 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS', 'EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.'],
     employees: ['Copyright (C) 2007,2008, MySQL AB', 'Fusheng Wang and Carlo Zaniolo', 'Giuseppe Maxia', 'Patrick Crews', 'http://creativecommons.org/licenses/by-sa/3.0/', 'https://github.com/datacharmer/test_db', 'Adaptation:', 'Any similarity to existing people is purely coincidental.', 'https://creativecommons.org/licenses/by-sa/3.0/legalcode'],
   };
-  assert.deepEqual(Object.keys(need).sort(), [...ids].sort());
-  for (const id of ids) {
+  const scriptedIds = ids.filter((id) => Object.values(matrix.datasets[id]).some((cell) => cell.state === 'download' && cell.origin === 'provider-script'));
+  assert.deepEqual(Object.keys(need).sort(), scriptedIds.sort());
+  for (const id of scriptedIds) {
     const text = await readFile(join(root, 'config/dialect-notices', `${id}.txt`), 'utf8');
     assert.ok(text.endsWith('\n') && !text.includes('\r') && !text.includes('\0'), `${id}: LF text`);
     for (const phrase of need[id]) assert.ok(text.includes(phrase), `${id}: the notice carries "${phrase}"`);
@@ -703,7 +705,7 @@ test('a dialect notice file wins over the shared one: Employees names the script
 test('every committed notice survives every dialect unchanged except for tabs, */, /*, $( and & (and the header of the exporter keeps lines of any length)', async () => {
   const root = new URL('..', import.meta.url).pathname;
   const dialectConfig = { ...clone(committed), notice: { ...committed.notice, dir: join(root, 'config/dialect-notices') } };
-  const ids = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8')).databases.map((entry) => entry.id);
+  const ids = (await readdir(join(root, 'config/dialect-notices'))).filter((file) => file.endsWith('.txt') && !file.includes('.mssql.') && !file.includes('.oracle.')).map((file) => file.slice(0, -4));
   for (const id of ids) for (const dialect of KNOWN_DIALECTS) {
     const notice = noticeOf(id, dialectConfig, dialect);
     assert.ok(!notice.includes('$(') && !notice.includes('&') && !notice.includes('\t') && !notice.includes('/*') && !notice.includes('*/'), `${id}/${dialect}: nothing to neutralise, so the header carries the notice verbatim`);

@@ -54,7 +54,7 @@ test('workflow checks pins against the exact PR base or previous push commit', (
 test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
   const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
   assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
-  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
   for (const { file, config } of hosts) {
     assert.equal(config.main, undefined, `${file} has no Worker script`);
     assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);

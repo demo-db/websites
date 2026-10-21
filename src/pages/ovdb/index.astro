@@ -12,16 +12,16 @@ import { ovdbServer, postgresqlPublicApiVerified, storageEngineCount, storageEnt
   </section>
   <section class="shell section">
     <div class="section-heading"><div><p class="eyebrow">Storage catalogue</p><h2>{storageGroups.length} datasets. {storageEngineCount} storage editions each.</h2></div><span class="muted">{publicOvdbApiCount} public OVDB APIs · {storageEntryCount} storage entries</span></div>
-    <p class="storage-intro">The shared server descriptor lists the six SQLite databases with working public APIs. PostgreSQL copies {postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only DTQL endpoints' : 'have public API access pending'}, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
+    <p class="storage-intro">The shared server descriptor lists the provider-backed databases and their declared read-only APIs. PostgreSQL copies {postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only DTQL endpoints' : 'have public API access pending'}, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
     <div class="database-grid">
       {storageGroups.map(({ database, storages }) => (
         <article class="database-card storage-group">
-          <span class="database-kicker">{database.recordsets.length} published SQLite collections</span>
-          <h2>{database.title}</h2><p>Explore the {database.title} dataset across four storage editions.</p>
+          <span class="database-kicker">{database.recordsets.length} published recordsets</span>
+          <h2>{database.title}</h2><p>Explore the {database.title} dataset across {storages.length} published storage {storages.length === 1 ? 'edition' : 'editions'}.</p>
           <div class="storage-choices">{storages.map((storage) => <a href={`/ovdb/db/${storage.id}/`}><strong>{storage.engine}<small>{storage.id}</small></strong><span>{storage.readiness === 'public-api' ? 'Public read-only API' : storage.readiness === 'hosted-repository' ? 'Published on GitHub · query locally' : storage.readiness === 'public-read-user-project-required' ? 'BigQuery · Google sign-in and your execution project required' : 'PostgreSQL copy · public API pending'}<span class="storage-tags">{storage.tags.map((tag) => <span class="storage-tag">{tag}</span>)}</span></span><span aria-hidden="true">→</span></a>)}</div>
         </article>
       ))}
     </div>
   </section>
-  <section class="shell section catalogue-note"><p class="eyebrow">Public interface</p><h2>Read and query. Never write.</h2><p>The six SQLite APIs use the shared backend and provider-declared capabilities. Their database manifests expose native table names, columns, keys, provenance, and public semantic references.</p><p><a class="text-link" href="/ovdb/schemas/ovdb-server-draft-1.schema.json">Server JSON Schema</a> · <a class="text-link" href="/ovdb/schemas/ovdb-database-draft-1.schema.json">Database JSON Schema</a></p></section>
+  <section class="shell section catalogue-note"><p class="eyebrow">Public interface</p><h2>Read and query. Never write.</h2><p>The provider APIs use the shared backend and provider-declared capabilities. Their database manifests expose native table names, columns, keys, provenance, and public semantic references.</p><p><a class="text-link" href="/ovdb/schemas/ovdb-server-draft-1.schema.json">Server JSON Schema</a> · <a class="text-link" href="/ovdb/schemas/ovdb-database-draft-1.schema.json">Database JSON Schema</a></p></section>
 </SiteLayout>

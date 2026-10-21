@@ -11,9 +11,11 @@ import { LOCK_FORMAT, LOCK_PATH, SQL_SCRIPT_FORMATS, deriveDatasetExports, seria
 import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 import { publishNorthwindOrdersEvidence } from './northwind-orders-evidence.mjs';
+import { projectRelatedDatabases } from './related-databases.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
+const relatedDatabaseConfig = JSON.parse(await readFile(join(root, 'config/related-databases.json'), 'utf8'));
 const comparisonHistory = JSON.parse(await readFile(join(root, 'config/comparison-fixtures-history.json'), 'utf8'));
 if (comparisonHistory.format !== 'demodb-comparison-fixture-history/v1') throw new Error('Unsupported comparison fixture history format');
 assertAppendOnlyFixturePins(registry.comparisonFixtures ?? [], comparisonHistory.fixtures);
@@ -122,6 +124,8 @@ for (const asset of comparisonAssets) {
 }
 
 assertPresentationReplacementsUsed();
+const relatedByDatabase = projectRelatedDatabases(relatedDatabaseConfig, databases);
+for (const db of databases) db.relatedDatabases = relatedByDatabase.get(db.id) ?? [];
 const ids = new Set();
 const hosts = new Map();
 const aliasHosts = new Map();
@@ -301,7 +305,7 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
-  const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums)));
+  const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums, manifest)));
   const paths = new Set();
   const physicalPaths = new Set();
   const publicPaths = new Set();
@@ -411,10 +415,13 @@ function displacedByGenerated(id, item) {
   };
 }
 
-function normalizeExport(id, item, tables, checksums) {
+function normalizeExport(id, item, tables, checksums, manifest) {
   const path = item.path;
   safeRelative(path);
-  if (!path.startsWith('artifacts/')) throw new Error(`${id}: public exports must be under artifacts/: ${path}`);
+  const nativeFiles = new Set(Object.values(manifest.source?.files ?? {}).map((file) => file?.path).filter(Boolean));
+  const nativeSourceManifest = manifest.storage?.engine === 'ingitdb' && path === manifest.dataFile;
+  const nativeOriginal = manifest.storage?.engine === 'ingitdb' && nativeFiles.has(path);
+  if (!path.startsWith('artifacts/') && !nativeSourceManifest && !nativeOriginal) throw new Error(`${id}: public exports must be provider artifacts or declared native original files: ${path}`);
   const base = path.split('/').pop();
   const checksum = checksums.files?.[path];
   const compression = item.compression ?? checksum?.compression ?? null;
@@ -435,6 +442,14 @@ function normalizeExport(id, item, tables, checksums) {
     decodedBytes: item.decodedBytes ?? checksum?.decodedBytes ?? null,
     decodedSha256: item.decodedSha256 ?? checksum?.decodedSha256 ?? null,
   };
+  if (nativeSourceManifest) {
+    return { path, encodedPath, publicPath: `metadata/${base}`, assetPath: `metadata/${base}`, chunks: [], format: 'metadata', table: null, ...common, dbWide: true };
+  }
+  if (nativeOriginal) {
+    if (item.format !== 'jsonl' || typeof item.table !== 'string' || !tables.some((table) => table.name === item.table)) throw new Error(`${id}: native original ${path} must identify a real JSONL recordset`);
+    return { path, encodedPath, publicPath: `jsonl/${id}.${item.table}.jsonl`, assetPath: `jsonl/${id}.${item.table}.jsonl`, chunks: [], format: 'jsonl', table: item.table, ...common, dbWide: false };
+  }
+
   if (compression === 'gzip' && (!Number.isSafeInteger(common.decodedBytes) || !isHash(common.decodedSha256))) {
     throw new Error(`${id}: gzip export ${path} needs decodedBytes and decodedSha256 checksums`);
   }
@@ -483,6 +498,7 @@ function normalizeExport(id, item, tables, checksums) {
   let publicPath;
   if (match || tableName) publicPath = `${format}/${id}.${tableName ?? match.name}.${extension}`;
   else if (format === 'sqlite') publicPath = `${id}.sqlite`;
+  else if (format === 'ingitdb') publicPath = base;
   else if (format === 'sql' || SQL_SCRIPT_FORMATS.includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);

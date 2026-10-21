@@ -66,7 +66,7 @@ const urlOf = (file) => `/${file}`.replace(/(^|\/)index\.html$/, '$1');
 test('every host config points at a built bundle with a top-level 404.html, and every bundle respects the static asset limits', async () => {
   const configs = await validateConfigs(await hostConfigs(), out);
   assert.deepEqual(configs.map(({ config }) => config.routes[0].pattern).sort(), manifest.hosts.map((host) => host.host).sort());
-  assert.deepEqual(manifest.hosts.map((host) => host.host).sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev']);
+  assert.deepEqual(manifest.hosts.map((host) => host.host).sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
   assert.ok(!manifest.hosts.some((host) => host.host === 'chinookdb.com'), 'chinookdb.com is not part of this deployment');
   for (const { config } of configs) {
     const dir = join(out, config.routes[0].pattern);
@@ -198,7 +198,7 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
 test('generated metadata endpoints replace the Worker responses', async () => {
   const discovery = JSON.parse(await readFile(join(out, 'demodb.dev/.well-known/openvaultdb'), 'utf8'));
   assert.equal(discovery.protocol, 'openvaultdb/0.1');
-  assert.equal(discovery.databases.length, 6);
+  assert.equal(discovery.databases.length, index.databases.length);
   for (const db of index.databases) {
     const dir = join(out, db.siteHost);
     const local = JSON.parse(await readFile(join(dir, '.well-known/openvaultdb'), 'utf8'));

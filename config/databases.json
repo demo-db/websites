@@ -46,11 +46,35 @@
       "commit": "1693587fca1d0966d4ef74a149f7105965fe6b56",
       "contractSha256": "83bc1f52480c1917451e726261fda83e4bdd5ea44ef81b90462f33a8a6234443",
       "textReplacements": [
-        { "from": "Employees (browser edition)", "to": "Employees (reduced subset)" },
-        { "from": "browser-sized edition of", "to": "reduced subset of" },
-        { "from": "Browser-sized subset of", "to": "Reduced subset of" },
-        { "from": "for the browser edition", "to": "for the reduced subset" }
+        {
+          "from": "Employees (browser edition)",
+          "to": "Employees (reduced subset)"
+        },
+        {
+          "from": "browser-sized edition of",
+          "to": "reduced subset of"
+        },
+        {
+          "from": "Browser-sized subset of",
+          "to": "Reduced subset of"
+        },
+        {
+          "from": "for the browser edition",
+          "to": "for the reduced subset"
+        }
       ]
+    },
+    {
+      "id": "shipping",
+      "repository": "https://github.com/demo-db/shipping",
+      "commit": "04128331f0357ca231441cb8e8aaa4a94c659772",
+      "contractSha256": "dc65dc97d01e8e5ed0afbc959e6a98bc04a2469df6cf9db43c4cc2c2be34234d"
+    },
+    {
+      "id": "shipping-logs",
+      "repository": "https://github.com/demo-db/shipping-logs",
+      "commit": "e4a714f915b147c357afdfffe103ca88e917b8cb",
+      "contractSha256": "1934ff898e78fe860c05e4d3cd0140d13ace30fd0466dc454bb4d19cbb5e2b06"
     }
   ],
   "comparisonFixtures": [

@@ -128,7 +128,7 @@ class ProviderGeneratorTests(unittest.TestCase):
                 "modelPropertyAliases": {"Order Details": {"Order ID": "Order_ID"}},
                 "ovdb": {
                     "query": True,
-                    "deployment": {"engine": "openvaultdb-go", "url": "https://cloud.openvaultdb.com/ovdb/db/fixture", "discovery": "https://fixture.demodb.dev/.well-known/openvaultdb"},
+                    "deployment": {"engine": "openvaultdb-go", "url": "https://cloud.openvaultdb.com/ovdb/dbs/fixture", "discovery": "https://demodb.dev/.well-known/openvaultdb"},
                     "recordsets": ["Order Details", "HumanResources.Employee", "dbo.DatabaseLog", "Child", "Empty Demo", "Self Link", "Exact Amounts"],
                 },
                 "meaning": {

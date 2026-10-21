@@ -76,6 +76,8 @@ def json_row(row: sqlite3.Row) -> dict[str, Any]:
 
 def model_type(sql_type: str) -> str:
     value = sql_type.upper()
+    if value in ("BOOL", "BOOLEAN"):
+        return "bool"
     if "INT" in value:
         return "int"
     if any(token in value for token in ("REAL", "FLOA", "DOUB", "NUM", "DEC", "MONEY")):
@@ -826,7 +828,7 @@ def ovdb_files(root: Path, manifest: dict[str, Any], config: dict[str, Any], sch
                 "The sha256 identifies the decoded SQLite fixture; source.inputSha256 identifies the compressed dataFile bytes."
                 if manifest["source"].get("inputCompression") == "gzip" else (
                     f"The sha256 identifies the generated SQLite fixture at {manifest['dataFile']}; recipe inputs are identified separately by the provider manifest."
-                    if manifest["source"].get("path") not in (None, manifest["dataFile"]) else ""
+                    if manifest.get("storage", {}).get("engine") != "ingitdb" and manifest["source"].get("path") not in (None, manifest["dataFile"]) else ""
                 ),
             ])),
         },

@@ -13,3 +13,6 @@ public/ovdb/db/
 public/ovdb/schemas/
 public/*/ovdb-database.json
 dist-hosts/
+
+# Python provider-tool caches
+__pycache__/

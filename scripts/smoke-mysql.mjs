@@ -14,8 +14,11 @@ export function checkedMysqlScript(database, pinned, bytes, config, page) {
     const cards = [...page.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((match) => match[1]);
     const labels = (html) => [...html.matchAll(/<strong\b[^>]*>([\s\S]*?)<\/strong>/g)].map((match) => match[1].replace(/<[^>]*>/g, '').trim());
     const matching = cards.filter((card) => labels(card).includes(declared.label));
+    const item = matching[0] ?? '';
+    const statuses = [...item.matchAll(/<span\b[^>]*>([\s\S]*?)<\/span>/g)];
     if (labels(page).filter((label) => label === declared.label).length !== 1 || matching.length !== 1 ||
-        !new RegExp(`<span\\b[^>]*>\\s*${word}:`).test(matching[0]) || /<a\b|\bdownload\s*=/i.test(matching[0])) {
+        statuses.length !== 1 || !/<\/strong>\s*<span\b/.test(item) ||
+        !statuses[0][1].trimStart().startsWith(`${word}:`) || /<a\b|\bdownload\s*=/i.test(item)) {
       throw new Error(`${database.localId}: MySQL page declaration differs from corpus`);
     }
     return 0;

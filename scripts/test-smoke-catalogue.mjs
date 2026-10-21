@@ -86,6 +86,8 @@ test('MySQL live contract accepts honest missing formats and rejects inconsisten
       [database, pinned, undefined, page], [database, undefined, bytes, page],
       [{ ...database, exports: [{ format: 'mysql' }] }, undefined, undefined, page],
       [database, undefined, undefined, page.replaceAll('MySQL script', 'Another format')],
+      [database, undefined, undefined, page.replace('<strong>MySQL script</strong>', '<strong>MySQL script</strong><span>Planned: coming soon</span>')],
+      [database, undefined, undefined, page.replace('<strong>MySQL script</strong>', '<strong>MySQL script</strong><em>ambiguous status</em>')],
       [database, undefined, undefined, page.replaceAll('MySQL script', 'Another MySQL script format')],
       [database, undefined, undefined, page + '<li><strong>MySQL script</strong><a href="/data/mysql.sql">Download</a></li>'],
       [database, undefined, undefined, page + '<li><strong>MySQL script</strong><span>Not available: pending</span></li>'],

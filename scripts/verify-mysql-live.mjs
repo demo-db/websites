@@ -27,8 +27,11 @@ const option = (name) => { const index = args.indexOf(`--${name}`); return index
 const providers = resolve(option('providers') ?? '');
 if (!option('providers')) throw new Error('pass --providers <directory of provider checkouts named by dataset id>');
 const registry = JSON.parse(await readFile(new URL('../config/databases.json', import.meta.url), 'utf8'));
+const matrix = JSON.parse(await readFile(new URL('../config/format-matrix.json', import.meta.url), 'utf8'));
 const only = option('only')?.split(',');
-const ids = registry.databases.map((entry) => entry.id).filter((id) => !only || only.includes(id));
+const ids = registry.databases.map((entry) => entry.id)
+  .filter((id) => matrix.datasets[id]?.mysql?.state === 'download' && matrix.datasets[id]?.mysql?.origin === 'provider-script')
+  .filter((id) => !only || only.includes(id));
 const config = await loadConfig();
 const spec = config.dialects.mysql;
 const password = `live-${process.pid}-${Math.random().toString(36).slice(2)}`;

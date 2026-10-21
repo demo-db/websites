@@ -1,0 +1,41 @@
+{
+  "format": "demodb-related-databases/v1",
+  "relationships": [
+    {
+      "id": "northwind-shipping-orders",
+      "kind": "synthetic-companion",
+      "label": "Synthetic shipping companion",
+      "description": "The synthetic Shipping requests use Northwind order identifiers for investigation examples.",
+      "endpoints": [
+        {
+          "database": "northwind",
+          "recordset": "Orders",
+          "field": "OrderID"
+        },
+        {
+          "database": "shipping",
+          "recordset": "requests",
+          "field": "order_id"
+        }
+      ]
+    },
+    {
+      "id": "shipping-events-original-logs",
+      "kind": "synthetic-companion",
+      "label": "Original synthetic log evidence",
+      "description": "Shipping event identifiers can be traced to the original baseline JSONL observations. Recovery collections remain separately labelled future examples.",
+      "endpoints": [
+        {
+          "database": "shipping",
+          "recordset": "events",
+          "field": "event_id"
+        },
+        {
+          "database": "shipping-logs",
+          "recordset": "baseline",
+          "field": "event_id"
+        }
+      ]
+    }
+  ]
+}

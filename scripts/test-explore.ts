@@ -23,13 +23,20 @@ test('exploreActions offers nothing without a database-level SQLite file', () =>
   assert.deepEqual(exploreActions(undefined), { primary: null, secondary: [] });
 });
 
-test('every registered dataset gets a SQLite primary action, a PostgreSQL secondary action when verified, and no user-facing WASM text', () => {
+test('registered datasets expose only the DataTug actions backed by their published formats', () => {
   for (const database of databases) {
     const actions = exploreActions(database);
-    assert.equal(actions.primary?.label, 'Explore SQLite in DataTug', `${database.id} primary label`);
-    assert.equal(actions.primary?.href, `https://datatug.app/demo/sqlite/${database.id}`, `${database.id} href`);
+    const hasSqlite = database.exports.some((file) => file.format === 'sqlite' && file.table === null);
+    if (hasSqlite) {
+      assert.equal(actions.primary?.label, 'Explore SQLite in DataTug', `${database.id} primary label`);
+      assert.equal(actions.primary?.href, `https://datatug.app/demo/sqlite/${database.id}`, `${database.id} href`);
+    } else {
+      assert.equal(actions.primary, null, `${database.id} has no SQLite action without a database-level SQLite export`);
+    }
+    const hasPostgresql = storageGroups.some((group) => group.database.localId === database.id
+      && group.storages.some((storage) => storage.engine === 'PostgreSQL'));
     const editionId = postgresqlDataTugEditionId(database.id);
-    assert.equal(editionId, postgresqlPublicApiVerified ? `${database.id}-postgresql` : null, `${database.id} PostgreSQL edition follows the verified flag`);
+    assert.equal(editionId, postgresqlPublicApiVerified && hasPostgresql ? `${database.id}-postgresql` : null, `${database.id} PostgreSQL edition follows its format and the verified flag`);
     const withPostgres = exploreActions(database, editionId);
     assert.deepEqual(withPostgres.primary, actions.primary, 'PostgreSQL never displaces the SQLite primary action');
     assert.deepEqual(withPostgres.secondary, editionId ? [{ engine: 'PostgreSQL', label: 'Explore PostgreSQL in DataTug', href: `https://datatug.app/demo/ovdb/${database.id}-postgresql` }] : []);
@@ -53,7 +60,8 @@ test('the selected PostgreSQL flag is a valid boolean and matches every storage 
   assert.equal(postgresqlApi.provenance.default, postgresqlApi.provenance.source === 'config/postgresql-api.json');
   assert.deepEqual(postgresqlApiProvenance, postgresqlApi.provenance);
   const postgres = storageGroups.flatMap((group) => group.storages).filter((storage) => storage.engine === 'PostgreSQL');
-  assert.equal(postgres.length, databases.length, 'every dataset has one PostgreSQL copy entry');
+  const postgresqlDownloads = databases.filter((database) => database.formatAvailability.some((format) => format.format === 'postgresql' && format.state === 'download'));
+  assert.equal(postgres.length, postgresqlDownloads.length, 'each PostgreSQL-capable dataset has one copy entry');
   for (const storage of postgres) {
     assert.deepEqual(storage, postgresqlStorageEntry(storage.id.replace(/-postgresql$/, ''), postgresqlPublicApiVerified));
   }
@@ -109,7 +117,11 @@ test('the PostgreSQL DataTug action needs a verified API and a hosted edition', 
 
 test('generated PostgreSQL DataTug links equal the datatug-apps catalogue routes', () => {
   assert.match(datatugCatalog.commit, /^[0-9a-f]{40}$/, 'the fixture records its source commit');
-  assert.deepEqual(datatugCatalog.entries.map((entry) => entry.dataset).sort(), databases.map((db) => db.id).sort(), 'same datasets as the registry');
+  const postgresqlDatasets = storageGroups
+    .filter((group) => group.storages.some((storage) => storage.engine === 'PostgreSQL'))
+    .map((group) => group.database.localId)
+    .sort();
+  assert.deepEqual(datatugCatalog.entries.map((entry) => entry.dataset).sort(), postgresqlDatasets, 'same datasets as the PostgreSQL storage catalogue');
   for (const { dataset, route } of datatugCatalog.entries) {
     assert.equal(datatugPostgresqlHref(`${dataset}-postgresql`), `https://datatug.app${route}`);
     if (postgresqlPublicApiVerified) {

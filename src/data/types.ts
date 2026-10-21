@@ -73,6 +73,16 @@ export type FormatAvailability = {
   followUp?: string;
 };
 
+export type RelatedDatabase = {
+  id: string;
+  kind: 'synthetic-companion';
+  label: string;
+  description: string;
+  databaseId: string;
+  local: { recordset: string; field: string };
+  remote: { recordset: string; field: string };
+};
+
 export type Database = {
   id: string;
   name: string;
@@ -90,6 +100,7 @@ export type Database = {
   schema: { contractVersion: number; database: { id: string; name: string }; source: Record<string, unknown>; tables: Recordset[]; sourceViews?: SourceView[] };
   schemaSha256: string;
   formatAvailability: FormatAvailability[];
+  relatedDatabases: RelatedDatabase[];
   tables: Recordset[];
   exports: ExportFile[];
   exportByPublicPath: Record<string, ExportFile>;

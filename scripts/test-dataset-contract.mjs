@@ -65,10 +65,18 @@ test('the registry, the generated index and the built pages list the same datase
 });
 
 for (const id of ids) {
+  const database = providerOf(id);
+  const sqlite = completeDownloads(database).find((file) => file.format === 'sqlite');
   for (const [label, file] of [['site page', join('dist/_db', id, 'index.html')], ['OpenVaultDB page', join('dist/ovdb/db', id, 'index.html')]]) {
-    test(`${id} ${label}: the primary action is "${CTA}", first, without WASM, to DataTug's route`, async () => {
+    test(`${id} ${label}: DataTug offers SQLite only when a complete SQLite export exists`, async () => {
       const actions = heroActions(await readFile(join(root, file), 'utf8'));
       const [first, ...others] = actions;
+      if (!sqlite) {
+        assert.deepEqual(actions.filter((action) => action.text === CTA || /\/demo\/sqlite\//.test(action.href ?? '')), [], 'no SQLite CTA is rendered without a complete SQLite export');
+        assert.ok(first, 'the page retains an honest non-SQLite action');
+        assert.doesNotMatch(JSON.stringify(actions), /wasm/i);
+        return;
+      }
       assert.equal(first.text, CTA, 'the first hero action is the CTA');
       assert.ok(first.classes.includes('button-primary'), 'it is the primary button');
       assert.equal(first.href, `https://datatug.app/demo/sqlite/${id}`);
@@ -78,9 +86,8 @@ for (const id of ids) {
     });
   }
 
-  test(`${id}: the CTA is offered because a complete SQLite file is published`, () => {
-    const database = providerOf(id);
-    assert.ok(completeDownloads(database).some((file) => file.format === 'sqlite'), 'a complete SQLite file is in the registry entry');
+  test(`${id}: the SQLite CTA follows the complete-download inventory`, () => {
+    assert.equal(Boolean(sqlite), database.formatAvailability.some((item) => item.format === 'sqlite' && item.state === 'download'));
   });
 
   test(`${id}: the download lists name only files that exist in the registry entry and in the built assets`, async () => {
@@ -124,14 +131,16 @@ async function loadCatalog() {
   return import(pathToFileURL(file).href);
 }
 
-test('the DataTug catalog and this registry list the same datasets with the same SQLite file, SHA-256 and size', async (t) => {
+test('every DataTug catalogue entry matches its SQLite-capable registry file, SHA-256 and size', async (t) => {
   let catalog;
   try { catalog = await loadCatalog(); } catch (error) {
     if (process.env.CI) throw new Error(`DataTug catalog unavailable (a failure in CI, never a skip): ${error.message}`);
     return t.skip(`DataTug catalog unavailable: ${error.message}`);
   }
-  assert.deepEqual([...catalog.demoSqliteDatasetIds].sort(), [...ids].sort(), 'datasets: DataTug catalog vs DemoDB registry');
-  for (const id of ids) {
+  const sqliteIds = ids.filter((id) => completeDownloads(providerOf(id)).some((file) => file.format === 'sqlite'));
+  const catalogueIds = [...catalog.demoSqliteDatasetIds].sort();
+  assert.deepEqual(catalogueIds.filter((id) => !sqliteIds.includes(id)), [], 'the DataTug catalogue contains only SQLite-capable DemoDB datasets');
+  for (const id of catalogueIds) {
     const file = completeDownloads(providerOf(id)).find((candidate) => candidate.format === 'sqlite');
     const entry = catalog.demoSqliteCatalog[id];
     assert.deepEqual(

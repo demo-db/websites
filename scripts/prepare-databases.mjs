@@ -11,9 +11,11 @@ import { LOCK_FORMAT, LOCK_PATH, SQL_SCRIPT_FORMATS, deriveDatasetExports, seria
 import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 import { publishNorthwindOrdersEvidence } from './northwind-orders-evidence.mjs';
+import { projectRelatedDatabases } from './related-databases.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
+const relatedDatabaseConfig = JSON.parse(await readFile(join(root, 'config/related-databases.json'), 'utf8'));
 const comparisonHistory = JSON.parse(await readFile(join(root, 'config/comparison-fixtures-history.json'), 'utf8'));
 if (comparisonHistory.format !== 'demodb-comparison-fixture-history/v1') throw new Error('Unsupported comparison fixture history format');
 assertAppendOnlyFixturePins(registry.comparisonFixtures ?? [], comparisonHistory.fixtures);
@@ -32,6 +34,9 @@ if (derivedLock && derivedLock.format !== LOCK_FORMAT) throw new Error(`${LOCK_P
 const lockCollector = updateDerivedLock ? { update: true, collected: {} } : { lock: derivedLock };
 const python = process.env.PYTHON ?? 'python3';
 const derivedByDatabase = new Map();
+// These six providers predate the deploymentVerified contract field and remain the
+// established public inventory. New providers must opt in with an explicit true value.
+const establishedPublicProviders = new Set(['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']);
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
@@ -67,7 +72,7 @@ for (const entry of registry.databases) {
   validateDescriptorSchemaProjection(descriptor, db.schema.tables);
   validateDescriptorAssetReferences(descriptor, db);
   if (descriptor.title !== source.ovdb.title || descriptor.description !== source.ovdb.description) throw new Error(`${entry.id}: OVDB descriptor text disagrees with the publisher metadata`);
-  if (descriptor.capabilities.query !== db.ovdb.query) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
+  if (descriptor.capabilities.query !== db.ovdb.declaredQuery) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
   const displayDescriptor = structuredClone(descriptor);
   applyPresentationText(displayDescriptor, entry, ['title', 'description', 'provenance', 'model', 'meaning']);
   ovdbDescriptors.push({ descriptor, displayDescriptor, bytes: source.ovdbDescriptorBytes });
@@ -122,6 +127,8 @@ for (const asset of comparisonAssets) {
 }
 
 assertPresentationReplacementsUsed();
+const relatedByDatabase = projectRelatedDatabases(relatedDatabaseConfig, databases);
+for (const db of databases) db.relatedDatabases = relatedByDatabase.get(db.id) ?? [];
 const ids = new Set();
 const hosts = new Map();
 const aliasHosts = new Map();
@@ -173,7 +180,7 @@ const ovdbServer = validateServerDescriptor({
   description: 'A shared, read-only OpenVaultDB server for the curated DemoDB sample databases.',
   homepage: 'https://demodb.dev/ovdb/',
   apiUrl: 'https://demodb.dev/ovdb/v1',
-  databases: ovdbDescriptors.map(({ descriptor }) => ({
+  databases: ovdbDescriptors.filter(({ descriptor }) => databases.find((db) => db.id === descriptor.localId)?.ovdb.deploymentVerified).map(({ descriptor }) => ({
     id: descriptor.id,
     localId: descriptor.localId,
     serverDbBaseUrl: descriptor.serverDbBaseUrl,
@@ -187,7 +194,7 @@ await writeFile(join(publicOvdb, 'ovdb-server.json'), `${JSON.stringify(ovdbServ
 for (const name of ['ovdb-server-draft-1.schema.json', 'ovdb-database-draft-1.schema.json']) {
   await writeFile(join(publicOvdb, 'schemas', name), await readFile(join(root, 'schemas', name)));
 }
-for (const { descriptor, bytes } of ovdbDescriptors) {
+for (const { descriptor, bytes } of ovdbDescriptors.filter(({ descriptor }) => databases.find((db) => db.id === descriptor.localId)?.ovdb.deploymentVerified)) {
   for (const target of [
     join(root, 'public/ovdb/db', descriptor.localId, 'ovdb-database.json'),
     join(root, 'public', descriptor.localId, 'ovdb-database.json'),
@@ -301,7 +308,8 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
-  const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums)));
+  const deploymentVerified = manifest.capabilities?.ovdb?.deploymentVerified === true || establishedPublicProviders.has(entry.id);
+  const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums, manifest)));
   const paths = new Set();
   const physicalPaths = new Set();
   const publicPaths = new Set();
@@ -328,9 +336,12 @@ function normalizeProvider(entry, source) {
       url: canonicalUrl, deploymentUrl, discovery,
       recordsetPage: source.ovdb.deployment?.recordset_page ?? null,
       connection: manifest.capabilities?.ovdb?.connection ?? deploymentUrl,
-      available: manifest.capabilities?.ovdb?.available === true,
+      declaredAvailable: manifest.capabilities?.ovdb?.available === true,
+      deploymentVerified,
+      available: manifest.capabilities?.ovdb?.available === true && deploymentVerified,
       readOnly: manifest.capabilities?.ovdb?.readOnly !== false,
-      query: manifest.capabilities?.ovdb?.query === true,
+      declaredQuery: manifest.capabilities?.ovdb?.query === true,
+      query: manifest.capabilities?.ovdb?.query === true && deploymentVerified,
     },
     sourceRepository: entry.repository, sourceCommit: entry.commit,
     publicIdentity: source.ovdbDescriptor.id,
@@ -411,10 +422,13 @@ function displacedByGenerated(id, item) {
   };
 }
 
-function normalizeExport(id, item, tables, checksums) {
+function normalizeExport(id, item, tables, checksums, manifest) {
   const path = item.path;
   safeRelative(path);
-  if (!path.startsWith('artifacts/')) throw new Error(`${id}: public exports must be under artifacts/: ${path}`);
+  const nativeFiles = new Set(Object.values(manifest.source?.files ?? {}).map((file) => file?.path).filter(Boolean));
+  const nativeSourceManifest = manifest.storage?.engine === 'ingitdb' && path === manifest.dataFile;
+  const nativeOriginal = manifest.storage?.engine === 'ingitdb' && nativeFiles.has(path);
+  if (!path.startsWith('artifacts/') && !nativeSourceManifest && !nativeOriginal) throw new Error(`${id}: public exports must be provider artifacts or declared native original files: ${path}`);
   const base = path.split('/').pop();
   const checksum = checksums.files?.[path];
   const compression = item.compression ?? checksum?.compression ?? null;
@@ -435,6 +449,14 @@ function normalizeExport(id, item, tables, checksums) {
     decodedBytes: item.decodedBytes ?? checksum?.decodedBytes ?? null,
     decodedSha256: item.decodedSha256 ?? checksum?.decodedSha256 ?? null,
   };
+  if (nativeSourceManifest) {
+    return { path, encodedPath, publicPath: `metadata/${base}`, assetPath: `metadata/${base}`, chunks: [], format: 'metadata', table: null, ...common, dbWide: true };
+  }
+  if (nativeOriginal) {
+    if (item.format !== 'jsonl' || typeof item.table !== 'string' || !tables.some((table) => table.name === item.table)) throw new Error(`${id}: native original ${path} must identify a real JSONL recordset`);
+    return { path, encodedPath, publicPath: `jsonl/${id}.${item.table}.jsonl`, assetPath: `jsonl/${id}.${item.table}.jsonl`, chunks: [], format: 'jsonl', table: item.table, ...common, dbWide: false };
+  }
+
   if (compression === 'gzip' && (!Number.isSafeInteger(common.decodedBytes) || !isHash(common.decodedSha256))) {
     throw new Error(`${id}: gzip export ${path} needs decodedBytes and decodedSha256 checksums`);
   }
@@ -483,6 +505,7 @@ function normalizeExport(id, item, tables, checksums) {
   let publicPath;
   if (match || tableName) publicPath = `${format}/${id}.${tableName ?? match.name}.${extension}`;
   else if (format === 'sqlite') publicPath = `${id}.sqlite`;
+  else if (format === 'ingitdb') publicPath = base;
   else if (format === 'sql' || SQL_SCRIPT_FORMATS.includes(format)) publicPath = format === 'sql' ? `${id}.sql` : `${id}.${format}.sql`;
   else if (dbWide) publicPath = `${id}.${extension}`;
   else publicPath = path.slice('artifacts/'.length);
@@ -503,9 +526,11 @@ function buildCorpus(databases) {
       sourceRevision: db.source.revision ?? db.sourceCommit,
       providerRevision: db.sourceCommit,
       homepage: db.canonicalUrl,
-      browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
-      serverManifestUrl: db.publicManifestUrl,
-      apiUrl: db.publicApiUrl,
+      ...(db.ovdb.deploymentVerified ? {
+        browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
+        serverManifestUrl: db.publicManifestUrl,
+        apiUrl: db.publicApiUrl,
+      } : {}),
       source: db.source,
       provenance: db.provenance,
       publisher: db.publisher,

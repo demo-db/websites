@@ -1,5 +1,8 @@
 """Offline tests for the served-format validator helpers (the PostgreSQL and parity runs need live services)."""
 import gzip
+import io
+import tarfile
+from unittest.mock import patch
 import importlib.util
 import pathlib
 import sys
@@ -14,6 +17,42 @@ spec.loader.exec_module(validator)
 
 
 class ValidateServedFormatsTest(unittest.TestCase):
+    def test_validates_native_tar_and_rejects_changed_original_bytes(self):
+        sys.path.insert(0, str(HERE.parent / "provider-tools"))
+        from test_native_ingitdb import NativeProviderTest
+        import generate_ingitdb
+        fixture = NativeProviderTest()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        generate_ingitdb.generate(fixture.root)
+        archive = fixture.root / "artifacts/logs.ingitdb.tar.gz"
+        db = {"id": "logs", "exports": [{"format": "ingitdb", "assetPath": archive.name}]}
+        archive.rename(fixture.root / archive.name)
+        with patch.object(validator, "provider_root", return_value=fixture.root), patch.dict(validator.os.environ, {}, clear=True):
+            report = validator.validate_ingitdb(db, fixture.root, fixture.root.parent)
+            self.assertEqual(report["rows"], 1)
+            self.assertEqual(report["errors"], 0)
+            with patch.dict(validator.os.environ, {"INGITDB_CLI": "ingitdb"}), patch.object(validator.subprocess, "run") as run:
+                run.return_value.returncode = 0
+                run.return_value.stdout = "valid"
+                run.return_value.stderr = ""
+                self.assertTrue(validator.validate_ingitdb(db, fixture.root, fixture.root.parent)["ingitdbCli"])
+                self.assertEqual(run.call_args.args[0][:3], ["ingitdb", "validate", "--path"])
+                self.assertTrue(run.call_args.args[0][3].endswith("/download/ingitdb"))
+            # A valid archive containing altered original records must fail byte parity.
+            path = fixture.root / archive.name
+            with tarfile.open(path) as bundle:
+                files = {member.name: bundle.extractfile(member).read() for member in bundle}
+            files["ingitdb/collections/baseline/records.jsonl"] = files["ingitdb/collections/baseline/records.jsonl"].replace(b'"e1"', b'"e2"')
+            for unsafe in (False, True):
+                with tarfile.open(path, "w:gz") as bundle:
+                    for name, body in files.items():
+                        member = tarfile.TarInfo("../escape" if unsafe else name)
+                        member.size = len(body)
+                        bundle.addfile(member, io.BytesIO(body))
+                with self.assertRaises((AssertionError, ValueError)):
+                    validator.validate_ingitdb(db, fixture.root, fixture.root.parent)
+
     def test_reads_plain_gzip_and_chunked_assets(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)

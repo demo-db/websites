@@ -60,7 +60,7 @@ test('validateMatrix rejects a missing cell, an unexplained gap and an unknown d
   assert.throws(() => validateMatrix(matrix, [...ids, 'newdb']), /newdb is registered but not declared/);
 });
 
-test('a planned format needs a reason, has no origin and is never served; the committed matrix serves a generated MySQL, SQL Server and Oracle script for every dataset', () => {
+test('a planned format needs a reason, has no origin and is never served; script availability follows each provider capability', () => {
   const clone = () => structuredClone(matrix);
   const noReason = clone(); noReason.datasets.pubs.oracle = { state: 'planned', reason: 'soon' };
   assert.throws(() => validateMatrix(noReason, ids), /pubs\/oracle: a planned format needs a specific reason/);
@@ -69,11 +69,14 @@ test('a planned format needs a reason, has no origin and is never served; the co
   const small = { datasets: { x: { oracle: { state: 'planned', reason: 'a specific and sufficiently long reason text' } } }, formats: ['oracle'], labels: { oracle: 'Oracle script' } };
   assert.deepEqual(formatAvailability(small, 'x', []).map((item) => [item.format, item.state]), [['oracle', 'planned']]);
   assert.throws(() => formatAvailability(small, 'x', [{ format: 'oracle', table: null, publicPath: 'x.oracle.sql', derived: true }]), /oracle: declared planned but x\.oracle\.sql is served/);
-  for (const id of ids) {
+  for (const id of ids.filter((candidate) => !['shipping', 'shipping-logs'].includes(candidate))) {
     for (const format of ['mysql', 'sqlserver', 'oracle']) {
       assert.equal(matrix.datasets[id][format].state, 'download', `${id}: the ${format} script is served`);
       assert.equal(matrix.datasets[id][format].origin, 'provider-script', `${id}: the ${format} script is the generated one`);
     }
+  }
+  for (const id of ['shipping', 'shipping-logs']) {
+    for (const format of ['mysql', 'sqlserver', 'oracle']) assert.equal(matrix.datasets[id][format].state, 'unavailable');
   }
 });
 

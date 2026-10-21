@@ -5,7 +5,9 @@ import { test } from 'node:test';
 import { CATALOGUE_SCRIPT, DEFAULT_WORKERS_LIMIT, capacityPlan, cloudflare, deployHosts, hostConfigs, parseLimit, preflight, validateConfigs } from './deploy-hosts.mjs';
 
 const env = { CLOUDFLARE_API_TOKEN: 'test-token', CLOUDFLARE_ACCOUNT_ID: 'acct123' };
-const DATASET_WORKERS = ['demodb-adventureworks', 'demodb-chinook', 'demodb-employees', 'demodb-northwind', 'demodb-pubs', 'demodb-sakila'];
+const ESTABLISHED_DATASET_WORKERS = ['demodb-adventureworks', 'demodb-chinook', 'demodb-employees', 'demodb-northwind', 'demodb-pubs', 'demodb-sakila'];
+const NEW_DATASET_WORKERS = ['demodb-shipping-logs', 'demodb-shipping'];
+const DATASET_WORKERS = [...ESTABLISHED_DATASET_WORKERS, ...NEW_DATASET_WORKERS];
 const scripts = (count, extra = []) => [...Array.from({ length: count - extra.length }, (_, i) => `other-${i}`), ...extra];
 
 function mockFetch(pages, calls = []) {
@@ -18,7 +20,7 @@ function mockFetch(pages, calls = []) {
   };
 }
 
-test('the six dataset Workers deploy first and the catalogue reuses demodb-websites, last, with demodb.dev only', async () => {
+test('the dataset Workers deploy first and the catalogue reuses demodb-websites, last, with demodb.dev only', async () => {
   const configs = await validateConfigs(await hostConfigs());
   assert.deepEqual(configs.map(({ config }) => config.name), [...DATASET_WORKERS, CATALOGUE_SCRIPT]);
   assert.deepEqual(configs.at(-1).config.routes, [{ pattern: 'demodb.dev', custom_domain: true }]);
@@ -28,7 +30,7 @@ test('the six dataset Workers deploy first and the catalogue reuses demodb-websi
 test('a real run lists Workers (read-only GET) before any wrangler call, then deploys in order', async () => {
   const configs = await hostConfigs();
   const events = [];
-  const fetch = async (url, init) => { events.push(`${init?.method} ${url}`); return mockFetch([scripts(94, [CATALOGUE_SCRIPT])])(url, init); };
+  const fetch = async (url, init) => { events.push(`${init?.method} ${url}`); return mockFetch([scripts(94, [CATALOGUE_SCRIPT, ...ESTABLISHED_DATASET_WORKERS])])(url, init); };
   const log = [];
   await deployHosts({ configs, env, fetch, wrangler: (args) => events.push(`wrangler ${args.join(' ')}`), log: (line) => log.push(line) });
   assert.deepEqual(events, [
@@ -36,22 +38,22 @@ test('a real run lists Workers (read-only GET) before any wrangler call, then de
     ...DATASET_WORKERS.map((name) => `wrangler deploy --config deploy/hosts/${name}.jsonc`),
     'wrangler deploy --config deploy/hosts/demodb-websites.jsonc',
   ]);
-  assert.match(log[0], /94 existing, 6 slot\(s\) needed \(demodb-adventureworks, .*demodb-sakila\), 6 free, 100\/100 after deploy/);
+  assert.match(log[0], /94 existing, 2 slot\(s\) needed \(demodb-shipping-logs, demodb-shipping\), 6 free, 96\/100 after deploy/);
 });
 
 test('today\'s account (94 Workers incl. demodb-websites) passes at exactly 100', async () => {
   const configs = await hostConfigs();
-  const plan = await preflight({ names: configs.map(({ config }) => config.name), env, fetch: mockFetch([scripts(94, [CATALOGUE_SCRIPT])]) });
-  assert.deepEqual(plan.created, DATASET_WORKERS);
-  assert.equal(plan.after, 100);
+  const plan = await preflight({ names: configs.map(({ config }) => config.name), env, fetch: mockFetch([scripts(94, [CATALOGUE_SCRIPT, ...ESTABLISHED_DATASET_WORKERS])]) });
+  assert.deepEqual(plan.created, NEW_DATASET_WORKERS);
+  assert.equal(plan.after, 96);
   assert.ok(plan.ok);
 });
 
 test('a failed preflight deploys nothing and says how many slots are needed', async () => {
   const configs = await hostConfigs();
   const calls = [];
-  await assert.rejects(deployHosts({ configs, env, fetch: mockFetch([scripts(95, [CATALOGUE_SCRIPT])]), wrangler: (args) => calls.push(args), log: () => {} }),
-    /needs 6 free Worker slot\(s\) .* the account has 95 Workers and 5 free under the limit of 100 \(101 in total after the deploy\)\. Nothing was deployed\. Free 1 more Worker slot/);
+  await assert.rejects(deployHosts({ configs, env, fetch: mockFetch([scripts(99, [CATALOGUE_SCRIPT, ...ESTABLISHED_DATASET_WORKERS])]), wrangler: (args) => calls.push(args), log: () => {} }),
+    /needs 2 free Worker slot\(s\) .* the account has 99 Workers and 1 free under the limit of 100 \(101 in total after the deploy\)\. Nothing was deployed\. Free 1 more Worker slot/);
   assert.deepEqual(calls, []);
 });
 
@@ -59,8 +61,8 @@ test('a dry run calls no API and passes --dry-run to every wrangler deploy', asy
   const configs = await hostConfigs();
   const calls = [];
   await deployHosts({ configs, dryRun: true, env: {}, fetch: async () => { throw new Error('no network in a dry run'); }, wrangler: (args) => calls.push(args.join(' ')), log: () => {} });
-  assert.equal(calls.length, 7);
-  for (const call of calls) assert.match(call, /^deploy --config deploy\/hosts\/demodb-[a-z]+\.jsonc --dry-run$/);
+  assert.equal(calls.length, 9);
+  for (const call of calls) assert.match(call, /^deploy --config deploy\/hosts\/demodb-[a-z-]+\.jsonc --dry-run$/);
 });
 
 test('capacityPlan counts only names the account does not have yet', () => {

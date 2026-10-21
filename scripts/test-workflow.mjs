@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { parse } from 'yaml';
+import { storagePageProblems } from './smoke-catalogue.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const workflow = parse(await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8'));
@@ -75,14 +76,24 @@ test('live smoke sends at most one request per URL and no OVDB API query', () =>
   assert.match(liveSmoke, /https:\/\/ovdb\.demodb\.dev\/v1/);
 });
 
-test('live smoke checks all six hosted BigQuery editions and their source, billing, and API boundaries', () => {
-  assert.match(liveSmoke, /storageIds = requiredQueryableDatabaseIds\.flatMap\(\(id\) => \[`\$\{id\}-sqlite`, `\$\{id\}-postgresql`, `\$\{id\}-ingitdb`, `\$\{id\}-bigquery`\]\)/);
-  assert.match(liveSmoke, /6 datasets\. 4 storage editions each/);
-  assert.match(liveSmoke, /body\.includes\('demodb-dev'\) && body\.includes\('your own execution project'\)/);
-  assert.match(liveSmoke, /your own Google Cloud execution project/);
-  assert.match(liveSmoke, /does not execute or proxy SQL/);
-  assert.match(liveSmoke, /DataTug browser query execution is not enabled yet/);
-  assert.match(liveSmoke, /!body\.includes\('Open read-only API'\) && !body\.includes\('Database descriptor'\)/);
+test('live smoke checks all six hosted BigQuery editions and their source, billing, and API boundaries', async () => {
+  assert.match(liveSmoke, /import \{ storageGroups \} from '\.\.\/src\/data\/ovdb\.ts'/);
+  assert.match(liveSmoke, /storageEntries = storageGroups\.flatMap\(\(\{ storages \}\) => storages\)/);
+  assert.match(liveSmoke, /for \(const storage of storageEntries\)/);
+  assert.match(liveSmoke, /storagePageProblems\(body, storage\)/);
+  const hosted = JSON.parse(await readFile(join(root, 'config/bigquery-hosting.json'), 'utf8'));
+  assert.deepEqual(hosted.datasets.map(({ id }) => id).sort(), ['adventureworks', 'chinook', 'employees', 'northwind', 'pubs', 'sakila']);
+  for (const { id } of hosted.datasets) {
+    const storage = { id: `${id}-bigquery`, engine: 'BigQuery', readiness: 'public-read-user-project-required' };
+    const body = await readFile(join(root, `dist/ovdb/db/${storage.id}/index.html`), 'utf8');
+    assert.deepEqual(storagePageProblems(body, storage), [], storage.id);
+    for (const boundary of ['demodb-dev', 'your own Google Cloud execution project', 'does not execute or proxy SQL', 'DataTug browser query execution is not enabled yet']) {
+      assert.ok(storagePageProblems(body.replaceAll(boundary, 'MISSING'), storage).length, `${storage.id}: missing ${boundary} fails`);
+    }
+    for (const claim of ['Open read-only API', 'Database descriptor']) {
+      assert.ok(storagePageProblems(`${body}<a>${claim}</a>`, storage).length, `${storage.id}: false ${claim} fails`);
+    }
+  }
 });
 
 test('live smoke checks Pubs static pages and includes it in shared query coverage', () => {

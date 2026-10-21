@@ -90,9 +90,11 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
   if (!website) throw new Error(`${database.localId}: generated website database is missing`);
   const available = new Set(website.formatAvailability.filter((item) => item.state === 'download').map((item) => item.format));
   const storages: StorageEntry[] = [];
+  // Preparation admits the established providers as well as explicit new deployment receipts.
+  // Use its normalized gate, matching descriptors and profile pages.
   if (available.has('sqlite')) storages.push({
     id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'],
-    readiness: website.capabilities?.ovdb?.deploymentVerified === true ? 'public-api' : 'hosted-api-pending',
+    readiness: website.ovdb?.deploymentVerified === true ? 'public-api' : 'hosted-api-pending',
   });
   if (available.has('postgresql')) storages.push(postgresqlStorageEntry(database.localId, postgresqlPublicApiVerified));
   if (available.has('ingitdb')) {

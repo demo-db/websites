@@ -6,6 +6,8 @@
 // response. The OVDB API is no longer served by this repository (it moved to https://ovdb.demodb.dev/v1,
 // served by the openvaultdb-cloud Worker), so this smoke checks only that the old URLs redirect there and
 // sends no API query.
+import { storageGroups } from '../src/data/ovdb.ts';
+import { catalogueProblems, storagePageProblems } from './smoke-catalogue.mjs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
@@ -36,7 +38,7 @@ const sites = [
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/.well-known/openvaultdb']],
 ];
-const storageIds = requiredQueryableDatabaseIds.flatMap((id) => [`${id}-sqlite`, `${id}-postgresql`, `${id}-ingitdb`, `${id}-bigquery`]);
+const storageEntries = storageGroups.flatMap(({ storages }) => storages);
 
 // Sequential on purpose (every request is awaited before the next; no Promise.all, no timers, no retry), at most one request per URL
 // and method, a hard cap on the total (scripts/smoke-guard.mjs), and the first HTTP 429 or Cloudflare 1027/1015 answer stops the run.
@@ -121,26 +123,15 @@ for (const [origin, paths] of sites) {
   for (const path of paths) await checked(`${origin}${path}`, (_body, response) => response.status === 200);
 }
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
-await checked('https://demodb.dev/ovdb/', (body) => storageIds.every((id) => body.includes(`/ovdb/db/${id}/`)) &&
-  body.includes('6 datasets. 4 storage editions each') && body.includes('demodb-dev') && body.includes('your own execution project') &&
-  body.includes('six SQLite databases with working public APIs') && body.includes(`${postgresqlApi.publicApiVerified ? 12 : 6} public OVDB APIs`) &&
-  (postgresqlApi.publicApiVerified
-    ? body.includes('with separate public read-only DTQL endpoints') && !body.includes('public API access pending')
-    : body.includes('PostgreSQL copies have public API access pending') && !body.includes('Neon')));
-for (const id of storageIds) {
-  const url = `https://demodb.dev/ovdb/db/${id}/`;
-  await checked(url, (body) => body.includes(`https://demodb.dev/ovdb/db/${id}/`) && (id.endsWith('-postgresql')
-    ? postgresqlApi.publicApiVerified
-      ? body.includes(`https://cloud.openvaultdb.com/v1/databases/${id}`) && body.includes('Open read-only API') &&
-        body.includes('does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint')
-      : body.includes('Public OpenVaultDB API access is being prepared') && !body.includes('Open read-only API')
-    : id.endsWith('-ingitdb')
-      ? body.includes('Browse inGitDB files') && body.includes('ingitdb validate --path ingitdb') && !body.includes('Open read-only API')
-      : id.endsWith('-bigquery')
-        ? body.includes('demodb-dev') && body.includes('your own Google Cloud execution project') &&
-          body.includes('does not execute or proxy SQL') && body.includes('DataTug browser query execution is not enabled yet') &&
-          !body.includes('Open read-only API') && !body.includes('Database descriptor')
-        : body.includes('Open read-only API')));
+await checked('https://demodb.dev/ovdb/', (body) => {
+  const problems = catalogueProblems(body, storageGroups);
+  return problems.length === 0 || problems.join('; ');
+});
+for (const storage of storageEntries) {
+  await checked(`https://demodb.dev/ovdb/db/${storage.id}/`, (body) => {
+    const problems = storagePageProblems(body, storage);
+    return problems.length === 0 || problems.join('; ');
+  });
 }
 await checkedDataTugPostgresqlLinks();
 await checkedServedModels();

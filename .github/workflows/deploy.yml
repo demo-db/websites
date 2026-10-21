@@ -168,4 +168,4 @@ jobs:
         if: github.event_name == 'push' && env.HAS_CREDENTIALS == 'true'
         env:
           BUILD_COMMIT: ${{ github.sha }}
-        run: node scripts/smoke-live.mjs
+        run: node --import tsx/esm scripts/smoke-live.mjs

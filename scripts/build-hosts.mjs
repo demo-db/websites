@@ -132,6 +132,7 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
   const ovdb = JSON.parse(await readFile(join(root, 'src/data/generated/ovdb.json'), 'utf8'));
   if (runtime.catalogueHost !== CATALOGUE_HOST) throw new Error(`Unexpected catalogue host ${runtime.catalogueHost}`);
   const ovdbIds = ovdb.databases.map((database) => database.localId);
+  const admittedOvdbIds = new Set(ovdb.server.databases.map((database) => database.localId));
   for (const id of ovdbIds) if (!/^[a-z][a-z0-9-]{0,39}$/.test(id)) throw new Error(`Unsafe OVDB id ${id}`);
   await rm(output, { recursive: true, force: true });
   await mkdir(output, { recursive: true });
@@ -152,7 +153,7 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
     await mkdir(join(dir, '.well-known'), { recursive: true });
     await writeFile(join(dir, '.well-known/openvaultdb'), JSON.stringify({
       name: 'DemoDB OpenVaultDB server', protocol: 'openvaultdb/0.1', authEnabled: false,
-      databases: ovdb.databases.map((database) => ({
+      databases: ovdb.databases.filter((database) => admittedOvdbIds.has(database.localId)).map((database) => ({
         id: database.localId, url: database.id, apiUrl: database.apiUrl,
         manifestUrl: `https://demodb.dev/ovdb/db/${database.localId}/ovdb-database.json`,
         capabilities: { read: true, query: database.capabilities.query, write: false },
@@ -252,7 +253,9 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
     await mkdir(join(dir, '.well-known'), { recursive: true });
     await writeFile(join(dir, '.well-known/openvaultdb'), JSON.stringify({
       name: `${db.name} OVDB discovery`, protocol: 'openvaultdb/0.1', authEnabled: false,
-      databases: [{ id: db.id, url: db.ovdb.url, apiUrl: db.ovdb.connection, capabilities: { read: true, query: db.ovdb.query, write: false } }],
+      databases: db.ovdb.deploymentVerified
+        ? [{ id: db.id, url: db.ovdb.url, apiUrl: db.ovdb.connection, capabilities: { read: true, query: db.ovdb.query, write: false } }]
+        : [],
     }));
     await writeFile(join(dir, 'robots.txt'), robots(host));
     await writeFile(join(dir, 'sitemap.xml'), sitemap(['/', '/tables/', '/schema/', '/downloads/', '/queries/', '/about/', '/model/', ...db.tables.map((table) => `/tables/${encodeURIComponent(table.name)}/`)].map((path) => `https://${host}${path}`)));
@@ -283,7 +286,7 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
     ]));
 
     const deployment = db.ovdb.deploymentUrl.replace(/\/$/, '');
-    await writeFile(join(dir, '_redirects'), redirectsFile(db.ovdb.available ? [
+    await writeFile(join(dir, '_redirects'), redirectsFile(db.ovdb.deploymentVerified && db.ovdb.available ? [
       ['/ovdb', deployment, 308],
       ['/ovdb/', deployment, 308],
       ['/ovdb/v1', OVDB_API, 308],

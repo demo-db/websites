@@ -182,6 +182,7 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind-sqlite'), { to: 'https://demodb.dev/ovdb/db/northwind-sqlite/', status: 308 });
   assert.equal(redirect(catalogue, '/ovdb/db/northwind-sqlite/'), null, 'storage pages are served, not redirected');
   assert.equal(redirect(catalogue, '/'), null);
+  for (const id of ['shipping', 'shipping-logs']) assert.deepEqual(await rules(`${id}.demodb.dev`), [], `${id} publishes no API redirect before deployment verification`);
   const chinook = await rules('chinook.demodb.dev');
   assert.deepEqual(redirect(chinook, '/ovdb/'), { to: 'https://cloud.openvaultdb.com/ovdb/dbs/chinook', status: 308 });
   assert.deepEqual(redirect(chinook, '/ovdb/dbs/chinook/collections/Artist'), { to: 'https://cloud.openvaultdb.com/ovdb/dbs/chinook/collections/Artist', status: 308 });
@@ -198,11 +199,12 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
 test('generated metadata endpoints replace the Worker responses', async () => {
   const discovery = JSON.parse(await readFile(join(out, 'demodb.dev/.well-known/openvaultdb'), 'utf8'));
   assert.equal(discovery.protocol, 'openvaultdb/0.1');
-  assert.equal(discovery.databases.length, index.databases.length);
+  assert.deepEqual(discovery.databases.map((database) => database.id), ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']);
   for (const db of index.databases) {
     const dir = join(out, db.siteHost);
     const local = JSON.parse(await readFile(join(dir, '.well-known/openvaultdb'), 'utf8'));
-    assert.equal(local.databases[0].id, db.id);
+    if (['shipping', 'shipping-logs'].includes(db.id)) assert.deepEqual(local.databases, [], `${db.id} has no callable discovery entry before deployment verification`);
+    else assert.equal(local.databases[0].id, db.id);
     assert.deepEqual(await readFile(join(dir, 'schema.json')), await readFile(join(root, 'dist/_db', db.id, 'metadata/schema.json')));
     assert.match(await readFile(join(dir, 'robots.txt'), 'utf8'), new RegExp(`Sitemap: https://${db.siteHost.replace(/\./g, '\\.')}/sitemap\\.xml`));
     assert.match(await readFile(join(dir, 'sitemap.xml'), 'utf8'), /<urlset /);

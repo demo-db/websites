@@ -34,6 +34,9 @@ if (derivedLock && derivedLock.format !== LOCK_FORMAT) throw new Error(`${LOCK_P
 const lockCollector = updateDerivedLock ? { update: true, collected: {} } : { lock: derivedLock };
 const python = process.env.PYTHON ?? 'python3';
 const derivedByDatabase = new Map();
+// These six providers predate the deploymentVerified contract field and remain the
+// established public inventory. New providers must opt in with an explicit true value.
+const establishedPublicProviders = new Set(['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']);
 
 const generatedDir = join(root, 'src/data/generated');
 const internalAssets = join(root, 'public/_db');
@@ -69,7 +72,7 @@ for (const entry of registry.databases) {
   validateDescriptorSchemaProjection(descriptor, db.schema.tables);
   validateDescriptorAssetReferences(descriptor, db);
   if (descriptor.title !== source.ovdb.title || descriptor.description !== source.ovdb.description) throw new Error(`${entry.id}: OVDB descriptor text disagrees with the publisher metadata`);
-  if (descriptor.capabilities.query !== db.ovdb.query) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
+  if (descriptor.capabilities.query !== db.ovdb.declaredQuery) throw new Error(`${entry.id}: OVDB query capability disagrees with the website metadata`);
   const displayDescriptor = structuredClone(descriptor);
   applyPresentationText(displayDescriptor, entry, ['title', 'description', 'provenance', 'model', 'meaning']);
   ovdbDescriptors.push({ descriptor, displayDescriptor, bytes: source.ovdbDescriptorBytes });
@@ -177,7 +180,7 @@ const ovdbServer = validateServerDescriptor({
   description: 'A shared, read-only OpenVaultDB server for the curated DemoDB sample databases.',
   homepage: 'https://demodb.dev/ovdb/',
   apiUrl: 'https://demodb.dev/ovdb/v1',
-  databases: ovdbDescriptors.map(({ descriptor }) => ({
+  databases: ovdbDescriptors.filter(({ descriptor }) => databases.find((db) => db.id === descriptor.localId)?.ovdb.deploymentVerified).map(({ descriptor }) => ({
     id: descriptor.id,
     localId: descriptor.localId,
     serverDbBaseUrl: descriptor.serverDbBaseUrl,
@@ -191,7 +194,7 @@ await writeFile(join(publicOvdb, 'ovdb-server.json'), `${JSON.stringify(ovdbServ
 for (const name of ['ovdb-server-draft-1.schema.json', 'ovdb-database-draft-1.schema.json']) {
   await writeFile(join(publicOvdb, 'schemas', name), await readFile(join(root, 'schemas', name)));
 }
-for (const { descriptor, bytes } of ovdbDescriptors) {
+for (const { descriptor, bytes } of ovdbDescriptors.filter(({ descriptor }) => databases.find((db) => db.id === descriptor.localId)?.ovdb.deploymentVerified)) {
   for (const target of [
     join(root, 'public/ovdb/db', descriptor.localId, 'ovdb-database.json'),
     join(root, 'public', descriptor.localId, 'ovdb-database.json'),
@@ -305,6 +308,7 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
+  const deploymentVerified = manifest.capabilities?.ovdb?.deploymentVerified === true || establishedPublicProviders.has(entry.id);
   const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums, manifest)));
   const paths = new Set();
   const physicalPaths = new Set();
@@ -332,9 +336,12 @@ function normalizeProvider(entry, source) {
       url: canonicalUrl, deploymentUrl, discovery,
       recordsetPage: source.ovdb.deployment?.recordset_page ?? null,
       connection: manifest.capabilities?.ovdb?.connection ?? deploymentUrl,
-      available: manifest.capabilities?.ovdb?.available === true,
+      declaredAvailable: manifest.capabilities?.ovdb?.available === true,
+      deploymentVerified,
+      available: manifest.capabilities?.ovdb?.available === true && deploymentVerified,
       readOnly: manifest.capabilities?.ovdb?.readOnly !== false,
-      query: manifest.capabilities?.ovdb?.query === true,
+      declaredQuery: manifest.capabilities?.ovdb?.query === true,
+      query: manifest.capabilities?.ovdb?.query === true && deploymentVerified,
     },
     sourceRepository: entry.repository, sourceCommit: entry.commit,
     publicIdentity: source.ovdbDescriptor.id,
@@ -521,7 +528,7 @@ function buildCorpus(databases) {
       homepage: db.canonicalUrl,
       browserManifestUrl: `${db.publicIdentity}ovdb-database.json`,
       serverManifestUrl: db.publicManifestUrl,
-      apiUrl: db.publicApiUrl,
+      ...(db.ovdb.deploymentVerified ? { apiUrl: db.publicApiUrl } : {}),
       source: db.source,
       provenance: db.provenance,
       publisher: db.publisher,

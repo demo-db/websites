@@ -10,6 +10,9 @@ export { bigQueryHosting };
 export const ovdbServer = generated.server as unknown as OVDBServer;
 export const ovdbDatabases = generated.databases as unknown as OVDBDatabase[];
 export const ovdbDatabaseById = new Map(ovdbDatabases.map((database) => [database.localId, database]));
+export const ovdbDeploymentVerified = new Map(generatedIndex.databases.map((database) => [
+  database.id, database.ovdb?.deploymentVerified === true,
+]));
 
 export type StorageEntry = {
   id: string;

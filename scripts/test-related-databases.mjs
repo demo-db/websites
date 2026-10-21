@@ -6,7 +6,7 @@ import { projectRelatedDatabases } from './related-databases.mjs';
 const config = JSON.parse(await readFile(new URL('../config/related-databases.json', import.meta.url), 'utf8'));
 const generated = JSON.parse(await readFile(new URL('../src/data/generated/index.json', import.meta.url), 'utf8')).databases;
 
-test('declared relationships project reciprocally with physical shared keys', () => {
+test('declared related fields project reciprocally', () => {
   const projected = projectRelatedDatabases(config, generated);
   assert.deepEqual(projected.get('northwind').map((item) => [item.databaseId, item.local, item.remote]), [
     ['shipping', { recordset: 'Orders', field: 'OrderID' }, { recordset: 'requests', field: 'order_id' }],

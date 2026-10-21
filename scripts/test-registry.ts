@@ -13,8 +13,17 @@ for (const database of databases) {
   assert.ok(descriptor, `${database.id} has a typed OVDB descriptor`);
   assert.equal(database.ovdb.readOnly, true, `${database.id} remains read-only`);
   assert.equal(typeof database.ovdb.query, 'boolean', `${database.id} declares query availability`);
-  assert.equal(descriptor.capabilities.query, database.ovdb.query, `${database.id} descriptor and provider query flags agree`);
+  assert.equal(descriptor.capabilities.query, database.ovdb.declaredQuery, `${database.id} descriptor and provider query flags agree`);
   assert.equal(descriptor.capabilities.write, false, `${database.id} descriptor does not expose writes`);
+}
+
+
+for (const id of ['shipping', 'shipping-logs']) {
+  const database = databaseById.get(id)!;
+  assert.equal(database.ovdb.declaredAvailable, true, `\${id} keeps its provider declaration`);
+  assert.equal(database.ovdb.deploymentVerified, false, `\${id} remains pending until live deployment is verified`);
+  assert.equal(database.ovdb.available, false, `\${id} is excluded from callable admission`);
+  assert.equal(database.ovdb.query, false, `\${id} makes no live query claim`);
 }
 
 const chinook = databaseById.get('chinook')!;

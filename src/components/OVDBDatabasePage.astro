@@ -3,7 +3,7 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 import ExploreActions from './ExploreActions.astro';
 import DataTugLimits from './DataTugLimits.astro';
 import { databaseById } from '../data/db';
-import { postgresqlDataTugEditionId } from '../data/ovdb';
+import { ovdbDeploymentVerified, postgresqlDataTugEditionId } from '../data/ovdb';
 import { exploreActions } from '../data/explore';
 import type { OVDBDatabase } from '../data/types';
 
@@ -11,6 +11,7 @@ const { database } = Astro.props as { database: OVDBDatabase };
 const explore = exploreActions(databaseById.get(database.localId), postgresqlDataTugEditionId(database.localId));
 const sourceRecordsets = databaseById.get(database.localId)?.tables ?? [];
 const keyCount = database.recordsets.reduce((sum, recordset) => sum + recordset.foreignKeys.length, 0);
+const deploymentVerified = ovdbDeploymentVerified.get(database.localId) === true;
 ---
 
 <SiteLayout title={`${database.title} · OpenVaultDB`} description={database.description} canonical={`/${database.localId}/`}>
@@ -21,14 +22,14 @@ const keyCount = database.recordsets.reduce((sum, recordset) => sum + recordset.
     <div class="hero-actions">
       <ExploreActions actions={explore} />
       <a class={explore.primary ? 'button button-quiet' : 'button button-primary'} href={database.homepage}>Explore the database site <span aria-hidden="true">→</span></a>
-      <a class="button button-quiet" href={database.apiUrl}>Read-only API</a>
+      {deploymentVerified ? <a class="button button-quiet" href={database.apiUrl}>Read-only API</a> : <span class="button button-quiet" aria-disabled="true">Read-only API pending</span>}
       <a class="button button-quiet" href="/ovdb/">Server directory</a>
     </div>
   </section>
 
   <section class="shell section intro-grid">
     <div><p class="eyebrow">Published collections</p><h2>{database.recordsets.length} read-only collections</h2></div>
-    <div class="intro-copy"><p>{keyCount} declared foreign-key relationships. Names and keys preserve the source database schema. The database site includes the complete native schema, including views.</p><p><a class="text-link" href={database.homepage}>Explore complete schema and exports ↗</a></p><p><a class="text-link" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Machine-readable database descriptor ↗</a></p></div>
+    <div class="intro-copy"><p>{keyCount} declared foreign-key relationships. Names and keys preserve the source database schema. The database site includes the complete native schema, including views.</p><p><a class="text-link" href={database.homepage}>Explore complete schema and exports ↗</a></p>{deploymentVerified && <p><a class="text-link" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Machine-readable database descriptor ↗</a></p>}</div>
   </section>
 
   {(explore.primary || explore.secondary.length > 0) && <DataTugLimits recordsets={sourceRecordsets} actions={explore} />}

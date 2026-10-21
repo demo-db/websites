@@ -38,6 +38,8 @@ const sites = [
   ['https://sakila.demodb.dev', ['/', '/theme.js', '/tables/film_actor/', '/tables/actor_info/', '/.well-known/openvaultdb']],
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/.well-known/openvaultdb']],
+  ['https://shipping.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
+  ['https://shipping-logs.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
 ];
 const storageEntries = storageGroups.flatMap(({ storages }) => storages);
 

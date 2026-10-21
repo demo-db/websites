@@ -86,6 +86,10 @@ test('MySQL live contract accepts honest missing formats and rejects inconsisten
       [database, pinned, undefined, page], [database, undefined, bytes, page],
       [{ ...database, exports: [{ format: 'mysql' }] }, undefined, undefined, page],
       [database, undefined, undefined, page.replaceAll('MySQL script', 'Another format')],
+      [database, undefined, undefined, page.replaceAll('MySQL script', 'Another MySQL script format')],
+      [database, undefined, undefined, page + '<li><strong>MySQL script</strong><a href="/data/mysql.sql">Download</a></li>'],
+      [database, undefined, undefined, page + '<li><strong>MySQL script</strong><span>Not available: pending</span></li>'],
+      [database, undefined, undefined, page.replace('<strong>MySQL script</strong>', '<strong>MySQL script</strong><a href="/data/mysql.sql">Download</a>')],
     ]) assert.throws(() => checkedMysqlScript(db, lock, received, config, html));
     const planned = { ...database, formatAvailability: database.formatAvailability.map((entry) => entry.format === 'mysql' ? { ...entry, state: 'planned' } : entry) };
     assert.equal(checkedMysqlScript(planned, undefined, undefined, config, page.replace(/Not available:/g, 'Planned:')), 0);

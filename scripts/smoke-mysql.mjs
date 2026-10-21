@@ -12,7 +12,12 @@ export function checkedMysqlScript(database, pinned, bytes, config, page) {
     if (exports.length || pinned || bytes) throw new Error(`${database.localId}: unavailable MySQL has an export, lock or received script`);
     const word = declared.state === 'planned' ? 'Planned' : 'Not available';
     const cards = [...page.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((match) => match[1]);
-    if (!cards.some((card) => card.includes(`${word}:`) && card.includes(declared.label))) throw new Error(`${database.localId}: MySQL page declaration differs from corpus`);
+    const labels = (html) => [...html.matchAll(/<strong\b[^>]*>([\s\S]*?)<\/strong>/g)].map((match) => match[1].replace(/<[^>]*>/g, '').trim());
+    const matching = cards.filter((card) => labels(card).includes(declared.label));
+    if (labels(page).filter((label) => label === declared.label).length !== 1 || matching.length !== 1 ||
+        !new RegExp(`<span\\b[^>]*>\\s*${word}:`).test(matching[0]) || /<a\b|\bdownload\s*=/i.test(matching[0])) {
+      throw new Error(`${database.localId}: MySQL page declaration differs from corpus`);
+    }
     return 0;
   }
   if (exports.length !== 1) throw new Error(`${database.localId}: expected one advertised MySQL export`);

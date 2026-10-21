@@ -672,8 +672,17 @@ function parseArgs(argv) {
   return options;
 }
 
-async function datasetIds() {
-  return (await readJsonFile(join(root, 'config/databases.json'))).databases.map((entry) => entry.id);
+export function scriptedDatasetIds(databases, matrix, formats) {
+  return databases.map((entry) => entry.id).filter((id) => formats.some((format) => {
+    const cell = matrix.datasets?.[id]?.[format];
+    return cell?.state === 'download' && cell.origin === 'provider-script';
+  }));
+}
+
+async function datasetIds(config) {
+  const databases = (await readJsonFile(join(root, 'config/databases.json'))).databases;
+  const matrix = await readJsonFile(join(root, 'config/format-matrix.json'));
+  return scriptedDatasetIds(databases, matrix, Object.values(config.dialects).map((dialect) => dialect.format));
 }
 
 async function main(argv) {
@@ -681,7 +690,7 @@ async function main(argv) {
   const options = parseArgs(rest);
   const config = await loadConfig();
   const toolsDir = resolve(options.tools ?? process.env.DEMODB_TOOLS_DIR ?? join(tmpdir(), 'demodb-tools'));
-  const dirs = options.provider ? [resolve(options.provider)] : options.providers ? (await datasetIds()).map((id) => join(resolve(options.providers), id)) : [];
+  const dirs = options.provider ? [resolve(options.provider)] : options.providers ? (await datasetIds(config)).map((id) => join(resolve(options.providers), id)) : [];
   if (dirs.length === 0 && ['generate', 'check', 'regenerate-check', 'record-verification'].includes(command)) throw new Error('pass --provider <checkout> or --providers <directory of checkouts named by dataset id>');
   // Every dialect of the config unless --dialect names one.
   const dialects = options.dialect ? [options.dialect] : Object.keys(config.dialects);

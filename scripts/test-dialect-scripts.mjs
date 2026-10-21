@@ -12,6 +12,7 @@ import {
   MANIFEST_FORMAT, canonicalJson, checkProvider, describeStored, encodeScript, generateProvider, inputsOf, inputsSha256Of, loadConfig,
   scriptProblems, serializeJson, validateConfig, verifyRelease, literalProblems, classifyPin, pinProblems, recordVerification, ensureDatatug, expectedNoticeLines,
   noticeOf, KNOWN_DIALECTS, ORACLE_MAX_LINE, ORACLE_PREAMBLE,
+  scriptedDatasetIds,
 } from './dialect-scripts.mjs';
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -23,6 +24,18 @@ const spec = config.dialects.mysql;
 const scratch = [];
 after(() => Promise.all(scratch.map((dir) => rm(dir, { recursive: true, force: true }))));
 const clone = (value) => structuredClone(value);
+
+test('bulk dialect checks select only providers with declared generated scripts', () => {
+  const databases = [{ id: 'ready' }, { id: 'sqlite-only' }, { id: 'native-only' }];
+  const formats = {
+    datasets: {
+      ready: { mysql: { state: 'download', origin: 'provider-script' }, sqlserver: { state: 'download', origin: 'provider-script' } },
+      'sqlite-only': { mysql: { state: 'unavailable' }, sqlserver: { state: 'unavailable' } },
+      'native-only': { mysql: { state: 'unavailable' }, sqlserver: { state: 'unavailable' } },
+    },
+  };
+  assert.deepEqual(scriptedDatasetIds(databases, formats, ['mysql', 'sqlserver']), ['ready']);
+});
 
 // --- the pin of the generator --------------------------------------------------------------------------------
 

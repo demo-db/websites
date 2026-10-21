@@ -24,6 +24,7 @@ import postgres_samples as pg  # noqa: E402
 URL = os.environ.get("DEMODB_LIVE_POSTGRES_URL", "")
 ROOTS = os.environ.get("DEMODB_PROVIDER_ROOTS", "")
 CONFIG = Path(__file__).resolve().parents[2] / "config" / "databases.json"
+FORMAT_MATRIX = Path(__file__).resolve().parents[2] / "config" / "format-matrix.json"
 # Northwind ships its own PostgreSQL artifact (artifacts/hosting-imports/postgres.sql,
 # built by the northwind repo's tooling, which emulates SQL Server-style view
 # expressions that SQLite evaluates differently). The shared generator does not
@@ -31,6 +32,12 @@ CONFIG = Path(__file__).resolve().parents[2] / "config" / "databases.json"
 OWN_ARTIFACT = {"northwind"}
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 ALLOW_DROP = os.environ.get("DEMODB_LIVE_POSTGRES_ALLOW_DROP") == "1"
+
+
+def postgres_dataset_ids() -> list[str]:
+    registered = [d["id"] for d in json.loads(CONFIG.read_text(encoding="utf-8"))["databases"]]
+    matrix = json.loads(FORMAT_MATRIX.read_text(encoding="utf-8"))["datasets"]
+    return [dataset for dataset in registered if matrix[dataset]["postgresql"]["state"] == "download"]
 
 
 def assert_loopback(url: str) -> None:
@@ -59,6 +66,11 @@ try:
     import psycopg as _psycopg  # noqa: F401
 except ImportError:  # pragma: no cover
     _psycopg = None
+
+
+class DatasetSelectionTests(unittest.TestCase):
+    def test_postgres_dataset_ids_follow_the_format_matrix(self) -> None:
+        self.assertEqual(postgres_dataset_ids(), ["chinook", "northwind", "pubs", "sakila", "adventureworks", "employees"])
 
 
 @unittest.skipIf(_psycopg is None, "psycopg is not installed")
@@ -102,7 +114,7 @@ class LivePostgresTests(unittest.TestCase):
             raise RuntimeError("refusing live test: it DROPs schemas named after the datasets; set DEMODB_LIVE_POSTGRES_ALLOW_DROP=1 against a throwaway server")
         import psycopg
         cls.psycopg = psycopg
-        cls.ids = [d["id"] for d in json.loads(CONFIG.read_text(encoding="utf-8"))["databases"]]
+        cls.ids = postgres_dataset_ids()
 
     def connect(self):
         return self.psycopg.connect(URL, autocommit=True)

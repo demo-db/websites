@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { parse } from 'yaml';
+import { runInNewContext } from 'node:vm';
+import { MAX_REQUESTS } from './smoke-guard.mjs';
 import { storagePageProblems } from './smoke-catalogue.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -198,4 +200,22 @@ test('the deploy runs wrangler deploy per config, never Pages, and documents the
   const text = await readFile(join(root, '.github/workflows/deploy.yml'), 'utf8');
   assert.match(text, /Workers Scripts: Edit, and on demodb\.dev Zone > Workers Routes: Edit, Zone > DNS: Edit and\s+# Zone: Read/);
   assert.doesNotMatch(text, /Cloudflare Pages/);
+});
+
+
+test('static smoke covers build markers, homepages and discovery for every deployed host', () => {
+  const literal = liveSmoke.match(/const sites = (\[[\s\S]*?\n\]);/)[1];
+  const sites = JSON.parse(JSON.stringify(runInNewContext(literal)));
+  assert.deepEqual(sites.map(([origin]) => new URL(origin).hostname).sort(), hosts.flatMap(({ config }) => config.routes.map(({ pattern }) => pattern)).sort());
+  for (const [origin, paths] of sites) {
+    assert.ok(paths.includes('/'), `${origin}: homepage`);
+    assert.ok(paths.includes('/.well-known/openvaultdb'), `${origin}: discovery`);
+  }
+  assert.match(liveSmoke, /for \(const \[origin, paths\] of sites\) \{\s*await checked\(`\$\{origin\}\/build-info\.json`/);
+  assert.match(liveSmoke, /marker\.commit === commit\.toLowerCase\(\)/);
+  for (const id of ['shipping', 'shipping-logs']) {
+    const paths = sites.find(([origin]) => origin === `https://${id}.demodb.dev`)[1];
+    assert.deepEqual(paths, ['/', '/theme.js', '/.well-known/openvaultdb']);
+  }
+  assert.equal(MAX_REQUESTS, 220, 'host coverage retains the exact request cap');
 });

@@ -6,6 +6,7 @@
 // response. The OVDB API is no longer served by this repository (it moved to https://ovdb.demodb.dev/v1,
 // served by the openvaultdb-cloud Worker), so this smoke checks only that the old URLs redirect there and
 // sends no API query.
+import { checkedMysqlScript } from './smoke-mysql.mjs';
 import { storageGroups } from '../src/data/ovdb.ts';
 import { catalogueProblems, storagePageProblems } from './smoke-catalogue.mjs';
 import { createHash } from 'node:crypto';
@@ -37,6 +38,8 @@ const sites = [
   ['https://sakila.demodb.dev', ['/', '/theme.js', '/tables/film_actor/', '/tables/actor_info/', '/.well-known/openvaultdb']],
   ['https://adventureworks.demodb.dev', ['/', '/theme.js', '/tables/HumanResources.EmployeeDepartmentHistory/', '/tables/Production.Product/', '/schema/', '/schema.json', '/.well-known/openvaultdb']],
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/.well-known/openvaultdb']],
+  ['https://shipping.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
+  ['https://shipping-logs.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
 ];
 const storageEntries = storageGroups.flatMap(({ storages }) => storages);
 
@@ -249,25 +252,10 @@ async function checkedCompleteExports() {
 // the completion comment. Chinook's upstream script is still served, apart.
 async function checkedMysqlScripts() {
   const corpus = JSON.parse((await get('https://demodb.dev/corpus.json')).body);
-  const spec = dialectConfig.dialects.mysql;
   let checkedScripts = 0;
   for (const database of corpus.databases) {
-    const declared = database.formatAvailability.find((entry) => entry.format === 'mysql');
-    if (declared?.state !== 'download') throw new Error(`${database.localId}: the MySQL script is not declared as a download`);
-    const pinned = derivedLock.datasets?.[database.localId]?.mysql;
-    const bytes = mysqlScripts.get(database.localId);
-    if (!bytes || !pinned) throw new Error(`${database.localId}: no MySQL script in the corpus or in the lock`);
-    if (bytes.length !== pinned.bytes || sha256(bytes) !== pinned.sha256) throw new Error(`${database.localId}: the served MySQL script is not the one the lock pins`);
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) throw new Error(`${database.localId}: MySQL script still gzip after decoding`);
-    const text = bytes.toString('utf8');
-    const lines = text.split('\n');
-    if (lines[0] !== `-- ${dialectConfig.edition}`) throw new Error(`${database.localId}: the first line is not the contract-edition label`);
-    if (!lines.slice(0, 40).includes(`-- Licence: ${database.licences.data}`)) throw new Error(`${database.localId}: the header lacks the licence ${database.licences.data}`);
-    if (!lines.some((line) => line.startsWith(`CREATE TABLE \`${spec.marker}\``))) throw new Error(`${database.localId}: no marker table`);
-    if (!lines.some((line) => line.startsWith(`INSERT INTO \`${spec.marker}\` VALUES ('${database.localId}', `))) throw new Error(`${database.localId}: the marker row is missing`);
-    if (text.includes('\r')) throw new Error(`${database.localId}: holds a CR`);
-    if (lines.filter((line) => line.length > 0).at(-1) !== '-- end of script') throw new Error(`${database.localId}: does not end with the completion comment`);
-    checkedScripts += 1;
+    const { body: page } = await get(`https://${database.localId}.demodb.dev/downloads/`);
+    checkedScripts += checkedMysqlScript(database, derivedLock.datasets?.[database.localId]?.mysql, mysqlScripts.get(database.localId), dialectConfig, page);
   }
   const upstreamUrl = 'https://chinook.demodb.dev/data/upstream/chinook.mysql.sql';
   const downloaded = downloads.get(upstreamUrl);

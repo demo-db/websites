@@ -11,7 +11,8 @@ a visitor downloads:
   its own database).
 * the YAML is loaded with PyYAML (a strict YAML 1.1 reader) and compared with the served JSON;
 * inGitDB archives are extracted and compared, row by row and definition by definition, with the fixture by
-  the independent parity checker ``validate_datatug_exports.py``.
+  the independent parity checker ``validate_datatug_exports.py``. Native inGitDB source archives instead
+  retain byte parity with the pinned originals after source hash, schema, key and row validation.
 
 Needs psycopg 3 for PostgreSQL (scripts/hosting-tools/requirements-live.txt).
 """
@@ -23,6 +24,8 @@ import json
 import os
 import re
 import sqlite3
+import shutil
+import tarfile
 import subprocess
 import sys
 import tempfile
@@ -157,21 +160,67 @@ def validate_postgresql(url: str, db: dict[str, Any], data_dir: Path, providers:
 OWN_ARTIFACT = {"northwind"}
 
 
+def validate_native_ingitdb_archive(archive: Path, root: Path, scratch: Path) -> tuple[Path, dict[str, Any]]:
+    """Check native downloads against validated original bytes, without a SQL snapshot."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "provider-tools"))
+    import generate_ingitdb as native
+
+    manifest = native.decode(native.read(root, "manifest.json"))
+    expected_root = scratch / "expected"
+    expected_root.mkdir()
+    (expected_root / "manifest.json").write_bytes(native.read(root, "manifest.json"))
+    source_path = manifest["dataFile"]
+    destination = native.checked_path(expected_root, source_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(native.read(root, source_path))
+    shutil.copytree(root / "ingitdb", expected_root / "ingitdb", symlinks=True)
+    # The existing native generator checks hashes, keys, row counts, types and schema.
+    # Run it only in scratch; the pinned checkout remains read-only.
+    native.generate(expected_root)
+    expected_archive = expected_root / f"artifacts/{manifest['id']}.ingitdb.tar.gz"
+    with tarfile.open(expected_archive, "r:gz") as bundle:
+        expected = {member.name: bundle.extractfile(member).read() for member in bundle}
+    actual: dict[str, bytes] = {}
+    with tarfile.open(archive, "r:gz") as bundle:
+        for member in bundle:
+            if not member.isfile() or member.name not in expected or member.name in actual:
+                raise AssertionError(f"{manifest['id']}: unexpected or unsafe native archive entry {member.name!r}")
+            if member.size != len(expected[member.name]):
+                raise AssertionError(f"{manifest['id']}: native archive size differs: {member.name}")
+            actual[member.name] = bundle.extractfile(member).read()
+    if actual != expected:
+        raise AssertionError(f"{manifest['id']}: native archive differs from pinned original files")
+    extracted = scratch / "download"
+    for name, body in actual.items():
+        path = extracted / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    contract = json.loads((expected_root / "metadata/contract.json").read_text())
+    tables = contract["schema"]["tables"]
+    return extracted / "ingitdb", {"dataChecked": True, "metadataAndDataMatch": True,
+                                    "errorCount": 0, "errors": [], "tables": len(tables),
+                                    "rows": sum(table["rowCount"] for table in tables)}
+
+
 def validate_ingitdb(db: dict[str, Any], data_dir: Path, providers: Path) -> dict[str, Any]:
     item = complete(db, "ingitdb")
     archive = data_dir / item["assetPath"]
     root = provider_root(providers, db["id"])
     with tempfile.TemporaryDirectory(prefix="demodb-ingitdb-check-") as scratch:
-        with zipfile.ZipFile(archive) as bundle:
-            if bundle.testzip() is not None:
-                raise AssertionError(f"{db['id']}: corrupt ZIP entry")
-            names = bundle.namelist()
-            prefix = f"{db['id']}-ingitdb/"
-            if not names or any(not name.startswith(prefix) or ".." in name.split("/") for name in names):
-                raise AssertionError(f"{db['id']}: archive entries are not all under {prefix}")
-            bundle.extractall(scratch)
-        native = Path(scratch) / f"{db['id']}-ingitdb"
-        report = ingitdb.validate(root, native)
+        manifest = json.loads((root / "manifest.json").read_text())
+        if manifest.get("storage", {}).get("engine") == "ingitdb":
+            native, report = validate_native_ingitdb_archive(archive, root, Path(scratch))
+        else:
+            with zipfile.ZipFile(archive) as bundle:
+                if bundle.testzip() is not None:
+                    raise AssertionError(f"{db['id']}: corrupt ZIP entry")
+                names = bundle.namelist()
+                prefix = f"{db['id']}-ingitdb/"
+                if not names or any(not name.startswith(prefix) or ".." in name.split("/") for name in names):
+                    raise AssertionError(f"{db['id']}: archive entries are not all under {prefix}")
+                bundle.extractall(scratch)
+            native = Path(scratch) / f"{db['id']}-ingitdb"
+            report = ingitdb.validate(root, native)
         cli = os.environ.get("INGITDB_CLI")
         if cli:
             run = subprocess.run([cli, "validate", "--path", str(native)], capture_output=True, text=True)

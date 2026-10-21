@@ -193,3 +193,9 @@ restores previous outputs. If restoration itself fails, the error reports the
 retained backup directory for recovery. Publication is not a single atomic
 multi-file filesystem operation. Tests read the generated archive through the
 actual native DAL adapter as well as checking original-byte preservation.
+
+Required languages precede optional languages, and root collection paths are
+distinct. Composite primary keys use the native U+001F serialization; composite
+components containing that separator are refused without changing source bytes.
+The owning native validator/key resolver and generated-archive DAL reopening
+are exercised for both single and composite key configurations.

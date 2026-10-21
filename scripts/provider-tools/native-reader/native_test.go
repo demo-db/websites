@@ -7,6 +7,8 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/record"
 	"github.com/ingitdb/dalgo2ingitdb"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
+	"github.com/ingitdb/ingitdb-go/ingitdb/config"
 	"github.com/ingitdb/ingitdb-go/ingitdb/validator"
 	"io"
 	"os"
@@ -66,10 +68,14 @@ func TestActualGeneratedNativeArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if row.Key().ID != "e1" || row.Data().(map[string]any)["synthetic"] != true {
+	expectedKey := os.Getenv("NATIVE_EXPECTED_KEY")
+	if expectedKey == "" {
+		expectedKey = "e1"
+	}
+	if row.Key().ID != expectedKey || row.Data().(map[string]any)["synthetic"] != true {
 		t.Fatal("native identity/type changed")
 	}
-	reopened := record.NewRecordWithData(record.NewKeyWithID("baseline", "e1"), map[string]any{})
+	reopened := record.NewRecordWithData(record.NewKeyWithID("baseline", expectedKey), map[string]any{})
 	if err := db.Get(context.Background(), reopened); err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +84,36 @@ func TestActualGeneratedNativeArchive(t *testing.T) {
 	}
 	if _, err = rows.Next(); err != dal.ErrNoMoreRecords {
 		t.Fatalf("unexpected extra record: %v", err)
+	}
+}
+
+// Pin the owning library's configuration and key behavior, not a Python model.
+func TestNativeConfigurationAndKeyParity(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		root  config.RootConfig
+		valid bool
+	}{
+		{"supported languages", config.RootConfig{Settings: config.Settings{Languages: []config.Language{{Required: "en"}, {Optional: "fr"}}}, RootCollections: map[string]string{"baseline": "collections/baseline"}}, true},
+		{"duplicate paths", config.RootConfig{RootCollections: map[string]string{"baseline": "collections/baseline", "alias": "collections/baseline"}}, false},
+		{"language order", config.RootConfig{Settings: config.Settings{Languages: []config.Language{{Optional: "fr"}, {Required: "en"}}}, RootCollections: map[string]string{"baseline": "collections/baseline"}}, false},
+		{"unicode identity", config.RootConfig{RootCollections: map[string]string{"é": "collections/baseline"}}, false},
+		{"wildcard", config.RootConfig{RootCollections: map[string]string{"baseline": "collections/*"}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.root.Validate(); (err == nil) != tc.valid {
+				t.Fatalf("actual native validation: %v", err)
+			}
+		})
+	}
+	definition := &ingitdb.CollectionDef{PrimaryKey: []string{"event_id", "part"}}
+	a, okA := ingitdb.ResolveListRecordKey(map[string]any{"event_id": "x\x1fy", "part": "z"}, definition)
+	b, okB := ingitdb.ResolveListRecordKey(map[string]any{"event_id": "x", "part": "y\x1fz"}, definition)
+	if !okA || !okB || a != b || a != "x\x1fy\x1fz" {
+		t.Fatal("native serialized-key contract changed")
+	}
+	valid, ok := ingitdb.ResolveListRecordKey(map[string]any{"event_id": "x", "part": "z"}, definition)
+	if !ok || valid != "x\x1fz" {
+		t.Fatal("native composite identity changed")
 	}
 }

@@ -60,9 +60,13 @@ def settings_valid(settings):
     if not isinstance(languages, list) or not languages or len(languages) > 100:
         raise shared.GenerationError('native languages must be a bounded list')
     seen = set()
+    optional_seen = False
     for item in languages:
         if not isinstance(item, dict) or len(item) != 1 or next(iter(item)) not in ('required', 'optional'):
             raise shared.GenerationError('unsupported native language')
+        if 'required' in item and optional_seen:
+            raise shared.GenerationError('required languages must precede optional languages')
+        optional_seen = optional_seen or 'optional' in item
         code = next(iter(item.values()))
         if not isinstance(code, str) or not re.fullmatch(r'[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', code) or code in seen:
             raise shared.GenerationError('invalid native language')
@@ -173,10 +177,12 @@ def generate(root):
         raise shared.GenerationError('native root map must be an object')
     if not roots or len(roots) > 100 or set(roots) != set(manifest['source']['files']):
         raise shared.GenerationError('native source inventory differs from collections')
+    if any(not isinstance(folder, str) or '*' in folder for folder in roots.values()) or len(set(roots.values())) != len(roots):
+        raise shared.GenerationError('native root paths must be distinct and without wildcards')
     inputs = {'ingitdb/.ingitdb/root-collections.yaml': read(root, 'ingitdb/.ingitdb/root-collections.yaml'), 'ingitdb/.ingitdb/settings.yaml': read(root, 'ingitdb/.ingitdb/settings.yaml')}
     tables, exports = ([], [])
     for name, folder in sorted(roots.items()):
-        if not name.isalnum() or not isinstance(folder, str):
+        if not re.fullmatch(r'[A-Za-z0-9]+', name) or not isinstance(folder, str):
             raise shared.GenerationError('unsupported collection identity')
         definition_path = 'ingitdb/' + folder + '/.collection/definition.yaml'
         definition_bytes = read(root, definition_path)
@@ -201,9 +207,16 @@ def generate(root):
             if not isinstance(row, dict) or '$ID' in row or set(row) - set(definition['columns']):
                 raise shared.GenerationError('unsupported native record shape')
             key = tuple((row.get(field) for field in pk))
-            if any((not isinstance(v, str) or not v.strip() for v in key)) or key in seen:
-                raise shared.GenerationError('missing/duplicate native key')
-            seen.add(key)
+            if any(not isinstance(v, str) or not v.strip() for v in key):
+                raise shared.GenerationError('missing native key')
+            # Native ResolveListRecordKey joins composite values with U+001F.
+            # Refuse ambiguous components rather than rewrite original bytes.
+            if len(pk) > 1 and any('\x1f' in value for value in key):
+                raise shared.GenerationError('ambiguous native composite key component')
+            native_key = '\x1f'.join(key)
+            if native_key in seen:
+                raise shared.GenerationError('duplicate serialized native key')
+            seen.add(native_key)
             for field, col in definition['columns'].items():
                 value = row.get(field)
                 if value is None:

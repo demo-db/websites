@@ -167,9 +167,55 @@ class NativeProviderTest(unittest.TestCase):
             with self.assertRaises(OSError): native.generate(self.root)
         self.assertEqual(self.snapshot(), before)
 
+    def test_native_root_and_serialized_key_refusals_preserve_tree(self):
+        for kind in ['duplicate-path', 'language-order', 'unicode-id', 'wildcard', 'composite-key']:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                import shutil
+                original = self.root
+                self.root = Path(directory) / 'provider'
+                shutil.copytree(original, self.root)
+                try:
+                    if kind == 'duplicate-path':
+                        self.put('ingitdb/.ingitdb/root-collections.yaml', {'baseline': 'collections/baseline', 'alias': 'collections/baseline'})
+                        manifest = copy.deepcopy(self.manifest)
+                        manifest['source']['files']['alias'] = manifest['source']['files']['baseline']
+                        self.put('manifest.json', manifest)
+                    elif kind == 'language-order':
+                        self.put('ingitdb/.ingitdb/settings.yaml', {'languages': [{'optional': 'fr'}, {'required': 'en'}]})
+                    elif kind in ('unicode-id', 'wildcard'):
+                        name = 'é' if kind == 'unicode-id' else 'baseline'
+                        folder = 'collections/*' if kind == 'wildcard' else 'collections/baseline'
+                        self.put('ingitdb/.ingitdb/root-collections.yaml', {name: folder})
+                        manifest = copy.deepcopy(self.manifest)
+                        manifest['source']['files'] = {name: manifest['source']['files']['baseline']}
+                        self.put('manifest.json', manifest)
+                    else:
+                        definition = copy.deepcopy(self.definition)
+                        definition['primary_key'] = ['event_id', 'part']
+                        definition['columns']['part'] = {'type': 'string', 'required': True}
+                        rows = [dict(event_id='x\x1fy', part='z', occurred_at='t', synthetic=True), dict(event_id='x', part='y\x1fz', occurred_at='t', synthetic=True)]
+                        raw = ''.join(json.dumps(row) + '\n' for row in rows).encode()
+                        self.put('ingitdb/collections/baseline/.collection/definition.yaml', definition)
+                        self.put('ingitdb/collections/baseline/records.jsonl', raw)
+                        manifest = copy.deepcopy(self.manifest)
+                        manifest['source']['files']['baseline'].update(bytes=len(raw), sha256=shared.sha256(raw), rowCount=2)
+                        self.put('manifest.json', manifest)
+                    before = self.snapshot()
+                    with self.assertRaises(shared.GenerationError): native.generate(self.root)
+                    self.assertEqual(before, self.snapshot())
+                finally:
+                    self.root = original
+
     def test_actual_native_archive_reader(self):
+        self.put('ingitdb/.ingitdb/settings.yaml', {'languages': [{'required': 'en'}, {'optional': 'fr'}]})
         native.generate(self.root)
         env = dict(os.environ, NATIVE_PROVIDER_ARCHIVE=str(self.root / 'artifacts/logs.ingitdb.tar.gz'))
+        result = subprocess.run(['go', '-C', str(Path(__file__).parent / 'native-reader'), 'test', '-count=1', './...'], env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.definition['primary_key'] = ['event_id', 'occurred_at']
+        self.save()
+        native.generate(self.root)
+        env['NATIVE_EXPECTED_KEY'] = 'e1\x1f2018-05-20T09:00:00Z'
         result = subprocess.run(['go', '-C', str(Path(__file__).parent / 'native-reader'), 'test', '-count=1', './...'], env=env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

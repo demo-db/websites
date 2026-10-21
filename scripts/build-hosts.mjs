@@ -163,7 +163,8 @@ export async function buildHosts({ dist = join(root, 'dist'), output = join(root
     await writeFile(join(dir, 'sitemap.xml'), sitemap([
       `https://${host}/`, 'https://demodb.dev/corpus.json', 'https://demodb.dev/ovdb/', 'https://demodb.dev/ovdb/ovdb-server.json',
       ...storageIds.map((id) => `https://demodb.dev/ovdb/db/${id}/`),
-      ...ovdbIds.flatMap((id) => [`https://demodb.dev/${id}/`, `https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]),
+      ...ovdbIds.map((id) => `https://demodb.dev/${id}/`),
+      ...[...admittedOvdbIds].flatMap((id) => [`https://demodb.dev/${id}/ovdb-database.json`, `https://demodb.dev/ovdb/db/${id}/ovdb-database.json`]),
       ...index.databases.map((database) => `https://${database.siteHost}/`),
     ]));
     const publicJson = [...READONLY_CORS, `Cache-Control: ${SHORT_CACHE}`];

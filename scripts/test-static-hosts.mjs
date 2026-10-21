@@ -200,6 +200,9 @@ test('generated metadata endpoints replace the Worker responses', async () => {
   const discovery = JSON.parse(await readFile(join(out, 'demodb.dev/.well-known/openvaultdb'), 'utf8'));
   assert.equal(discovery.protocol, 'openvaultdb/0.1');
   assert.deepEqual(discovery.databases.map((database) => database.id), ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']);
+  const catalogueSitemap = await readFile(join(out, 'demodb.dev/sitemap.xml'), 'utf8');
+  for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']) assert.match(catalogueSitemap, new RegExp(`/ovdb/db/${id}/ovdb-database\\.json`));
+  for (const id of ['shipping', 'shipping-logs']) assert.doesNotMatch(catalogueSitemap, new RegExp(`/${id}/ovdb-database\\.json`));
   for (const db of index.databases) {
     const dir = join(out, db.siteHost);
     const local = JSON.parse(await readFile(join(dir, '.well-known/openvaultdb'), 'utf8'));

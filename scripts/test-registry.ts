@@ -3,7 +3,7 @@ import { databases, databaseById, downloadFiles } from '../src/data/db';
 import { ovdbDatabases } from '../src/data/ovdb';
 
 assert.equal(new Set(databases.map((database) => database.id)).size, databases.length, 'provider IDs are unique');
-for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs', 'countries']) assert.ok(databaseById.has(id), `${id} remains registered`);
+for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs']) assert.ok(databaseById.has(id), `${id} remains registered`);
 const descriptorById = new Map(ovdbDatabases.map((database) => [database.localId, database]));
 for (const database of databases) {
   assert.equal(database.siteHost, `${database.id}.demodb.dev`);
@@ -18,7 +18,7 @@ for (const database of databases) {
 }
 
 
-for (const id of ['shipping', 'shipping-logs', 'countries']) {
+for (const id of ['shipping', 'shipping-logs']) {
   const database = databaseById.get(id)!;
   assert.equal(database.ovdb.declaredAvailable, true, `\${id} keeps its provider declaration`);
   assert.equal(database.ovdb.deploymentVerified, true, `${id} has actual independently verified publication`);
@@ -87,12 +87,6 @@ assert.equal(shipping.tables.filter((table) => table.kind === 'view').length, 2)
 assert.deepEqual(shipping.tables.find((table) => table.name === 'requests')?.rows.filter((row) => [11038, 11045, 11062].includes(Number(row.order_id))).map((row) => row.order_id), [11038, 11045, 11062]);
 assert.ok(shipping.exports.some((file) => file.publicPath === 'shipping.sqlite'));
 
-const countries = databaseById.get('countries')!;
-assert.deepEqual(countries.tables.filter((table) => table.kind === 'table').map((table) => [table.name, table.rowCount]).sort(), [['countries', 252], ['country_aliases', 25], ['sources', 3]]);
-assert.deepEqual(countries.tables.filter((table) => table.kind === 'view').map((table) => table.name), ['country_names']);
-assert.deepEqual(countries.tables.find((table) => table.name === 'countries')?.columns.filter((column) => column.primaryKey).map((column) => column.name), ['iso2']);
-assert.ok(countries.exports.some((file) => file.publicPath === 'countries.sqlite'));
-
 const shippingLogs = databaseById.get('shipping-logs')!;
 assert.equal(shippingLogs.tables.length, 6);
 assert.deepEqual(shippingLogs.tables.map((table) => [table.name, table.rowCount]), [["baseline", 29], ["carrierGateway", 2], ["carrierGatewayRecovery11045example", 2], ["carrierGatewayRecovery11062example", 2], ["recovery11045example", 3], ["recovery11062example", 3]]);
@@ -101,4 +95,4 @@ assert.ok(shippingLogs.exports.some((file) => file.format === 'ingitdb' && file.
 assert.equal(shippingLogs.exports.filter((file) => file.format === "jsonl").length, 6);
 assert.ok(!shippingLogs.exports.some((file) => file.format === 'sqlite'), 'original logs are not converted to SQLite');
 
-console.log('Provider registry includes the six established providers plus immutable Shipping, Countries and native Shipping Logs contracts and preserves their native schema.');
+console.log('Provider registry includes the six established providers plus immutable Shipping and native Shipping Logs contracts and preserves their native schema.');

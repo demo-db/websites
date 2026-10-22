@@ -8,7 +8,7 @@
 // sends no API query.
 import { checkedMysqlScript } from './smoke-mysql.mjs';
 import { storageGroups } from '../src/data/ovdb.ts';
-import { catalogueProblems, storagePageProblems } from './smoke-catalogue.mjs';
+import { catalogueProblems, storagePageProblems, publicationDiscoveryProblems } from './smoke-catalogue.mjs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
@@ -25,13 +25,14 @@ if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be
 const OVDB_API = 'https://ovdb.demodb.dev/v1';
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const requiredQueryableDatabaseIds = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
+const requiredPublishedDatabaseIds = [...requiredQueryableDatabaseIds, 'shipping', 'shipping-logs'];
 const comparisonFixture = {
   sha256: '3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f',
   bytes: 1007616,
 };
 const comparisonFixturePath = `/data/compare/${comparisonFixture.sha256}.sqlite`;
 const sites = [
-  ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json', '/adventureworks/', '/adventureworks/ovdb-database.json', '/ovdb/db/adventureworks/ovdb-database.json', '/employees/', '/employees/ovdb-database.json', '/ovdb/db/employees/ovdb-database.json']],
+  ['https://demodb.dev', ['/', '/theme.js', '/ovdb/', '/ovdb/ovdb-server.json', '/.well-known/openvaultdb', '/chinook/', '/chinook/ovdb-database.json', '/ovdb/db/chinook/ovdb-database.json', '/northwind/', '/northwind/ovdb-database.json', '/ovdb/db/northwind/ovdb-database.json', '/pubs/', '/pubs/ovdb-database.json', '/ovdb/db/pubs/ovdb-database.json', '/sakila/', '/sakila/ovdb-database.json', '/ovdb/db/sakila/ovdb-database.json', '/adventureworks/', '/adventureworks/ovdb-database.json', '/ovdb/db/adventureworks/ovdb-database.json', '/employees/', '/employees/ovdb-database.json', '/ovdb/db/employees/ovdb-database.json', '/shipping/', '/shipping/ovdb-database.json', '/ovdb/db/shipping/ovdb-database.json', '/shipping-logs/', '/shipping-logs/ovdb-database.json', '/ovdb/db/shipping-logs/ovdb-database.json']],
   ['https://chinook.demodb.dev', ['/', '/theme.js', '/tables/Artist/', '/.well-known/openvaultdb']],
   ['https://northwind.demodb.dev', ['/', '/theme.js', '/tables/Order%20Details/', '/tables/Invoices/', '/.well-known/openvaultdb']],
   ['https://pubs.demodb.dev', ['/', '/theme.js', '/tables/', '/tables/titles/', '/.well-known/openvaultdb']],
@@ -125,6 +126,10 @@ for (const [origin, paths] of sites) {
   });
   for (const path of paths) await checked(`${origin}${path}`, (_body, response) => response.status === 200);
 }
+await checked('https://demodb.dev/.well-known/openvaultdb', (body) => {
+  const problems = publicationDiscoveryProblems(body, requiredPublishedDatabaseIds);
+  return problems.length === 0 || problems.join('; ');
+});
 await checked('https://demodb.dev/', (body) => body.includes('Explore OpenVaultDB server') && body.includes('Browse server and storage catalogue'));
 await checked('https://demodb.dev/ovdb/', (body) => {
   const problems = catalogueProblems(body, storageGroups);

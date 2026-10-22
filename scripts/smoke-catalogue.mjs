@@ -37,9 +37,32 @@ export function storagePageProblems(body, storage) {
   } else {
     if (body.includes('Open read-only API')) problems.push('unverified API advertised');
     if (storage.readiness === 'hosted-api-pending' && !body.includes('Public OpenVaultDB API access is being prepared')) problems.push('pending API state missing');
-    if (storage.readiness === 'hosted-repository' && (!body.includes('Browse inGitDB files') || !body.includes('ingitdb validate --path ingitdb') || !body.includes(storage.repositoryUrl))) problems.push('pinned inGitDB repository instructions missing');
     if (storage.readiness === 'public-read-user-project-required' && (!body.includes('demodb-dev') || !body.includes('your own Google Cloud execution project') || !body.includes('does not execute or proxy SQL') || !body.includes('DataTug browser query execution is not enabled yet') || body.includes('Database descriptor'))) problems.push('BigQuery capability limits missing');
   }
-  if (storage.id === 'shipping-logs-ingitdb' && (!body.includes('three native inGitDB collections') || !body.includes('No SQLite database, parsed snapshot, parity report, or source-name map is claimed'))) problems.push('native original log provenance missing');
+  if (storage.engine === 'inGitDB' && (!body.includes('Browse inGitDB files') || !body.includes('ingitdb validate --path ingitdb') || !body.includes(storage.repositoryUrl))) problems.push('pinned inGitDB repository instructions missing');
+  if (storage.engine === 'inGitDB' && storage.readiness === 'public-api' && (!body.includes(storage.apiUrl) || !body.includes('Database descriptor'))) problems.push('native API descriptor missing');
+  if (storage.nativeOriginal && (!body.includes('preserves the native source records as') || !body.includes('No SQLite database, parsed snapshot, parity report, or source-name map is claimed'))) problems.push('native original log provenance missing');
+  return problems;
+}
+
+// The central generator publishes branded DemoDB aliases, independent of the serving host.
+export function publicationDiscoveryProblems(body, expectedIds) {
+  let discovery;
+  try { discovery = JSON.parse(body); } catch { return ['discovery is not JSON']; }
+  const problems = [];
+  if (!discovery || discovery.protocol !== 'openvaultdb/0.1' || discovery.authEnabled !== false) return ['discovery protocol/auth differs'];
+  const rows = discovery.databases;
+  if (expectedIds.length !== 8 || new Set(expectedIds).size !== 8 || !Array.isArray(rows) || rows.length !== 8) return ['discovery must contain exactly eight providers'];
+  const seen = new Set();
+  for (const row of rows) {
+    const fields = ['id', 'url', 'apiUrl', 'manifestUrl', 'capabilities'];
+    if (!row || typeof row !== 'object' || Object.keys(row).length !== fields.length || !fields.every((key) => Object.hasOwn(row, key))) { problems.push('discovery row shape differs'); continue; }
+    if (typeof row.id !== 'string' || !expectedIds.includes(row.id) || seen.has(row.id)) { problems.push('discovery has unexpected/duplicate provider'); continue; }
+    seen.add(row.id);
+    if (row.url !== `https://demodb.dev/${row.id}/` || row.apiUrl !== `https://demodb.dev/ovdb/v1/databases/${row.id}` || row.manifestUrl !== `https://demodb.dev/ovdb/db/${row.id}/ovdb-database.json`) problems.push(`${row.id}: canonical discovery URLs differ`);
+    const capability = row.capabilities;
+    if (!capability || Object.keys(capability).sort().join(',') !== 'query,read,write' || capability.read !== true || capability.query !== true || capability.write !== false) problems.push(`${row.id}: read-only query capability differs`);
+  }
+  if (seen.size !== expectedIds.length) problems.push('discovery provider inventory differs');
   return problems;
 }

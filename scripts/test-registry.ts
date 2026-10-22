@@ -21,9 +21,9 @@ for (const database of databases) {
 for (const id of ['shipping', 'shipping-logs']) {
   const database = databaseById.get(id)!;
   assert.equal(database.ovdb.declaredAvailable, true, `\${id} keeps its provider declaration`);
-  assert.equal(database.ovdb.deploymentVerified, false, `\${id} remains pending until live deployment is verified`);
-  assert.equal(database.ovdb.available, false, `\${id} is excluded from callable admission`);
-  assert.equal(database.ovdb.query, false, `\${id} makes no live query claim`);
+  assert.equal(database.ovdb.deploymentVerified, true, `${id} has actual independently verified publication`);
+  assert.equal(database.ovdb.available, true, `${id} is admitted after actual publication`);
+  assert.equal(database.ovdb.query, true, `${id} publishes its actual read-only query capability`);
 }
 
 const chinook = databaseById.get('chinook')!;

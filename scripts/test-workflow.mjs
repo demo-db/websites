@@ -109,6 +109,8 @@ test('live smoke checks Sakila native tables, views, SQLite, and query capabilit
   assert.match(liveSmoke, /\/tables\/actor_info\//);
   assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
   assert.match(liveSmoke, /requiredQueryableDatabaseIds = \['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'\]/);
+  assert.match(liveSmoke, /requiredPublishedDatabaseIds = \[\.\.\.requiredQueryableDatabaseIds, 'shipping', 'shipping-logs'\]/);
+  assert.match(liveSmoke, /publicationDiscoveryProblems\(body, requiredPublishedDatabaseIds\)/);
 });
 
 test('live smoke verifies AdventureWorks full SQLite bytes and source-only SQL Server views', () => {

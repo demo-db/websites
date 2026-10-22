@@ -22,31 +22,32 @@ const isPublic = storage?.readiness === 'public-api';
 const isPublicSQLite = isPublic && storage?.engine === 'SQLite';
 const isPostgreSQL = storage?.engine === 'PostgreSQL';
 const isPublicPostgreSQL = isPublic && isPostgreSQL;
-const isGit = storage?.readiness === 'hosted-repository';
+const isGit = storage?.engine === 'inGitDB';
+const isPublicNative = isPublic && isGit;
 const isBigQuery = storage?.readiness === 'public-read-user-project-required';
-const isNativeOriginal = isGit && database.localId === 'shipping-logs';
+const isNativeOriginal = isGit && storage?.nativeOriginal === true;
 const canonical = `/ovdb/db/${storage?.id}/`;
 const storageDescription = isPublic ? 'Public read-only OpenVaultDB API available.' : isGit ? 'Git-hosted inGitDB edition, ready to query locally.' : isBigQuery ? 'Hosted on BigQuery with authenticated Google-user read access; queries require your own execution project.' : storage ? `${storage.engine} edition; public OpenVaultDB access pending.` : 'OpenVaultDB profile.';
 const cliInstructions = isGit ? `git clone https://github.com/demo-db/${database.localId}.git\ncd ${database.localId}\ngit checkout ${storage.revision}\ningitdb validate --path ingitdb\ningitdb list collections --path ingitdb\ningitdb select --path ingitdb --from <collection> --limit 10` : '';
 const parityReportUrl = isGit && storage?.manifestUrl ? storage.manifestUrl.replace(/\/export-manifest\.json$/, '/native-parity-report.json') : '';
 const sourceCollectionsUrl = isGit && storage?.manifestUrl ? storage.manifestUrl.replace(/\/export-manifest\.json$/, '/.ingitdb/source-collections.json') : '';
-const nativeOriginalDescription = 'The pinned repository preserves the original logs as three native inGitDB collections. The source manifest records provenance, byte lengths, and hashes for the baseline and two clearly labelled future recovery examples.';
-const nativeOriginalValidation = 'No SQLite database, parsed snapshot, parity report, or source-name map is claimed for this edition. The pinned collection definitions declare event_id as the required primary key, and the original JSONL bytes remain available for local validation.';
+const nativeOriginalDescription = `The pinned repository preserves the native source records as ${database.recordsets.length} native inGitDB collections. The source manifest records provenance, byte lengths, hashes and source classifications.`;
+const nativeOriginalValidation = 'No SQLite database, parsed snapshot, parity report, or source-name map is claimed for this edition. The pinned collection definitions declare their required primary keys, and the original source bytes remain available for local validation.';
 ---
 {storage ? <SiteLayout title={`${database.title} · ${storage.engine} storage · DemoDB`} description={`${database.title} ${storage.engine} storage on DemoDB. ${storageDescription}`} canonical={canonical}>
   <section class="shell page-hero">
     <a class="back-link" href="/ovdb/">← Server and storage catalogue</a>
     <p class="eyebrow">{database.title} · {storage.engine}</p>
     <h1>{database.title}<br /><em>{storage.engine} storage</em></h1>
-    <p class="hero-lede">{isPublicPostgreSQL ? 'Hosted on Neon and available through the public OpenVaultDB read-only DTQL API.' : isPublicSQLite ? 'Published on the shared OpenVaultDB server with a public read-only API.' : isGit ? 'Published in the dataset’s GitHub repository as queryable inGitDB collections.' : isBigQuery ? 'Hosted in Google BigQuery and readable by authenticated Google accounts. Run queries with your own Google Cloud execution project; DataTug browser query execution is not enabled yet.' : 'Public OpenVaultDB API access is being prepared.'}</p>
+    <p class="hero-lede">{isPublicPostgreSQL ? 'Hosted on Neon and available through the public OpenVaultDB read-only DTQL API.' : isPublicSQLite ? 'Published on the shared OpenVaultDB server with a public read-only API.' : isPublicNative ? 'Published as native inGitDB collections with a public read-only OpenVaultDB API.' : isGit ? 'Published in the dataset’s GitHub repository as queryable inGitDB collections.' : isBigQuery ? 'Hosted in Google BigQuery and readable by authenticated Google accounts. Run queries with your own Google Cloud execution project; DataTug browser query execution is not enabled yet.' : 'Public OpenVaultDB API access is being prepared.'}</p>
     <div class="storage-tags" aria-label="Storage tags">{storage.tags.map((tag) => <span class="storage-tag">{tag}</span>)}</div>
     <div class="hero-actions">
       {isPublicSQLite && <a class="button button-primary" href={database.apiUrl}>Open read-only API <span aria-hidden="true">↗</span></a>}
-      {isPublicPostgreSQL && <a class="button button-primary" href={storage.apiUrl}>Open read-only API <span aria-hidden="true">↗</span></a>}
-      {isGit && <a class="button button-primary" href={storage.repositoryUrl}>Browse inGitDB files <span aria-hidden="true">↗</span></a>}
+      {(isPublicPostgreSQL || isPublicNative) && <a class="button button-primary" href={storage.apiUrl}>Open read-only API <span aria-hidden="true">↗</span></a>}
+      {isGit && <a class={isPublicNative ? "button button-quiet" : "button button-primary"} href={storage.repositoryUrl}>Browse inGitDB files <span aria-hidden="true">↗</span></a>}
       {isBigQuery && <a class="button button-primary" href={storage.verificationUrl}>Hosted edition manifest <span aria-hidden="true">↗</span></a>}
       <a class="button button-quiet" href={database.homepage}>Explore dataset and schema <span aria-hidden="true">→</span></a>
-      {isPublicSQLite && <a class="button button-quiet" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Database descriptor ↗</a>}
+      {(isPublicSQLite || isPublicNative) && <a class="button button-quiet" href={`/ovdb/db/${database.localId}/ovdb-database.json`}>Database descriptor ↗</a>}
       {isGit && <a class="button button-quiet" href={storage.manifestUrl}>{isNativeOriginal ? 'Source manifest' : 'Export manifest'} ↗</a>}
     </div>
   </section>

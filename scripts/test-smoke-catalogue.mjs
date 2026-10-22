@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { storageGroups, publicOvdbApiCount, postgresqlPublicApiVerified, ovdbDeploymentVerified } from '../src/data/ovdb.ts';
-import { catalogueProblems, storagePageProblems } from './smoke-catalogue.mjs';
+import { catalogueProblems, storagePageProblems, publicationDiscoveryProblems } from './smoke-catalogue.mjs';
 
 const html = await readFile(new URL('../dist/ovdb/index.html', import.meta.url), 'utf8');
 const entries = storageGroups.flatMap(({ storages }) => storages);
@@ -12,16 +12,16 @@ test('actual built catalogue and every edition match the typed capability invent
   assert.deepEqual(catalogueProblems(html, storageGroups), []);
   assert.equal(storageGroups.length, 8);
   assert.equal(entries.length, 26);
-  assert.equal(publicOvdbApiCount, postgresqlPublicApiVerified ? 12 : 6);
-  assert.deepEqual(entries.filter(({ engine, readiness }) => engine === 'SQLite' && readiness === 'public-api').map(({ id }) => id).sort(), ['adventureworks-sqlite', 'chinook-sqlite', 'employees-sqlite', 'northwind-sqlite', 'pubs-sqlite', 'sakila-sqlite']);
+  assert.equal(publicOvdbApiCount, postgresqlPublicApiVerified ? 14 : 8);
+  assert.deepEqual(entries.filter(({ engine, readiness }) => engine === 'SQLite' && readiness === 'public-api').map(({ id }) => id).sort(), ['adventureworks-sqlite', 'chinook-sqlite', 'employees-sqlite', 'northwind-sqlite', 'pubs-sqlite', 'sakila-sqlite', 'shipping-sqlite']);
   for (const entry of entries) assert.deepEqual(storagePageProblems(await page(entry.id), entry), [], entry.id);
   for (const { database, storages } of storageGroups) {
     for (const entry of storages.filter(({ engine }) => engine === 'SQLite')) {
       assert.equal(entry.readiness === 'public-api', ovdbDeploymentVerified.get(database.localId) === true);
     }
   }
-  assert.equal(entries.find(({ id }) => id === 'shipping-sqlite').readiness, 'hosted-api-pending');
-  assert.deepEqual(entries.filter(({ id }) => id.startsWith('shipping-logs-')).map(({ id, readiness }) => [id, readiness]), [['shipping-logs-ingitdb', 'hosted-repository']]);
+  assert.equal(entries.find(({ id }) => id === 'shipping-sqlite').readiness, 'public-api');
+  assert.deepEqual(entries.filter(({ id }) => id.startsWith('shipping-logs-')).map(({ id, readiness }) => [id, readiness]), [['shipping-logs-ingitdb', 'public-api']]);
 });
 
 test('missing, duplicate and unexpected edition links fail', () => {
@@ -34,11 +34,11 @@ test('missing, duplicate and unexpected edition links fail', () => {
 test('wrong totals and falsely admitted pending APIs fail against actual built HTML', async () => {
   assert.ok(catalogueProblems(html.replace('8 datasets across 26 storage editions.', '6 datasets across 24 storage editions.'), storageGroups).some((p) => p.includes('summary')));
   assert.ok(catalogueProblems(html.replace(`${publicOvdbApiCount} public OVDB APIs`, '999 public OVDB APIs'), storageGroups).some((p) => p.includes('API count')));
-  assert.ok(catalogueProblems(html.replace(/(href="\/ovdb\/db\/shipping-sqlite\/"[\s\S]*?)SQLite edition · public API pending/, '$1Public read-only API'), storageGroups).some((p) => p.includes('shipping-sqlite')));
-  const pending = entries.find(({ id }) => id === 'shipping-sqlite');
+  assert.ok(catalogueProblems(html.replace(/(href="\/ovdb\/db\/shipping-sqlite\/"[\s\S]*?)Public read-only API/, '$1SQLite edition · public API pending'), storageGroups).some((p) => p.includes('shipping-sqlite')));
+  const pending = { ...entries.find(({ id }) => id === 'shipping-sqlite'), readiness: 'hosted-api-pending' };
   assert.ok(storagePageProblems(`${await page(pending.id)}<a>Open read-only API</a>`, pending).includes('unverified API advertised'));
   const native = entries.find(({ id }) => id === 'shipping-logs-ingitdb');
-  assert.ok(storagePageProblems((await page(native.id)).replace('three native inGitDB collections', 'SQLite snapshot'), native).includes('native original log provenance missing'));
+  assert.ok(storagePageProblems((await page(native.id)).replace(/native source records as [0-9]+ native inGitDB collections/, 'SQLite snapshot'), native).includes('native original log provenance missing'));
 });
 
 test('actual built PostgreSQL introduction cannot overclaim or underclaim readiness', () => {
@@ -96,5 +96,25 @@ test('MySQL live contract accepts honest missing formats and rejects inconsisten
     const planned = { ...database, formatAvailability: database.formatAvailability.map((entry) => entry.format === 'mysql' ? { ...entry, state: 'planned' } : entry) };
     assert.equal(checkedMysqlScript(planned, undefined, undefined, config, page.replace(/Not available:/g, 'Planned:')), 0);
     assert.throws(() => checkedMysqlScript(planned, undefined, undefined, config, page));
+  }
+});
+
+test('actual generated central discovery admits all eight canonical read-only provider aliases', async () => {
+  const body = await readFile(new URL('../dist-hosts/demodb.dev/.well-known/openvaultdb', import.meta.url), 'utf8');
+  const expected = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs'];
+  assert.deepEqual(publicationDiscoveryProblems(body, expected), []);
+  const original = JSON.parse(body);
+  for (const kind of ['six', 'duplicate', 'unexpected', 'url', 'apiUrl', 'manifestUrl', 'read', 'query', 'write', 'protocol', 'auth']) {
+    const value = structuredClone(original);
+    if (kind === 'six') value.databases = value.databases.slice(0, 6);
+    else if (kind === 'duplicate') value.databases[7] = value.databases[0];
+    else if (kind === 'unexpected') value.databases[0].id = 'unpublished';
+    else if (['url', 'apiUrl', 'manifestUrl'].includes(kind)) value.databases[0][kind] = 'https://cloud.openvaultdb.com/';
+    else if (kind === 'read') value.databases[0].capabilities.read = 1;
+    else if (kind === 'query') value.databases[0].capabilities.query = false;
+    else if (kind === 'write') value.databases[0].capabilities.write = true;
+    else if (kind === 'protocol') value.protocol = 'other';
+    else value.authEnabled = true;
+    assert.ok(publicationDiscoveryProblems(JSON.stringify(value), expected).length, kind);
   }
 });

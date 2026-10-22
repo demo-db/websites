@@ -39,13 +39,8 @@ test('public corpus index keeps native metadata but omits preview rows', async (
     assert.match(database.providerRevision, /^[a-f0-9]{40}$/, `${database.localId} pins its immutable provider commit`);
     assert.ok(database.licences?.data && database.licences?.model && database.licences?.meaning);
     assert.match(database.schemaSha256, /^[a-f0-9]{64}$/);
-    if (['shipping', 'shipping-logs'].includes(database.localId)) {
-      assert.equal(database.browserManifestUrl, undefined);
-      assert.equal(database.serverManifestUrl, undefined);
-    } else {
-      assert.match(database.browserManifestUrl, /\/ovdb-database\.json$/);
-      assert.match(database.serverManifestUrl, /\/ovdb-database\.json$/);
-    }
+    assert.match(database.browserManifestUrl, /\/ovdb-database\.json$/);
+    assert.match(database.serverManifestUrl, /\/ovdb-database\.json$/);
     assert.ok(Array.isArray(database.sourceViews), `${database.localId} publishes source-view metadata separately from executable recordsets`);
     for (const sourceView of database.sourceViews) {
       assert.equal(typeof sourceView.availableAsSqliteView, 'boolean');

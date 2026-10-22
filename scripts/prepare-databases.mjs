@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 import { assertAppendOnlyFixturePins, materializeComparisonFixtures } from './comparison-fixtures.mjs';
 import { validateDatabaseDescriptor, validateServerDescriptor } from './ovdb-schema.mjs';
 import { materializeProviderExports } from './provider-exports.mjs';
+import { providerAvailability } from './provider-availability.mjs';
 import { LOCK_FORMAT, LOCK_PATH, SQL_SCRIPT_FORMATS, deriveDatasetExports, serializeLock } from './derived-exports.mjs';
 import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
@@ -308,7 +309,7 @@ function normalizeProvider(entry, source) {
   if (!validHttpsUrl(discovery)) throw new Error(`${entry.id}: invalid OVDB discovery URL`);
   if (new URL(discovery).pathname !== '/.well-known/openvaultdb') throw new Error(`${entry.id}: discovery path must be /.well-known/openvaultdb`);
   const aliases = Array.isArray(manifest.aliases) ? manifest.aliases.map(validHost) : [];
-  const deploymentVerified = manifest.capabilities?.ovdb?.deploymentVerified === true || establishedPublicProviders.has(entry.id);
+  const availability = providerAvailability(manifest, establishedPublicProviders.has(entry.id));
   const exports = source.contract.exports.map((item) => displacedByGenerated(entry.id, normalizeExport(entry.id, item, schema.tables, source.checksums, manifest)));
   const paths = new Set();
   const physicalPaths = new Set();
@@ -336,12 +337,7 @@ function normalizeProvider(entry, source) {
       url: canonicalUrl, deploymentUrl, discovery,
       recordsetPage: source.ovdb.deployment?.recordset_page ?? null,
       connection: manifest.capabilities?.ovdb?.connection ?? deploymentUrl,
-      declaredAvailable: manifest.capabilities?.ovdb?.available === true,
-      deploymentVerified,
-      available: manifest.capabilities?.ovdb?.available === true && deploymentVerified,
-      readOnly: manifest.capabilities?.ovdb?.readOnly !== false,
-      declaredQuery: manifest.capabilities?.ovdb?.query === true,
-      query: manifest.capabilities?.ovdb?.query === true && deploymentVerified,
+      ...availability,
     },
     sourceRepository: entry.repository, sourceCommit: entry.commit,
     publicIdentity: source.ovdbDescriptor.id,

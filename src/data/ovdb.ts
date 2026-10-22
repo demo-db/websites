@@ -1,3 +1,6 @@
+import { hasCallableReadOnlyApi, inGitDBStorageEntry } from './storage-entry';
+import type { StorageEntry } from './storage-entry';
+export type { StorageEntry } from './storage-entry';
 import generated from './generated/ovdb.json';
 import registry from '../../config/databases.json';
 import bigQueryHosting from '../../config/bigquery-hosting.json';
@@ -14,26 +17,7 @@ export const ovdbDeploymentVerified = new Map(generatedIndex.databases.map((data
   database.id, database.ovdb?.deploymentVerified === true,
 ]));
 
-export type StorageEntry = {
-  id: string;
-  engine: 'SQLite' | 'PostgreSQL' | 'inGitDB' | 'BigQuery';
-  tags: string[];
-  readiness: 'public-api' | 'hosted-api-pending' | 'hosted-repository' | 'public-read-user-project-required';
-  apiUrl?: string;
-  repositoryUrl?: string;
-  manifestUrl?: string;
-  revision?: string;
-  sourceProjectId?: string;
-  datasetId?: string;
-  location?: string;
-  executionProject?: 'user-selected';
-  tableCount?: number;
-  rowCount?: number;
-  sourceRepository?: string;
-  sourceRevision?: string;
-  sourceSqliteSha256?: string;
-  verificationUrl?: string;
-};
+
 
 // PostgreSQL copies are public only when config/postgresql-api.json says so (copied to
 // generated/ by prepare:databases, or taken from DEMODB_POSTGRESQL_API_CONFIG in CI). The
@@ -94,20 +78,18 @@ export const storageGroups: { database: OVDBDatabase; storages: StorageEntry[] }
   // Use its normalized gate, matching descriptors and profile pages.
   if (available.has('sqlite')) storages.push({
     id: `${database.localId}-sqlite`, engine: 'SQLite', tags: [database.localId, 'sqlite'],
-    readiness: website.ovdb?.deploymentVerified === true ? 'public-api' : 'hosted-api-pending',
+    readiness: hasCallableReadOnlyApi(website.ovdb) ? 'public-api' : 'hosted-api-pending',
   });
   if (available.has('postgresql')) storages.push(postgresqlStorageEntry(database.localId, postgresqlPublicApiVerified));
   if (available.has('ingitdb')) {
-    const revision = database.localId === 'shipping-logs' ? website.sourceCommit : inGitDBRevisions[database.localId];
+    const nativeOriginal = 'preview' in website.schema && website.schema.preview === 'native-api-only';
+    const revision = nativeOriginal ? website.sourceCommit : inGitDBRevisions[database.localId];
     if (!revision || !/^[a-f0-9]{40}$/.test(revision)) throw new Error(`${database.localId}: published inGitDB storage needs an immutable repository revision`);
-    storages.push({
-      id: `${database.localId}-ingitdb`, engine: 'inGitDB', tags: [database.localId, 'ingitdb', 'github'], readiness: 'hosted-repository',
-      repositoryUrl: `https://github.com/demo-db/${database.localId}/tree/${revision}/ingitdb`,
-      manifestUrl: database.localId === 'shipping-logs'
-        ? `https://github.com/demo-db/${database.localId}/blob/${revision}/source-manifest.json`
-        : `https://github.com/demo-db/${database.localId}/blob/${revision}/ingitdb/export-manifest.json`,
-      revision,
-    });
+    const sourceManifest = website.exports.find((file) => file.format === 'metadata' && file.table === null);
+    if (nativeOriginal && !sourceManifest) throw new Error(`${database.localId}: native original source manifest missing`);
+    const manifestPath = nativeOriginal ? sourceManifest!.path : 'ingitdb/export-manifest.json';
+    const manifestUrl = `https://github.com/demo-db/${database.localId}/blob/${revision}/${manifestPath.split('/').map(encodeURIComponent).join('/')}`;
+    storages.push(inGitDBStorageEntry(database.localId, revision, nativeOriginal, website.ovdb, database.apiUrl, manifestUrl));
   }
   const edition = bigQueryEditions.find((candidate) => candidate.id === database.localId);
   if (edition) storages.push({

@@ -94,11 +94,11 @@ assert.deepEqual(countries.tables.find((table) => table.name === 'countries')?.c
 assert.ok(countries.exports.some((file) => file.publicPath === 'countries.sqlite'));
 
 const shippingLogs = databaseById.get('shipping-logs')!;
-assert.equal(shippingLogs.tables.length, 3);
-assert.deepEqual(shippingLogs.tables.map((table) => [table.name, table.rowCount]), [['baseline', 29], ['recovery11045example', 3], ['recovery11062example', 3]]);
+assert.equal(shippingLogs.tables.length, 6);
+assert.deepEqual(shippingLogs.tables.map((table) => [table.name, table.rowCount]), [["baseline", 29], ["carrierGateway", 2], ["carrierGatewayRecovery11045example", 2], ["carrierGatewayRecovery11062example", 2], ["recovery11045example", 3], ["recovery11062example", 3]]);
 assert.ok(shippingLogs.tables.every((table) => table.columns.some((column) => column.name === 'event_id' && column.primaryKey)));
 assert.ok(shippingLogs.exports.some((file) => file.format === 'ingitdb' && file.publicPath === 'shipping-logs.ingitdb.tar.gz'));
-assert.equal(shippingLogs.exports.filter((file) => file.format === 'jsonl').length, 3);
+assert.equal(shippingLogs.exports.filter((file) => file.format === "jsonl").length, 6);
 assert.ok(!shippingLogs.exports.some((file) => file.format === 'sqlite'), 'original logs are not converted to SQLite');
 
 console.log('Provider registry includes the six established providers plus immutable Shipping, Countries and native Shipping Logs contracts and preserves their native schema.');

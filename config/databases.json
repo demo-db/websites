@@ -75,6 +75,12 @@
       "repository": "https://github.com/demo-db/shipping-logs",
       "commit": "9534639578f13791dc023ad8553604533dadb716",
       "contractSha256": "d320c763e6de85399a256498cba30c414f02d068674c78030e1d9bb7267c1d7f"
+    },
+    {
+      "id": "countries",
+      "repository": "https://github.com/demo-db/countries",
+      "commit": "3554140b054aaadd5b8185492b63fcdf3b360b2d",
+      "contractSha256": "edb2ef142b998236e12c2a4e83c3d55d1c5ad0d262dcf44a490d777c29798bcf"
     }
   ],
   "comparisonFixtures": [

@@ -51,6 +51,16 @@
         "sha256": "5a42ed5ea10b72bec01b742db0d8867fc4823674257cccaeeaa4f142d7286ac8"
       }
     },
+    "countries": {
+      "json": {
+        "bytes": 119510,
+        "sha256": "2458732a115a9f79cee6b1cbce80ccc7f395608e12454728a8bb11b1fce3a802"
+      },
+      "yaml": {
+        "bytes": 134637,
+        "sha256": "6b2a5061e57587a68ad07d9eabc68505fcdd89696a0a03e72d322345e5a6853a"
+      }
+    },
     "employees": {
       "ingitdb": {
         "contentSha256": "b56053bbb5c10749636d8a46e4a7d5b21b989df264b435be3ce21d6bf701bb5f",

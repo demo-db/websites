@@ -69,13 +69,13 @@ test('a planned format needs a reason, has no origin and is never served; script
   const small = { datasets: { x: { oracle: { state: 'planned', reason: 'a specific and sufficiently long reason text' } } }, formats: ['oracle'], labels: { oracle: 'Oracle script' } };
   assert.deepEqual(formatAvailability(small, 'x', []).map((item) => [item.format, item.state]), [['oracle', 'planned']]);
   assert.throws(() => formatAvailability(small, 'x', [{ format: 'oracle', table: null, publicPath: 'x.oracle.sql', derived: true }]), /oracle: declared planned but x\.oracle\.sql is served/);
-  for (const id of ids.filter((candidate) => !['shipping', 'shipping-logs'].includes(candidate))) {
+  for (const id of ids.filter((candidate) => !['shipping', 'shipping-logs', 'countries'].includes(candidate))) {
     for (const format of ['mysql', 'sqlserver', 'oracle']) {
       assert.equal(matrix.datasets[id][format].state, 'download', `${id}: the ${format} script is served`);
       assert.equal(matrix.datasets[id][format].origin, 'provider-script', `${id}: the ${format} script is the generated one`);
     }
   }
-  for (const id of ['shipping', 'shipping-logs']) {
+  for (const id of ['shipping', 'shipping-logs', 'countries']) {
     for (const format of ['mysql', 'sqlserver', 'oracle']) assert.equal(matrix.datasets[id][format].state, 'unavailable');
   }
 });

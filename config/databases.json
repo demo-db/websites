@@ -79,8 +79,8 @@
     {
       "id": "countries",
       "repository": "https://github.com/demo-db/countries",
-      "commit": "3554140b054aaadd5b8185492b63fcdf3b360b2d",
-      "contractSha256": "edb2ef142b998236e12c2a4e83c3d55d1c5ad0d262dcf44a490d777c29798bcf"
+      "commit": "dec4fa9798bc6118328156cd8abaf3803d0cba2f",
+      "contractSha256": "d20c52ef854b7260e0689bcce59c18d1acdb874fe5f0f757d12f1fb3a2a51729"
     }
   ],
   "comparisonFixtures": [

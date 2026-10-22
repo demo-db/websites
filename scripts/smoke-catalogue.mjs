@@ -52,7 +52,7 @@ export function publicationDiscoveryProblems(body, expectedIds) {
   const problems = [];
   if (!discovery || discovery.protocol !== 'openvaultdb/0.1' || discovery.authEnabled !== false) return ['discovery protocol/auth differs'];
   const rows = discovery.databases;
-  if (expectedIds.length !== 8 || new Set(expectedIds).size !== 8 || !Array.isArray(rows) || rows.length !== 8) return ['discovery must contain exactly eight providers'];
+  if (expectedIds.length !== 9 || new Set(expectedIds).size !== 9 || !Array.isArray(rows) || rows.length !== 9) return ['discovery must contain exactly nine providers'];
   const seen = new Set();
   for (const row of rows) {
     const fields = ['id', 'url', 'apiUrl', 'manifestUrl', 'capabilities'];

@@ -66,7 +66,7 @@ const urlOf = (file) => `/${file}`.replace(/(^|\/)index\.html$/, '$1');
 test('every host config points at a built bundle with a top-level 404.html, and every bundle respects the static asset limits', async () => {
   const configs = await validateConfigs(await hostConfigs(), out);
   assert.deepEqual(configs.map(({ config }) => config.routes[0].pattern).sort(), manifest.hosts.map((host) => host.host).sort());
-  assert.deepEqual(manifest.hosts.map((host) => host.host).sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
+  assert.deepEqual(manifest.hosts.map((host) => host.host).sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'countries.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
   assert.ok(!manifest.hosts.some((host) => host.host === 'chinookdb.com'), 'chinookdb.com is not part of this deployment');
   for (const { config } of configs) {
     const dir = join(out, config.routes[0].pattern);
@@ -182,7 +182,7 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind-sqlite'), { to: 'https://demodb.dev/ovdb/db/northwind-sqlite/', status: 308 });
   assert.equal(redirect(catalogue, '/ovdb/db/northwind-sqlite/'), null, 'storage pages are served, not redirected');
   assert.equal(redirect(catalogue, '/'), null);
-  for (const id of ['shipping', 'shipping-logs']) {
+  for (const id of ['shipping', 'shipping-logs', 'countries']) {
     const activated = await rules(`${id}.demodb.dev`);
     assert.deepEqual(redirect(activated, `/ovdb/v1/databases/${id}/dtql`), { to: `${OVDB_API}/databases/${id}/dtql`, status: 308 });
   }
@@ -202,9 +202,9 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
 test('generated metadata endpoints replace the Worker responses', async () => {
   const discovery = JSON.parse(await readFile(join(out, 'demodb.dev/.well-known/openvaultdb'), 'utf8'));
   assert.equal(discovery.protocol, 'openvaultdb/0.1');
-  assert.deepEqual(discovery.databases.map((database) => database.id), ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs']);
+  assert.deepEqual(discovery.databases.map((database) => database.id), ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs', 'countries']);
   const catalogueSitemap = await readFile(join(out, 'demodb.dev/sitemap.xml'), 'utf8');
-  for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs']) assert.match(catalogueSitemap, new RegExp(`/ovdb/db/${id}/ovdb-database\\.json`));
+  for (const id of ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs', 'countries']) assert.match(catalogueSitemap, new RegExp(`/ovdb/db/${id}/ovdb-database\\.json`));
   for (const db of index.databases) {
     const dir = join(out, db.siteHost);
     const local = JSON.parse(await readFile(join(dir, '.well-known/openvaultdb'), 'utf8'));

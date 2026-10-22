@@ -10,10 +10,10 @@ const page = async (id) => readFile(new URL(`../dist/ovdb/db/${id}/index.html`, 
 
 test('actual built catalogue and every edition match the typed capability inventory', async () => {
   assert.deepEqual(catalogueProblems(html, storageGroups), []);
-  assert.equal(storageGroups.length, 8);
-  assert.equal(entries.length, 26);
-  assert.equal(publicOvdbApiCount, postgresqlPublicApiVerified ? 14 : 8);
-  assert.deepEqual(entries.filter(({ engine, readiness }) => engine === 'SQLite' && readiness === 'public-api').map(({ id }) => id).sort(), ['adventureworks-sqlite', 'chinook-sqlite', 'employees-sqlite', 'northwind-sqlite', 'pubs-sqlite', 'sakila-sqlite', 'shipping-sqlite']);
+  assert.equal(storageGroups.length, 9);
+  assert.equal(entries.length, 27);
+  assert.equal(publicOvdbApiCount, postgresqlPublicApiVerified ? 15 : 9);
+  assert.deepEqual(entries.filter(({ engine, readiness }) => engine === 'SQLite' && readiness === 'public-api').map(({ id }) => id).sort(), ['adventureworks-sqlite', 'chinook-sqlite', 'employees-sqlite', 'northwind-sqlite', 'pubs-sqlite', 'sakila-sqlite', 'shipping-sqlite', 'countries-sqlite'].sort());
   for (const entry of entries) assert.deepEqual(storagePageProblems(await page(entry.id), entry), [], entry.id);
   for (const { database, storages } of storageGroups) {
     for (const entry of storages.filter(({ engine }) => engine === 'SQLite')) {
@@ -32,7 +32,7 @@ test('missing, duplicate and unexpected edition links fail', () => {
 });
 
 test('wrong totals and falsely admitted pending APIs fail against actual built HTML', async () => {
-  assert.ok(catalogueProblems(html.replace('8 datasets across 26 storage editions.', '6 datasets across 24 storage editions.'), storageGroups).some((p) => p.includes('summary')));
+  assert.ok(catalogueProblems(html.replace('9 datasets across 27 storage editions.', '6 datasets across 24 storage editions.'), storageGroups).some((p) => p.includes('summary')));
   assert.ok(catalogueProblems(html.replace(`${publicOvdbApiCount} public OVDB APIs`, '999 public OVDB APIs'), storageGroups).some((p) => p.includes('API count')));
   assert.ok(catalogueProblems(html.replace(/(href="\/ovdb\/db\/shipping-sqlite\/"[\s\S]*?)Public read-only API/, '$1SQLite edition · public API pending'), storageGroups).some((p) => p.includes('shipping-sqlite')));
   const pending = { ...entries.find(({ id }) => id === 'shipping-sqlite'), readiness: 'hosted-api-pending' };
@@ -77,7 +77,7 @@ test('MySQL live contract accepts honest missing formats and rejects inconsisten
   assert.throws(() => checkedMysqlScript(available, { ...pinned, sha256: '0'.repeat(64) }, bytes, config, ''));
   assert.throws(() => checkedMysqlScript(available, pinned, undefined, config, ''));
   assert.throws(() => checkedMysqlScript({ ...available, exports: [] }, pinned, bytes, config, ''));
-  for (const id of ['shipping', 'shipping-logs']) {
+  for (const id of ['shipping', 'shipping-logs', 'countries']) {
     const corpus = JSON.parse(await readFile(new URL('../dist/corpus.json', import.meta.url), 'utf8'));
     const database = corpus.databases.find((entry) => entry.localId === id);
     const page = await readFile(new URL(`../dist/_db/${id}/downloads/index.html`, import.meta.url), 'utf8');
@@ -99,9 +99,9 @@ test('MySQL live contract accepts honest missing formats and rejects inconsisten
   }
 });
 
-test('actual generated central discovery admits all eight canonical read-only provider aliases', async () => {
+test('actual generated central discovery admits all nine canonical read-only provider aliases', async () => {
   const body = await readFile(new URL('../dist-hosts/demodb.dev/.well-known/openvaultdb', import.meta.url), 'utf8');
-  const expected = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs'];
+  const expected = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs', 'countries'];
   assert.deepEqual(publicationDiscoveryProblems(body, expected), []);
   const original = JSON.parse(body);
   for (const kind of ['six', 'duplicate', 'unexpected', 'url', 'apiUrl', 'manifestUrl', 'read', 'query', 'write', 'protocol', 'auth']) {

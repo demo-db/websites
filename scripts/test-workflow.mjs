@@ -57,7 +57,7 @@ test('workflow checks pins against the exact PR base or previous push commit', (
 test('every public hostname is bound to exactly one assets-only config, with no Worker script', () => {
   const patterns = hosts.flatMap(({ config }) => config.routes.map((route) => route.pattern));
   assert.equal(new Set(patterns).size, patterns.length, 'custom domain bindings are unique');
-  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
+  assert.deepEqual(patterns.sort(), ['adventureworks.demodb.dev', 'chinook.demodb.dev', 'countries.demodb.dev', 'demodb.dev', 'employees.demodb.dev', 'northwind.demodb.dev', 'pubs.demodb.dev', 'sakila.demodb.dev', 'shipping-logs.demodb.dev', 'shipping.demodb.dev']);
   for (const { file, config } of hosts) {
     assert.equal(config.main, undefined, `${file} has no Worker script`);
     assert.equal(config.assets.binding, undefined, `${file} binds no ASSETS for a script`);
@@ -109,7 +109,7 @@ test('live smoke checks Sakila native tables, views, SQLite, and query capabilit
   assert.match(liveSmoke, /\/tables\/actor_info\//);
   assert.match(liveSmoke, /\/ovdb\/db\/sakila\/ovdb-database\.json/);
   assert.match(liveSmoke, /requiredQueryableDatabaseIds = \['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'\]/);
-  assert.match(liveSmoke, /requiredPublishedDatabaseIds = \[\.\.\.requiredQueryableDatabaseIds, 'shipping', 'shipping-logs'\]/);
+  assert.match(liveSmoke, /requiredPublishedDatabaseIds = \[\.\.\.requiredQueryableDatabaseIds, 'shipping', 'shipping-logs', 'countries'\]/);
   assert.match(liveSmoke, /publicationDiscoveryProblems\(body, requiredPublishedDatabaseIds\)/);
 });
 
@@ -215,7 +215,7 @@ test('static smoke covers build markers, homepages and discovery for every deplo
   }
   assert.match(liveSmoke, /for \(const \[origin, paths\] of sites\) \{\s*await checked\(`\$\{origin\}\/build-info\.json`/);
   assert.match(liveSmoke, /marker\.commit === commit\.toLowerCase\(\)/);
-  for (const id of ['shipping', 'shipping-logs']) {
+  for (const id of ['shipping', 'shipping-logs', 'countries']) {
     const paths = sites.find(([origin]) => origin === `https://${id}.demodb.dev`)[1];
     assert.deepEqual(paths, ['/', '/theme.js', '/.well-known/openvaultdb']);
   }

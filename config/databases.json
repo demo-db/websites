@@ -67,14 +67,20 @@
     {
       "id": "shipping",
       "repository": "https://github.com/demo-db/shipping",
-      "commit": "ea71228bc4aceb845075fc7ef79e868debe3149f",
-      "contractSha256": "2e999268b742987804c2c5af44f9b0f64e8900a32e96acf53bb32a0607907fdd"
+      "commit": "5eff414052ea417502549c5f80b92b558804305f",
+      "contractSha256": "e9899b1d70ac5d75a52183ee35bc06a0f4bddce37b9894b32897f267b5631f46"
     },
     {
       "id": "shipping-logs",
       "repository": "https://github.com/demo-db/shipping-logs",
-      "commit": "9534639578f13791dc023ad8553604533dadb716",
-      "contractSha256": "d320c763e6de85399a256498cba30c414f02d068674c78030e1d9bb7267c1d7f"
+      "commit": "78bc3e52fa535c68ead96eb2a8d4c25d5d072c86",
+      "contractSha256": "520dc9b530f8f048de3b4f9df06c08e5872c53bd956f35ac3a248eee5e1e6c6b"
+    },
+    {
+      "id": "countries",
+      "repository": "https://github.com/demo-db/countries",
+      "commit": "dec4fa9798bc6118328156cd8abaf3803d0cba2f",
+      "contractSha256": "d20c52ef854b7260e0689bcce59c18d1acdb874fe5f0f757d12f1fb3a2a51729"
     }
   ],
   "comparisonFixtures": [

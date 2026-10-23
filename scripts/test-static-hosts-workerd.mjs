@@ -101,11 +101,11 @@ test('catalogue: pages, public JSON with CORS, API and legacy redirects, no data
   const discovery = await probe('demodb.dev', catalogue, '/.well-known/openvaultdb');
   assert.equal(discovery.response.headers.get('content-type'), 'application/json; charset=utf-8');
   assert.equal(JSON.parse(discovery.body).protocol, 'openvaultdb/0.1');
-  const api = await probe('demodb.dev', catalogue, '/ovdb/v1/databases/chinook/dtql?q=1');
+  const api = await probe('demodb.dev', catalogue, '/ovdb/v1/databases/chinook/tugql?q=1');
   assert.equal(api.response.status, 308);
   assert.equal(api.response.headers.get('access-control-allow-origin'), '*', 'the redirect carries CORS');
-  assert.equal(api.response.headers.get('location'), `${OVDB_API}/databases/chinook/dtql?q=1`);
-  const post = await catalogue('/ovdb/v1/databases/chinook/dtql', 'POST', { body: '{}', headers: { 'Content-Type': 'application/json' } });
+  assert.equal(api.response.headers.get('location'), `${OVDB_API}/databases/chinook/tugql?q=1`);
+  const post = await catalogue('/ovdb/v1/databases/chinook/tugql', 'POST', { body: '{}', headers: { 'Content-Type': 'application/json' } });
   assert.equal(post.status, 308, 'a POST is redirected with its method preserved');
   const legacy = await probe('demodb.dev', catalogue, '/ovdb/dbs/chinook?x=1');
   assert.equal(legacy.response.status, 308);
@@ -137,8 +137,8 @@ test('dataset host: files at public paths with data headers, no private namespac
   assert.equal((await probe('chinook', chinook, '/schema.json')).response.headers.get('access-control-allow-origin'), '*');
   assert.equal((await probe('chinook', chinook, '/tables/Artist/')).response.status, 200);
   assert.equal((await probe('chinook', chinook, '/.well-known/openvaultdb')).response.status, 200);
-  const api = await probe('chinook', chinook, '/ovdb/v1/databases/chinook/dtql?x=1');
-  assert.equal(api.response.headers.get('location'), `${OVDB_API}/databases/chinook/dtql?x=1`);
+  const api = await probe('chinook', chinook, '/ovdb/v1/databases/chinook/tugql?x=1');
+  assert.equal(api.response.headers.get('location'), `${OVDB_API}/databases/chinook/tugql?x=1`);
   assert.equal(api.response.headers.get('access-control-allow-origin'), '*', 'the redirect carries CORS like the Worker did');
   assert.equal((await probe('chinook', chinook, '/ovdb/')).response.headers.get('location'), 'https://cloud.openvaultdb.com/ovdb/dbs/chinook');
   for (const path of ['/_db/x', '/_db/chinook/index.html', '/no-such-page/']) assert.equal((await probe('chinook', chinook, path)).response.status, 404, path);

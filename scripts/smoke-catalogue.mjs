@@ -22,7 +22,7 @@ export function catalogueProblems(body, groups) {
   const postgres = entries.filter(({ engine }) => engine === 'PostgreSQL');
   const postgresVerified = postgres.length > 0 && postgres.every(({ readiness }) => readiness === 'public-api');
   if (postgresVerified
-    ? !text.includes('PostgreSQL copies are hosted on Neon with separate public read-only DTQL endpoints') || text.includes('public API access pending')
+    ? !text.includes('PostgreSQL copies are hosted on Neon with separate public read-only TugQL endpoints') || text.includes('public API access pending')
     : !text.includes('PostgreSQL copies have public API access pending') || text.includes('Neon')) problems.push('PostgreSQL introduction differs from admitted capabilities');
   if (!body.includes('demodb-dev') || !body.includes('your own execution project')) problems.push('BigQuery execution requirements missing');
   return problems;

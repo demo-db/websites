@@ -12,7 +12,7 @@ import { ovdbServer, postgresqlPublicApiVerified, storageEntryCount, storageGrou
   </section>
   <section class="shell section">
     <div class="section-heading"><div><p class="eyebrow">Storage catalogue</p><h2>{storageGroups.length} datasets across {storageEntryCount} storage editions.</h2></div><span class="muted">{publicOvdbApiCount} public OVDB APIs</span></div>
-    <p class="storage-intro">The shared server descriptor lists the provider-backed databases and their declared read-only APIs. PostgreSQL copies {postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only DTQL endpoints' : 'have public API access pending'}, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
+    <p class="storage-intro">The shared server descriptor lists the provider-backed databases and their declared read-only APIs. PostgreSQL copies {postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only TugQL endpoints' : 'have public API access pending'}, inGitDB editions are published in each dataset’s GitHub repository, and verified BigQuery editions are hosted in <code>demodb-dev</code>. BigQuery data is readable by authenticated Google accounts; queries require your own execution project.</p>
     <div class="database-grid">
       {storageGroups.map(({ database, storages }) => (
         <article class="database-card storage-group">

@@ -1,0 +1,6127 @@
+{
+  "format": "demodb-bigquery-schema-baseline/v1",
+  "projectId": "demodb-dev",
+  "location": "US",
+  "observedOn": "2026-10-07T11:52:33.509481+00:00",
+  "verificationScope": "Live BigQuery table metadata and row counts; not full-cell equality",
+  "datasets": [
+    {
+      "id": "chinook",
+      "datasetId": "chinook",
+      "sourceRevision": "26e852cca00101f53a84ef8ee1f1ae389067f5cf",
+      "sourceSqliteSha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15",
+      "tableCount": 11,
+      "rowCount": 15607,
+      "tables": [
+        {
+          "tableId": "Album",
+          "rowCount": 347,
+          "schema": {
+            "fields": [
+              {
+                "name": "AlbumId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AlbumId"
+              },
+              {
+                "name": "Title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Title"
+              },
+              {
+                "name": "ArtistId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ArtistId"
+              }
+            ]
+          },
+          "sourceTable": "Album"
+        },
+        {
+          "tableId": "Artist",
+          "rowCount": 275,
+          "schema": {
+            "fields": [
+              {
+                "name": "ArtistId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ArtistId"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Name"
+              }
+            ]
+          },
+          "sourceTable": "Artist"
+        },
+        {
+          "tableId": "Customer",
+          "rowCount": 59,
+          "schema": {
+            "fields": [
+              {
+                "name": "CustomerId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerId"
+              },
+              {
+                "name": "FirstName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FirstName"
+              },
+              {
+                "name": "LastName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: LastName"
+              },
+              {
+                "name": "Company",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Company"
+              },
+              {
+                "name": "Address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Address"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: City"
+              },
+              {
+                "name": "State",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: State"
+              },
+              {
+                "name": "Country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Country"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "Phone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Phone"
+              },
+              {
+                "name": "Fax",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Fax"
+              },
+              {
+                "name": "Email",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Email"
+              },
+              {
+                "name": "SupportRepId",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: SupportRepId"
+              }
+            ]
+          },
+          "sourceTable": "Customer"
+        },
+        {
+          "tableId": "Employee",
+          "rowCount": 8,
+          "schema": {
+            "fields": [
+              {
+                "name": "EmployeeId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmployeeId"
+              },
+              {
+                "name": "LastName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: LastName"
+              },
+              {
+                "name": "FirstName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FirstName"
+              },
+              {
+                "name": "Title",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Title"
+              },
+              {
+                "name": "ReportsTo",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ReportsTo"
+              },
+              {
+                "name": "BirthDate",
+                "type": "DATETIME",
+                "mode": "NULLABLE",
+                "description": "Source field: BirthDate"
+              },
+              {
+                "name": "HireDate",
+                "type": "DATETIME",
+                "mode": "NULLABLE",
+                "description": "Source field: HireDate"
+              },
+              {
+                "name": "Address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Address"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: City"
+              },
+              {
+                "name": "State",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: State"
+              },
+              {
+                "name": "Country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Country"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "Phone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Phone"
+              },
+              {
+                "name": "Fax",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Fax"
+              },
+              {
+                "name": "Email",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Email"
+              }
+            ]
+          },
+          "sourceTable": "Employee"
+        },
+        {
+          "tableId": "Genre",
+          "rowCount": 25,
+          "schema": {
+            "fields": [
+              {
+                "name": "GenreId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: GenreId"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Name"
+              }
+            ]
+          },
+          "sourceTable": "Genre"
+        },
+        {
+          "tableId": "Invoice",
+          "rowCount": 412,
+          "schema": {
+            "fields": [
+              {
+                "name": "InvoiceId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: InvoiceId"
+              },
+              {
+                "name": "CustomerId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerId"
+              },
+              {
+                "name": "InvoiceDate",
+                "type": "DATETIME",
+                "mode": "REQUIRED",
+                "description": "Source field: InvoiceDate"
+              },
+              {
+                "name": "BillingAddress",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: BillingAddress"
+              },
+              {
+                "name": "BillingCity",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: BillingCity"
+              },
+              {
+                "name": "BillingState",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: BillingState"
+              },
+              {
+                "name": "BillingCountry",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: BillingCountry"
+              },
+              {
+                "name": "BillingPostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: BillingPostalCode"
+              },
+              {
+                "name": "Total",
+                "type": "NUMERIC",
+                "mode": "REQUIRED",
+                "description": "Source field: Total",
+                "precision": "10",
+                "scale": "2"
+              }
+            ]
+          },
+          "sourceTable": "Invoice"
+        },
+        {
+          "tableId": "InvoiceLine",
+          "rowCount": 2240,
+          "schema": {
+            "fields": [
+              {
+                "name": "InvoiceLineId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: InvoiceLineId"
+              },
+              {
+                "name": "InvoiceId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: InvoiceId"
+              },
+              {
+                "name": "TrackId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TrackId"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "NUMERIC",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPrice",
+                "precision": "10",
+                "scale": "2"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              }
+            ]
+          },
+          "sourceTable": "InvoiceLine"
+        },
+        {
+          "tableId": "MediaType",
+          "rowCount": 5,
+          "schema": {
+            "fields": [
+              {
+                "name": "MediaTypeId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MediaTypeId"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Name"
+              }
+            ]
+          },
+          "sourceTable": "MediaType"
+        },
+        {
+          "tableId": "Playlist",
+          "rowCount": 18,
+          "schema": {
+            "fields": [
+              {
+                "name": "PlaylistId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PlaylistId"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Name"
+              }
+            ]
+          },
+          "sourceTable": "Playlist"
+        },
+        {
+          "tableId": "PlaylistTrack",
+          "rowCount": 8715,
+          "schema": {
+            "fields": [
+              {
+                "name": "PlaylistId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PlaylistId"
+              },
+              {
+                "name": "TrackId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TrackId"
+              }
+            ]
+          },
+          "sourceTable": "PlaylistTrack"
+        },
+        {
+          "tableId": "Track",
+          "rowCount": 3503,
+          "schema": {
+            "fields": [
+              {
+                "name": "TrackId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TrackId"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "AlbumId",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: AlbumId"
+              },
+              {
+                "name": "MediaTypeId",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MediaTypeId"
+              },
+              {
+                "name": "GenreId",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: GenreId"
+              },
+              {
+                "name": "Composer",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Composer"
+              },
+              {
+                "name": "Milliseconds",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Milliseconds"
+              },
+              {
+                "name": "Bytes",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: Bytes"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "NUMERIC",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPrice",
+                "precision": "10",
+                "scale": "2"
+              }
+            ]
+          },
+          "sourceTable": "Track"
+        }
+      ]
+    },
+    {
+      "id": "northwind",
+      "datasetId": "northwind",
+      "sourceRevision": "e74726515c3833620b54b7a50d1d273276dd23c1",
+      "sourceSqliteSha256": "279b34136771aee75d802094b3329515a2b01da65d2a20a4a9e3b58c29b4fd20",
+      "tableCount": 13,
+      "rowCount": 3310,
+      "tables": [
+        {
+          "tableId": "Categories",
+          "rowCount": 8,
+          "schema": {
+            "fields": [
+              {
+                "name": "CategoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CategoryID"
+              },
+              {
+                "name": "CategoryName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CategoryName"
+              },
+              {
+                "name": "Description",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Description"
+              },
+              {
+                "name": "Picture",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: Picture"
+              }
+            ]
+          },
+          "sourceTable": "Categories"
+        },
+        {
+          "tableId": "CustomerCustomerDemo",
+          "rowCount": 0,
+          "schema": {
+            "fields": [
+              {
+                "name": "CustomerID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerID"
+              },
+              {
+                "name": "CustomerTypeID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerTypeID"
+              }
+            ]
+          },
+          "sourceTable": "CustomerCustomerDemo"
+        },
+        {
+          "tableId": "CustomerDemographics",
+          "rowCount": 0,
+          "schema": {
+            "fields": [
+              {
+                "name": "CustomerTypeID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerTypeID"
+              },
+              {
+                "name": "CustomerDesc",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CustomerDesc"
+              }
+            ]
+          },
+          "sourceTable": "CustomerDemographics"
+        },
+        {
+          "tableId": "Customers",
+          "rowCount": 93,
+          "schema": {
+            "fields": [
+              {
+                "name": "CustomerID",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CustomerID"
+              },
+              {
+                "name": "CompanyName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CompanyName"
+              },
+              {
+                "name": "ContactName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ContactName"
+              },
+              {
+                "name": "ContactTitle",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ContactTitle"
+              },
+              {
+                "name": "Address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Address"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: City"
+              },
+              {
+                "name": "Region",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Region"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "Country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Country"
+              },
+              {
+                "name": "Phone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Phone"
+              },
+              {
+                "name": "Fax",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Fax"
+              }
+            ]
+          },
+          "sourceTable": "Customers"
+        },
+        {
+          "tableId": "EmployeeTerritories",
+          "rowCount": 49,
+          "schema": {
+            "fields": [
+              {
+                "name": "EmployeeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmployeeID"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryID"
+              }
+            ]
+          },
+          "sourceTable": "EmployeeTerritories"
+        },
+        {
+          "tableId": "Employees",
+          "rowCount": 9,
+          "schema": {
+            "fields": [
+              {
+                "name": "EmployeeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmployeeID"
+              },
+              {
+                "name": "LastName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LastName"
+              },
+              {
+                "name": "FirstName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: FirstName"
+              },
+              {
+                "name": "Title",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Title"
+              },
+              {
+                "name": "TitleOfCourtesy",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: TitleOfCourtesy"
+              },
+              {
+                "name": "BirthDate",
+                "type": "DATE",
+                "mode": "NULLABLE",
+                "description": "Source field: BirthDate"
+              },
+              {
+                "name": "HireDate",
+                "type": "DATE",
+                "mode": "NULLABLE",
+                "description": "Source field: HireDate"
+              },
+              {
+                "name": "Address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Address"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: City"
+              },
+              {
+                "name": "Region",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Region"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "Country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Country"
+              },
+              {
+                "name": "HomePhone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: HomePhone"
+              },
+              {
+                "name": "Extension",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Extension"
+              },
+              {
+                "name": "Photo",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: Photo"
+              },
+              {
+                "name": "Notes",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Notes"
+              },
+              {
+                "name": "ReportsTo",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ReportsTo"
+              },
+              {
+                "name": "PhotoPath",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PhotoPath"
+              }
+            ]
+          },
+          "sourceTable": "Employees"
+        },
+        {
+          "tableId": "Order_x20_Details",
+          "rowCount": 2155,
+          "schema": {
+            "fields": [
+              {
+                "name": "OrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPrice"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              },
+              {
+                "name": "Discount",
+                "type": "FLOAT",
+                "mode": "REQUIRED",
+                "description": "Source field: Discount"
+              }
+            ]
+          },
+          "sourceTable": "Order Details"
+        },
+        {
+          "tableId": "Orders",
+          "rowCount": 830,
+          "schema": {
+            "fields": [
+              {
+                "name": "OrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderID"
+              },
+              {
+                "name": "CustomerID",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CustomerID"
+              },
+              {
+                "name": "EmployeeID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: EmployeeID"
+              },
+              {
+                "name": "OrderDate",
+                "type": "DATETIME",
+                "mode": "NULLABLE",
+                "description": "Source field: OrderDate"
+              },
+              {
+                "name": "RequiredDate",
+                "type": "DATETIME",
+                "mode": "NULLABLE",
+                "description": "Source field: RequiredDate"
+              },
+              {
+                "name": "ShippedDate",
+                "type": "DATETIME",
+                "mode": "NULLABLE",
+                "description": "Source field: ShippedDate"
+              },
+              {
+                "name": "ShipVia",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipVia"
+              },
+              {
+                "name": "Freight",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Freight"
+              },
+              {
+                "name": "ShipName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipName"
+              },
+              {
+                "name": "ShipAddress",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipAddress"
+              },
+              {
+                "name": "ShipCity",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipCity"
+              },
+              {
+                "name": "ShipRegion",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipRegion"
+              },
+              {
+                "name": "ShipPostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipPostalCode"
+              },
+              {
+                "name": "ShipCountry",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipCountry"
+              }
+            ]
+          },
+          "sourceTable": "Orders"
+        },
+        {
+          "tableId": "Products",
+          "rowCount": 77,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "ProductName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductName"
+              },
+              {
+                "name": "SupplierID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: SupplierID"
+              },
+              {
+                "name": "CategoryID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: CategoryID"
+              },
+              {
+                "name": "QuantityPerUnit",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: QuantityPerUnit"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: UnitPrice"
+              },
+              {
+                "name": "UnitsInStock",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: UnitsInStock"
+              },
+              {
+                "name": "UnitsOnOrder",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: UnitsOnOrder"
+              },
+              {
+                "name": "ReorderLevel",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ReorderLevel"
+              },
+              {
+                "name": "Discontinued",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Discontinued"
+              }
+            ]
+          },
+          "sourceTable": "Products"
+        },
+        {
+          "tableId": "Regions",
+          "rowCount": 4,
+          "schema": {
+            "fields": [
+              {
+                "name": "RegionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: RegionID"
+              },
+              {
+                "name": "RegionDescription",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: RegionDescription"
+              }
+            ]
+          },
+          "sourceTable": "Regions"
+        },
+        {
+          "tableId": "Shippers",
+          "rowCount": 3,
+          "schema": {
+            "fields": [
+              {
+                "name": "ShipperID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipperID"
+              },
+              {
+                "name": "CompanyName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CompanyName"
+              },
+              {
+                "name": "Phone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Phone"
+              }
+            ]
+          },
+          "sourceTable": "Shippers"
+        },
+        {
+          "tableId": "Suppliers",
+          "rowCount": 29,
+          "schema": {
+            "fields": [
+              {
+                "name": "SupplierID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SupplierID"
+              },
+              {
+                "name": "CompanyName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CompanyName"
+              },
+              {
+                "name": "ContactName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ContactName"
+              },
+              {
+                "name": "ContactTitle",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ContactTitle"
+              },
+              {
+                "name": "Address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Address"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: City"
+              },
+              {
+                "name": "Region",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Region"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "Country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Country"
+              },
+              {
+                "name": "Phone",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Phone"
+              },
+              {
+                "name": "Fax",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Fax"
+              },
+              {
+                "name": "HomePage",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: HomePage"
+              }
+            ]
+          },
+          "sourceTable": "Suppliers"
+        },
+        {
+          "tableId": "Territories",
+          "rowCount": 53,
+          "schema": {
+            "fields": [
+              {
+                "name": "TerritoryID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "TerritoryDescription",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryDescription"
+              },
+              {
+                "name": "RegionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: RegionID"
+              }
+            ]
+          },
+          "sourceTable": "Territories"
+        }
+      ]
+    },
+    {
+      "id": "pubs",
+      "datasetId": "pubs",
+      "sourceRevision": "6c06c5c7395b03ff1a02c2b1a21485add3e1b65b",
+      "sourceSqliteSha256": "b45b08b7c06441cc0b138b031ea5bd32bd5866aebf874c89d2ebf7fc6abb3691",
+      "tableCount": 11,
+      "rowCount": 255,
+      "tables": [
+        {
+          "tableId": "authors",
+          "rowCount": 23,
+          "schema": {
+            "fields": [
+              {
+                "name": "au_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: au_id"
+              },
+              {
+                "name": "au_lname",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: au_lname"
+              },
+              {
+                "name": "au_fname",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: au_fname"
+              },
+              {
+                "name": "phone",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: phone"
+              },
+              {
+                "name": "address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: address"
+              },
+              {
+                "name": "city",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: city"
+              },
+              {
+                "name": "state",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: state"
+              },
+              {
+                "name": "zip",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: zip"
+              },
+              {
+                "name": "contract",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: contract"
+              }
+            ]
+          },
+          "sourceTable": "authors"
+        },
+        {
+          "tableId": "discounts",
+          "rowCount": 3,
+          "schema": {
+            "fields": [
+              {
+                "name": "discounttype",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: discounttype"
+              },
+              {
+                "name": "stor_id",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: stor_id"
+              },
+              {
+                "name": "lowqty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: lowqty"
+              },
+              {
+                "name": "highqty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: highqty"
+              },
+              {
+                "name": "discount",
+                "type": "NUMERIC",
+                "mode": "REQUIRED",
+                "description": "Source field: discount",
+                "precision": "4",
+                "scale": "2"
+              }
+            ]
+          },
+          "sourceTable": "discounts"
+        },
+        {
+          "tableId": "employee",
+          "rowCount": 43,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_id"
+              },
+              {
+                "name": "fname",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: fname"
+              },
+              {
+                "name": "minit",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: minit"
+              },
+              {
+                "name": "lname",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: lname"
+              },
+              {
+                "name": "job_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: job_id"
+              },
+              {
+                "name": "job_lvl",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: job_lvl"
+              },
+              {
+                "name": "pub_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: pub_id"
+              },
+              {
+                "name": "hire_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: hire_date"
+              }
+            ]
+          },
+          "sourceTable": "employee"
+        },
+        {
+          "tableId": "jobs",
+          "rowCount": 14,
+          "schema": {
+            "fields": [
+              {
+                "name": "job_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: job_id"
+              },
+              {
+                "name": "job_desc",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: job_desc"
+              },
+              {
+                "name": "min_lvl",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: min_lvl"
+              },
+              {
+                "name": "max_lvl",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: max_lvl"
+              }
+            ]
+          },
+          "sourceTable": "jobs"
+        },
+        {
+          "tableId": "pub_info",
+          "rowCount": 8,
+          "schema": {
+            "fields": [
+              {
+                "name": "pub_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: pub_id"
+              },
+              {
+                "name": "logo",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: logo"
+              },
+              {
+                "name": "pr_info",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: pr_info"
+              }
+            ]
+          },
+          "sourceTable": "pub_info"
+        },
+        {
+          "tableId": "publishers",
+          "rowCount": 8,
+          "schema": {
+            "fields": [
+              {
+                "name": "pub_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: pub_id"
+              },
+              {
+                "name": "pub_name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: pub_name"
+              },
+              {
+                "name": "city",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: city"
+              },
+              {
+                "name": "state",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: state"
+              },
+              {
+                "name": "country",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: country"
+              }
+            ]
+          },
+          "sourceTable": "publishers"
+        },
+        {
+          "tableId": "roysched",
+          "rowCount": 86,
+          "schema": {
+            "fields": [
+              {
+                "name": "title_id",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: title_id"
+              },
+              {
+                "name": "lorange",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: lorange"
+              },
+              {
+                "name": "hirange",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: hirange"
+              },
+              {
+                "name": "royalty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: royalty"
+              }
+            ]
+          },
+          "sourceTable": "roysched"
+        },
+        {
+          "tableId": "sales",
+          "rowCount": 21,
+          "schema": {
+            "fields": [
+              {
+                "name": "stor_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: stor_id"
+              },
+              {
+                "name": "ord_num",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ord_num"
+              },
+              {
+                "name": "ord_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ord_date"
+              },
+              {
+                "name": "qty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: qty"
+              },
+              {
+                "name": "payterms",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: payterms"
+              },
+              {
+                "name": "title_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title_id"
+              }
+            ]
+          },
+          "sourceTable": "sales"
+        },
+        {
+          "tableId": "stores",
+          "rowCount": 6,
+          "schema": {
+            "fields": [
+              {
+                "name": "stor_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: stor_id"
+              },
+              {
+                "name": "stor_name",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: stor_name"
+              },
+              {
+                "name": "stor_address",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: stor_address"
+              },
+              {
+                "name": "city",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: city"
+              },
+              {
+                "name": "state",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: state"
+              },
+              {
+                "name": "zip",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: zip"
+              }
+            ]
+          },
+          "sourceTable": "stores"
+        },
+        {
+          "tableId": "titleauthor",
+          "rowCount": 25,
+          "schema": {
+            "fields": [
+              {
+                "name": "au_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: au_id"
+              },
+              {
+                "name": "title_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title_id"
+              },
+              {
+                "name": "au_ord",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: au_ord"
+              },
+              {
+                "name": "royaltyper",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: royaltyper"
+              }
+            ]
+          },
+          "sourceTable": "titleauthor"
+        },
+        {
+          "tableId": "titles",
+          "rowCount": 18,
+          "schema": {
+            "fields": [
+              {
+                "name": "title_id",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title_id"
+              },
+              {
+                "name": "title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title"
+              },
+              {
+                "name": "type",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: type"
+              },
+              {
+                "name": "pub_id",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: pub_id"
+              },
+              {
+                "name": "price",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: price"
+              },
+              {
+                "name": "advance",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: advance"
+              },
+              {
+                "name": "royalty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: royalty"
+              },
+              {
+                "name": "ytd_sales",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ytd_sales"
+              },
+              {
+                "name": "notes",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: notes"
+              },
+              {
+                "name": "pubdate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: pubdate"
+              }
+            ]
+          },
+          "sourceTable": "titles"
+        }
+      ]
+    },
+    {
+      "id": "sakila",
+      "datasetId": "sakila",
+      "sourceRevision": "cb9a81a8cbedcd8831737f281f888d5d584fae85",
+      "sourceSqliteSha256": "9bebeee50fecb1fee115c206a4f380f2f6d1f009e7796b18b8a8cfba7c810454",
+      "tableCount": 16,
+      "rowCount": 47268,
+      "tables": [
+        {
+          "tableId": "actor",
+          "rowCount": 200,
+          "schema": {
+            "fields": [
+              {
+                "name": "actor_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: actor_id"
+              },
+              {
+                "name": "first_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: first_name"
+              },
+              {
+                "name": "last_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_name"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "actor"
+        },
+        {
+          "tableId": "address",
+          "rowCount": 603,
+          "schema": {
+            "fields": [
+              {
+                "name": "address_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: address_id"
+              },
+              {
+                "name": "address",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: address"
+              },
+              {
+                "name": "address2",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: address2"
+              },
+              {
+                "name": "district",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: district"
+              },
+              {
+                "name": "city_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: city_id"
+              },
+              {
+                "name": "postal_code",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: postal_code"
+              },
+              {
+                "name": "phone",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: phone"
+              },
+              {
+                "name": "location",
+                "type": "BYTES",
+                "mode": "REQUIRED",
+                "description": "Source field: location"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "address"
+        },
+        {
+          "tableId": "category",
+          "rowCount": 16,
+          "schema": {
+            "fields": [
+              {
+                "name": "category_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: category_id"
+              },
+              {
+                "name": "name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: name"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "category"
+        },
+        {
+          "tableId": "city",
+          "rowCount": 600,
+          "schema": {
+            "fields": [
+              {
+                "name": "city_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: city_id"
+              },
+              {
+                "name": "city",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: city"
+              },
+              {
+                "name": "country_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: country_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "city"
+        },
+        {
+          "tableId": "country",
+          "rowCount": 109,
+          "schema": {
+            "fields": [
+              {
+                "name": "country_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: country_id"
+              },
+              {
+                "name": "country",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: country"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "country"
+        },
+        {
+          "tableId": "customer",
+          "rowCount": 599,
+          "schema": {
+            "fields": [
+              {
+                "name": "customer_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: customer_id"
+              },
+              {
+                "name": "store_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: store_id"
+              },
+              {
+                "name": "first_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: first_name"
+              },
+              {
+                "name": "last_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_name"
+              },
+              {
+                "name": "email",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: email"
+              },
+              {
+                "name": "address_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: address_id"
+              },
+              {
+                "name": "active",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: active"
+              },
+              {
+                "name": "create_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: create_date"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "customer"
+        },
+        {
+          "tableId": "film",
+          "rowCount": 1000,
+          "schema": {
+            "fields": [
+              {
+                "name": "film_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: film_id"
+              },
+              {
+                "name": "title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title"
+              },
+              {
+                "name": "description",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: description"
+              },
+              {
+                "name": "release_year",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: release_year"
+              },
+              {
+                "name": "language_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: language_id"
+              },
+              {
+                "name": "original_language_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: original_language_id"
+              },
+              {
+                "name": "rental_duration",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: rental_duration"
+              },
+              {
+                "name": "rental_rate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rental_rate"
+              },
+              {
+                "name": "length",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: length"
+              },
+              {
+                "name": "replacement_cost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: replacement_cost"
+              },
+              {
+                "name": "rating",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: rating"
+              },
+              {
+                "name": "special_features",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: special_features"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "film"
+        },
+        {
+          "tableId": "film_actor",
+          "rowCount": 5462,
+          "schema": {
+            "fields": [
+              {
+                "name": "actor_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: actor_id"
+              },
+              {
+                "name": "film_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: film_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "film_actor"
+        },
+        {
+          "tableId": "film_category",
+          "rowCount": 1000,
+          "schema": {
+            "fields": [
+              {
+                "name": "film_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: film_id"
+              },
+              {
+                "name": "category_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: category_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "film_category"
+        },
+        {
+          "tableId": "film_text",
+          "rowCount": 1000,
+          "schema": {
+            "fields": [
+              {
+                "name": "film_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: film_id"
+              },
+              {
+                "name": "title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title"
+              },
+              {
+                "name": "description",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: description"
+              }
+            ]
+          },
+          "sourceTable": "film_text"
+        },
+        {
+          "tableId": "inventory",
+          "rowCount": 4581,
+          "schema": {
+            "fields": [
+              {
+                "name": "inventory_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: inventory_id"
+              },
+              {
+                "name": "film_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: film_id"
+              },
+              {
+                "name": "store_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: store_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "inventory"
+        },
+        {
+          "tableId": "language",
+          "rowCount": 6,
+          "schema": {
+            "fields": [
+              {
+                "name": "language_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: language_id"
+              },
+              {
+                "name": "name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: name"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "language"
+        },
+        {
+          "tableId": "payment",
+          "rowCount": 16044,
+          "schema": {
+            "fields": [
+              {
+                "name": "payment_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: payment_id"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: customer_id"
+              },
+              {
+                "name": "staff_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: staff_id"
+              },
+              {
+                "name": "rental_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: rental_id"
+              },
+              {
+                "name": "amount",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: amount"
+              },
+              {
+                "name": "payment_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: payment_date"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "payment"
+        },
+        {
+          "tableId": "rental",
+          "rowCount": 16044,
+          "schema": {
+            "fields": [
+              {
+                "name": "rental_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: rental_id"
+              },
+              {
+                "name": "rental_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rental_date"
+              },
+              {
+                "name": "inventory_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: inventory_id"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: customer_id"
+              },
+              {
+                "name": "return_date",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: return_date"
+              },
+              {
+                "name": "staff_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: staff_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "rental"
+        },
+        {
+          "tableId": "staff",
+          "rowCount": 2,
+          "schema": {
+            "fields": [
+              {
+                "name": "staff_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: staff_id"
+              },
+              {
+                "name": "first_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: first_name"
+              },
+              {
+                "name": "last_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_name"
+              },
+              {
+                "name": "address_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: address_id"
+              },
+              {
+                "name": "picture",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: picture"
+              },
+              {
+                "name": "email",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: email"
+              },
+              {
+                "name": "store_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: store_id"
+              },
+              {
+                "name": "active",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: active"
+              },
+              {
+                "name": "username",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: username"
+              },
+              {
+                "name": "password",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: password"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "staff"
+        },
+        {
+          "tableId": "store",
+          "rowCount": 2,
+          "schema": {
+            "fields": [
+              {
+                "name": "store_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: store_id"
+              },
+              {
+                "name": "manager_staff_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: manager_staff_id"
+              },
+              {
+                "name": "address_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: address_id"
+              },
+              {
+                "name": "last_update",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_update"
+              }
+            ]
+          },
+          "sourceTable": "store"
+        }
+      ]
+    },
+    {
+      "id": "adventureworks",
+      "datasetId": "adventureworks",
+      "sourceRevision": "5028a27189b487d6fd8025fafc1307aada707fd2",
+      "sourceSqliteSha256": "6a105e1982becfe003fc7a307d7cad9d738390cedd79d166c2167fd817168109",
+      "tableCount": 71,
+      "rowCount": 759240,
+      "tables": [
+        {
+          "tableId": "HumanResources_x2E_Department",
+          "rowCount": 16,
+          "schema": {
+            "fields": [
+              {
+                "name": "DepartmentID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: DepartmentID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "GroupName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: GroupName"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.Department"
+        },
+        {
+          "tableId": "HumanResources_x2E_Employee",
+          "rowCount": 290,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "NationalIDNumber",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: NationalIDNumber"
+              },
+              {
+                "name": "LoginID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: LoginID"
+              },
+              {
+                "name": "OrganizationNode",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: OrganizationNode"
+              },
+              {
+                "name": "OrganizationLevel",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: OrganizationLevel"
+              },
+              {
+                "name": "JobTitle",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: JobTitle"
+              },
+              {
+                "name": "BirthDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: BirthDate"
+              },
+              {
+                "name": "MaritalStatus",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: MaritalStatus"
+              },
+              {
+                "name": "Gender",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Gender"
+              },
+              {
+                "name": "HireDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: HireDate"
+              },
+              {
+                "name": "SalariedFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalariedFlag"
+              },
+              {
+                "name": "VacationHours",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: VacationHours"
+              },
+              {
+                "name": "SickLeaveHours",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SickLeaveHours"
+              },
+              {
+                "name": "CurrentFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CurrentFlag"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.Employee"
+        },
+        {
+          "tableId": "HumanResources_x2E_EmployeeDepartmentHistory",
+          "rowCount": 296,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "DepartmentID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: DepartmentID"
+              },
+              {
+                "name": "ShiftID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShiftID"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.EmployeeDepartmentHistory"
+        },
+        {
+          "tableId": "HumanResources_x2E_EmployeePayHistory",
+          "rowCount": 316,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "RateChangeDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: RateChangeDate"
+              },
+              {
+                "name": "Rate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Rate"
+              },
+              {
+                "name": "PayFrequency",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PayFrequency"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.EmployeePayHistory"
+        },
+        {
+          "tableId": "HumanResources_x2E_JobCandidate",
+          "rowCount": 13,
+          "schema": {
+            "fields": [
+              {
+                "name": "JobCandidateID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: JobCandidateID"
+              },
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "Resume",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Resume"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.JobCandidate"
+        },
+        {
+          "tableId": "HumanResources_x2E_Shift",
+          "rowCount": 3,
+          "schema": {
+            "fields": [
+              {
+                "name": "ShiftID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShiftID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "StartTime",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartTime"
+              },
+              {
+                "name": "EndTime",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: EndTime"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "HumanResources.Shift"
+        },
+        {
+          "tableId": "Person_x2E_Address",
+          "rowCount": 19614,
+          "schema": {
+            "fields": [
+              {
+                "name": "AddressID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AddressID"
+              },
+              {
+                "name": "AddressLine1",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: AddressLine1"
+              },
+              {
+                "name": "AddressLine2",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: AddressLine2"
+              },
+              {
+                "name": "City",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: City"
+              },
+              {
+                "name": "StateProvinceID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: StateProvinceID"
+              },
+              {
+                "name": "PostalCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PostalCode"
+              },
+              {
+                "name": "SpatialLocation",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: SpatialLocation"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.Address"
+        },
+        {
+          "tableId": "Person_x2E_AddressType",
+          "rowCount": 6,
+          "schema": {
+            "fields": [
+              {
+                "name": "AddressTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AddressTypeID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.AddressType"
+        },
+        {
+          "tableId": "Person_x2E_BusinessEntity",
+          "rowCount": 20777,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.BusinessEntity"
+        },
+        {
+          "tableId": "Person_x2E_BusinessEntityAddress",
+          "rowCount": 19614,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "AddressID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AddressID"
+              },
+              {
+                "name": "AddressTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AddressTypeID"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.BusinessEntityAddress"
+        },
+        {
+          "tableId": "Person_x2E_BusinessEntityContact",
+          "rowCount": 909,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "PersonID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PersonID"
+              },
+              {
+                "name": "ContactTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ContactTypeID"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.BusinessEntityContact"
+        },
+        {
+          "tableId": "Person_x2E_ContactType",
+          "rowCount": 20,
+          "schema": {
+            "fields": [
+              {
+                "name": "ContactTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ContactTypeID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.ContactType"
+        },
+        {
+          "tableId": "Person_x2E_CountryRegion",
+          "rowCount": 238,
+          "schema": {
+            "fields": [
+              {
+                "name": "CountryRegionCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CountryRegionCode"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.CountryRegion"
+        },
+        {
+          "tableId": "Person_x2E_EmailAddress",
+          "rowCount": 19972,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "EmailAddressID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmailAddressID"
+              },
+              {
+                "name": "EmailAddress",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EmailAddress"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.EmailAddress"
+        },
+        {
+          "tableId": "Person_x2E_Password",
+          "rowCount": 19972,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "PasswordHash",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PasswordHash"
+              },
+              {
+                "name": "PasswordSalt",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PasswordSalt"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.Password"
+        },
+        {
+          "tableId": "Person_x2E_Person",
+          "rowCount": 19972,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "PersonType",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PersonType"
+              },
+              {
+                "name": "NameStyle",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: NameStyle"
+              },
+              {
+                "name": "Title",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Title"
+              },
+              {
+                "name": "FirstName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FirstName"
+              },
+              {
+                "name": "MiddleName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: MiddleName"
+              },
+              {
+                "name": "LastName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: LastName"
+              },
+              {
+                "name": "Suffix",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Suffix"
+              },
+              {
+                "name": "EmailPromotion",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmailPromotion"
+              },
+              {
+                "name": "AdditionalContactInfo",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: AdditionalContactInfo"
+              },
+              {
+                "name": "Demographics",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Demographics"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.Person"
+        },
+        {
+          "tableId": "Person_x2E_PersonPhone",
+          "rowCount": 19972,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "PhoneNumber",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PhoneNumber"
+              },
+              {
+                "name": "PhoneNumberTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PhoneNumberTypeID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.PersonPhone"
+        },
+        {
+          "tableId": "Person_x2E_PhoneNumberType",
+          "rowCount": 3,
+          "schema": {
+            "fields": [
+              {
+                "name": "PhoneNumberTypeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PhoneNumberTypeID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.PhoneNumberType"
+        },
+        {
+          "tableId": "Person_x2E_StateProvince",
+          "rowCount": 181,
+          "schema": {
+            "fields": [
+              {
+                "name": "StateProvinceID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: StateProvinceID"
+              },
+              {
+                "name": "StateProvinceCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StateProvinceCode"
+              },
+              {
+                "name": "CountryRegionCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CountryRegionCode"
+              },
+              {
+                "name": "IsOnlyStateProvinceFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: IsOnlyStateProvinceFlag"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Person.StateProvince"
+        },
+        {
+          "tableId": "Production_x2E_BillOfMaterials",
+          "rowCount": 2679,
+          "schema": {
+            "fields": [
+              {
+                "name": "BillOfMaterialsID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BillOfMaterialsID"
+              },
+              {
+                "name": "ProductAssemblyID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ProductAssemblyID"
+              },
+              {
+                "name": "ComponentID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ComponentID"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "UnitMeasureCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitMeasureCode"
+              },
+              {
+                "name": "BOMLevel",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BOMLevel"
+              },
+              {
+                "name": "PerAssemblyQty",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PerAssemblyQty"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.BillOfMaterials"
+        },
+        {
+          "tableId": "Production_x2E_Culture",
+          "rowCount": 8,
+          "schema": {
+            "fields": [
+              {
+                "name": "CultureID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CultureID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.Culture"
+        },
+        {
+          "tableId": "Production_x2E_Document",
+          "rowCount": 12,
+          "schema": {
+            "fields": [
+              {
+                "name": "DocumentNode",
+                "type": "BYTES",
+                "mode": "REQUIRED",
+                "description": "Source field: DocumentNode"
+              },
+              {
+                "name": "DocumentLevel",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: DocumentLevel"
+              },
+              {
+                "name": "Title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Title"
+              },
+              {
+                "name": "Owner",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Owner"
+              },
+              {
+                "name": "FolderFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: FolderFlag"
+              },
+              {
+                "name": "FileName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FileName"
+              },
+              {
+                "name": "FileExtension",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FileExtension"
+              },
+              {
+                "name": "Revision",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Revision"
+              },
+              {
+                "name": "ChangeNumber",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ChangeNumber"
+              },
+              {
+                "name": "Status",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Status"
+              },
+              {
+                "name": "DocumentSummary",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: DocumentSummary"
+              },
+              {
+                "name": "Document",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: Document"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.Document"
+        },
+        {
+          "tableId": "Production_x2E_Illustration",
+          "rowCount": 5,
+          "schema": {
+            "fields": [
+              {
+                "name": "IllustrationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: IllustrationID"
+              },
+              {
+                "name": "Diagram",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Diagram"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.Illustration"
+        },
+        {
+          "tableId": "Production_x2E_Location",
+          "rowCount": 14,
+          "schema": {
+            "fields": [
+              {
+                "name": "LocationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: LocationID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "CostRate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CostRate"
+              },
+              {
+                "name": "Availability",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Availability"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.Location"
+        },
+        {
+          "tableId": "Production_x2E_Product",
+          "rowCount": 504,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ProductNumber",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductNumber"
+              },
+              {
+                "name": "MakeFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MakeFlag"
+              },
+              {
+                "name": "FinishedGoodsFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: FinishedGoodsFlag"
+              },
+              {
+                "name": "Color",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Color"
+              },
+              {
+                "name": "SafetyStockLevel",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SafetyStockLevel"
+              },
+              {
+                "name": "ReorderPoint",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ReorderPoint"
+              },
+              {
+                "name": "StandardCost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StandardCost"
+              },
+              {
+                "name": "ListPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ListPrice"
+              },
+              {
+                "name": "Size",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Size"
+              },
+              {
+                "name": "SizeUnitMeasureCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: SizeUnitMeasureCode"
+              },
+              {
+                "name": "WeightUnitMeasureCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: WeightUnitMeasureCode"
+              },
+              {
+                "name": "Weight",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Weight"
+              },
+              {
+                "name": "DaysToManufacture",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: DaysToManufacture"
+              },
+              {
+                "name": "ProductLine",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ProductLine"
+              },
+              {
+                "name": "Class",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Class"
+              },
+              {
+                "name": "Style",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Style"
+              },
+              {
+                "name": "ProductSubcategoryID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ProductSubcategoryID"
+              },
+              {
+                "name": "ProductModelID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ProductModelID"
+              },
+              {
+                "name": "SellStartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SellStartDate"
+              },
+              {
+                "name": "SellEndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: SellEndDate"
+              },
+              {
+                "name": "DiscontinuedDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: DiscontinuedDate"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.Product"
+        },
+        {
+          "tableId": "Production_x2E_ProductCategory",
+          "rowCount": 4,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductCategoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductCategoryID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductCategory"
+        },
+        {
+          "tableId": "Production_x2E_ProductCostHistory",
+          "rowCount": 395,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "StandardCost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StandardCost"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductCostHistory"
+        },
+        {
+          "tableId": "Production_x2E_ProductDescription",
+          "rowCount": 762,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductDescriptionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductDescriptionID"
+              },
+              {
+                "name": "Description",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Description"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductDescription"
+        },
+        {
+          "tableId": "Production_x2E_ProductDocument",
+          "rowCount": 32,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "DocumentNode",
+                "type": "BYTES",
+                "mode": "REQUIRED",
+                "description": "Source field: DocumentNode"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductDocument"
+        },
+        {
+          "tableId": "Production_x2E_ProductInventory",
+          "rowCount": 1069,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "LocationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: LocationID"
+              },
+              {
+                "name": "Shelf",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Shelf"
+              },
+              {
+                "name": "Bin",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Bin"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductInventory"
+        },
+        {
+          "tableId": "Production_x2E_ProductListPriceHistory",
+          "rowCount": 395,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "ListPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ListPrice"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductListPriceHistory"
+        },
+        {
+          "tableId": "Production_x2E_ProductModel",
+          "rowCount": 128,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductModelID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductModelID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "CatalogDescription",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CatalogDescription"
+              },
+              {
+                "name": "Instructions",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Instructions"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductModel"
+        },
+        {
+          "tableId": "Production_x2E_ProductModelIllustration",
+          "rowCount": 7,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductModelID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductModelID"
+              },
+              {
+                "name": "IllustrationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: IllustrationID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductModelIllustration"
+        },
+        {
+          "tableId": "Production_x2E_ProductModelProductDescriptionCulture",
+          "rowCount": 762,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductModelID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductModelID"
+              },
+              {
+                "name": "ProductDescriptionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductDescriptionID"
+              },
+              {
+                "name": "CultureID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CultureID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductModelProductDescriptionCulture"
+        },
+        {
+          "tableId": "Production_x2E_ProductPhoto",
+          "rowCount": 101,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductPhotoID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductPhotoID"
+              },
+              {
+                "name": "ThumbNailPhoto",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: ThumbNailPhoto"
+              },
+              {
+                "name": "ThumbnailPhotoFileName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ThumbnailPhotoFileName"
+              },
+              {
+                "name": "LargePhoto",
+                "type": "BYTES",
+                "mode": "NULLABLE",
+                "description": "Source field: LargePhoto"
+              },
+              {
+                "name": "LargePhotoFileName",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LargePhotoFileName"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductPhoto"
+        },
+        {
+          "tableId": "Production_x2E_ProductProductPhoto",
+          "rowCount": 504,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "ProductPhotoID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductPhotoID"
+              },
+              {
+                "name": "Primary",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Primary"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductProductPhoto"
+        },
+        {
+          "tableId": "Production_x2E_ProductReview",
+          "rowCount": 4,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductReviewID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductReviewID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "ReviewerName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ReviewerName"
+              },
+              {
+                "name": "ReviewDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ReviewDate"
+              },
+              {
+                "name": "EmailAddress",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: EmailAddress"
+              },
+              {
+                "name": "Rating",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Rating"
+              },
+              {
+                "name": "Comments",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Comments"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductReview"
+        },
+        {
+          "tableId": "Production_x2E_ProductSubcategory",
+          "rowCount": 37,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductSubcategoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductSubcategoryID"
+              },
+              {
+                "name": "ProductCategoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductCategoryID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ProductSubcategory"
+        },
+        {
+          "tableId": "Production_x2E_ScrapReason",
+          "rowCount": 16,
+          "schema": {
+            "fields": [
+              {
+                "name": "ScrapReasonID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ScrapReasonID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.ScrapReason"
+        },
+        {
+          "tableId": "Production_x2E_TransactionHistory",
+          "rowCount": 113443,
+          "schema": {
+            "fields": [
+              {
+                "name": "TransactionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "ReferenceOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ReferenceOrderID"
+              },
+              {
+                "name": "ReferenceOrderLineID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ReferenceOrderLineID"
+              },
+              {
+                "name": "TransactionDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionDate"
+              },
+              {
+                "name": "TransactionType",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionType"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              },
+              {
+                "name": "ActualCost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ActualCost"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.TransactionHistory"
+        },
+        {
+          "tableId": "Production_x2E_TransactionHistoryArchive",
+          "rowCount": 89253,
+          "schema": {
+            "fields": [
+              {
+                "name": "TransactionID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "ReferenceOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ReferenceOrderID"
+              },
+              {
+                "name": "ReferenceOrderLineID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ReferenceOrderLineID"
+              },
+              {
+                "name": "TransactionDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionDate"
+              },
+              {
+                "name": "TransactionType",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TransactionType"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              },
+              {
+                "name": "ActualCost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ActualCost"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.TransactionHistoryArchive"
+        },
+        {
+          "tableId": "Production_x2E_UnitMeasure",
+          "rowCount": 38,
+          "schema": {
+            "fields": [
+              {
+                "name": "UnitMeasureCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitMeasureCode"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.UnitMeasure"
+        },
+        {
+          "tableId": "Production_x2E_WorkOrder",
+          "rowCount": 72591,
+          "schema": {
+            "fields": [
+              {
+                "name": "WorkOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: WorkOrderID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "OrderQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderQty"
+              },
+              {
+                "name": "StockedQty",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: StockedQty"
+              },
+              {
+                "name": "ScrappedQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ScrappedQty"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "DueDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DueDate"
+              },
+              {
+                "name": "ScrapReasonID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ScrapReasonID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.WorkOrder"
+        },
+        {
+          "tableId": "Production_x2E_WorkOrderRouting",
+          "rowCount": 67131,
+          "schema": {
+            "fields": [
+              {
+                "name": "WorkOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: WorkOrderID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "OperationSequence",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OperationSequence"
+              },
+              {
+                "name": "LocationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: LocationID"
+              },
+              {
+                "name": "ScheduledStartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ScheduledStartDate"
+              },
+              {
+                "name": "ScheduledEndDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ScheduledEndDate"
+              },
+              {
+                "name": "ActualStartDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ActualStartDate"
+              },
+              {
+                "name": "ActualEndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ActualEndDate"
+              },
+              {
+                "name": "ActualResourceHrs",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ActualResourceHrs"
+              },
+              {
+                "name": "PlannedCost",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PlannedCost"
+              },
+              {
+                "name": "ActualCost",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ActualCost"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Production.WorkOrderRouting"
+        },
+        {
+          "tableId": "Purchasing_x2E_ProductVendor",
+          "rowCount": 460,
+          "schema": {
+            "fields": [
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "AverageLeadTime",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: AverageLeadTime"
+              },
+              {
+                "name": "StandardPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StandardPrice"
+              },
+              {
+                "name": "LastReceiptCost",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LastReceiptCost"
+              },
+              {
+                "name": "LastReceiptDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LastReceiptDate"
+              },
+              {
+                "name": "MinOrderQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MinOrderQty"
+              },
+              {
+                "name": "MaxOrderQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MaxOrderQty"
+              },
+              {
+                "name": "OnOrderQty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: OnOrderQty"
+              },
+              {
+                "name": "UnitMeasureCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitMeasureCode"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Purchasing.ProductVendor"
+        },
+        {
+          "tableId": "Purchasing_x2E_PurchaseOrderDetail",
+          "rowCount": 8845,
+          "schema": {
+            "fields": [
+              {
+                "name": "PurchaseOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PurchaseOrderID"
+              },
+              {
+                "name": "PurchaseOrderDetailID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PurchaseOrderDetailID"
+              },
+              {
+                "name": "DueDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DueDate"
+              },
+              {
+                "name": "OrderQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderQty"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPrice"
+              },
+              {
+                "name": "LineTotal",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LineTotal"
+              },
+              {
+                "name": "ReceivedQty",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ReceivedQty"
+              },
+              {
+                "name": "RejectedQty",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: RejectedQty"
+              },
+              {
+                "name": "StockedQty",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: StockedQty"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Purchasing.PurchaseOrderDetail"
+        },
+        {
+          "tableId": "Purchasing_x2E_PurchaseOrderHeader",
+          "rowCount": 4012,
+          "schema": {
+            "fields": [
+              {
+                "name": "PurchaseOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PurchaseOrderID"
+              },
+              {
+                "name": "RevisionNumber",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: RevisionNumber"
+              },
+              {
+                "name": "Status",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Status"
+              },
+              {
+                "name": "EmployeeID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: EmployeeID"
+              },
+              {
+                "name": "VendorID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: VendorID"
+              },
+              {
+                "name": "ShipMethodID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipMethodID"
+              },
+              {
+                "name": "OrderDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderDate"
+              },
+              {
+                "name": "ShipDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipDate"
+              },
+              {
+                "name": "SubTotal",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SubTotal"
+              },
+              {
+                "name": "TaxAmt",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TaxAmt"
+              },
+              {
+                "name": "Freight",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Freight"
+              },
+              {
+                "name": "TotalDue",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TotalDue"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Purchasing.PurchaseOrderHeader"
+        },
+        {
+          "tableId": "Purchasing_x2E_ShipMethod",
+          "rowCount": 5,
+          "schema": {
+            "fields": [
+              {
+                "name": "ShipMethodID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipMethodID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ShipBase",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipBase"
+              },
+              {
+                "name": "ShipRate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipRate"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Purchasing.ShipMethod"
+        },
+        {
+          "tableId": "Purchasing_x2E_Vendor",
+          "rowCount": 104,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "AccountNumber",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: AccountNumber"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "CreditRating",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CreditRating"
+              },
+              {
+                "name": "PreferredVendorStatus",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: PreferredVendorStatus"
+              },
+              {
+                "name": "ActiveFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ActiveFlag"
+              },
+              {
+                "name": "PurchasingWebServiceURL",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PurchasingWebServiceURL"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Purchasing.Vendor"
+        },
+        {
+          "tableId": "Sales_x2E_CountryRegionCurrency",
+          "rowCount": 109,
+          "schema": {
+            "fields": [
+              {
+                "name": "CountryRegionCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CountryRegionCode"
+              },
+              {
+                "name": "CurrencyCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CurrencyCode"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.CountryRegionCurrency"
+        },
+        {
+          "tableId": "Sales_x2E_CreditCard",
+          "rowCount": 19118,
+          "schema": {
+            "fields": [
+              {
+                "name": "CreditCardID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CreditCardID"
+              },
+              {
+                "name": "CardType",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CardType"
+              },
+              {
+                "name": "CardNumber",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CardNumber"
+              },
+              {
+                "name": "ExpMonth",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ExpMonth"
+              },
+              {
+                "name": "ExpYear",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ExpYear"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.CreditCard"
+        },
+        {
+          "tableId": "Sales_x2E_Currency",
+          "rowCount": 105,
+          "schema": {
+            "fields": [
+              {
+                "name": "CurrencyCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CurrencyCode"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.Currency"
+        },
+        {
+          "tableId": "Sales_x2E_CurrencyRate",
+          "rowCount": 13532,
+          "schema": {
+            "fields": [
+              {
+                "name": "CurrencyRateID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CurrencyRateID"
+              },
+              {
+                "name": "CurrencyRateDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CurrencyRateDate"
+              },
+              {
+                "name": "FromCurrencyCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: FromCurrencyCode"
+              },
+              {
+                "name": "ToCurrencyCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ToCurrencyCode"
+              },
+              {
+                "name": "AverageRate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: AverageRate"
+              },
+              {
+                "name": "EndOfDayRate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: EndOfDayRate"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.CurrencyRate"
+        },
+        {
+          "tableId": "Sales_x2E_Customer",
+          "rowCount": 19820,
+          "schema": {
+            "fields": [
+              {
+                "name": "CustomerID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerID"
+              },
+              {
+                "name": "PersonID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: PersonID"
+              },
+              {
+                "name": "StoreID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: StoreID"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "AccountNumber",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: AccountNumber"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.Customer"
+        },
+        {
+          "tableId": "Sales_x2E_PersonCreditCard",
+          "rowCount": 19118,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "CreditCardID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CreditCardID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.PersonCreditCard"
+        },
+        {
+          "tableId": "Sales_x2E_SalesOrderDetail",
+          "rowCount": 121317,
+          "schema": {
+            "fields": [
+              {
+                "name": "SalesOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesOrderID"
+              },
+              {
+                "name": "SalesOrderDetailID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesOrderDetailID"
+              },
+              {
+                "name": "CarrierTrackingNumber",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CarrierTrackingNumber"
+              },
+              {
+                "name": "OrderQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderQty"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "SpecialOfferID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SpecialOfferID"
+              },
+              {
+                "name": "UnitPrice",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPrice"
+              },
+              {
+                "name": "UnitPriceDiscount",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UnitPriceDiscount"
+              },
+              {
+                "name": "LineTotal",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: LineTotal"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesOrderDetail"
+        },
+        {
+          "tableId": "Sales_x2E_SalesOrderHeader",
+          "rowCount": 31465,
+          "schema": {
+            "fields": [
+              {
+                "name": "SalesOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesOrderID"
+              },
+              {
+                "name": "RevisionNumber",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: RevisionNumber"
+              },
+              {
+                "name": "OrderDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: OrderDate"
+              },
+              {
+                "name": "DueDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DueDate"
+              },
+              {
+                "name": "ShipDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ShipDate"
+              },
+              {
+                "name": "Status",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Status"
+              },
+              {
+                "name": "OnlineOrderFlag",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: OnlineOrderFlag"
+              },
+              {
+                "name": "SalesOrderNumber",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: SalesOrderNumber"
+              },
+              {
+                "name": "PurchaseOrderNumber",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: PurchaseOrderNumber"
+              },
+              {
+                "name": "AccountNumber",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: AccountNumber"
+              },
+              {
+                "name": "CustomerID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: CustomerID"
+              },
+              {
+                "name": "SalesPersonID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: SalesPersonID"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "BillToAddressID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BillToAddressID"
+              },
+              {
+                "name": "ShipToAddressID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipToAddressID"
+              },
+              {
+                "name": "ShipMethodID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShipMethodID"
+              },
+              {
+                "name": "CreditCardID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: CreditCardID"
+              },
+              {
+                "name": "CreditCardApprovalCode",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: CreditCardApprovalCode"
+              },
+              {
+                "name": "CurrencyRateID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: CurrencyRateID"
+              },
+              {
+                "name": "SubTotal",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SubTotal"
+              },
+              {
+                "name": "TaxAmt",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TaxAmt"
+              },
+              {
+                "name": "Freight",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Freight"
+              },
+              {
+                "name": "TotalDue",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: TotalDue"
+              },
+              {
+                "name": "Comment",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Comment"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesOrderHeader"
+        },
+        {
+          "tableId": "Sales_x2E_SalesOrderHeaderSalesReason",
+          "rowCount": 27647,
+          "schema": {
+            "fields": [
+              {
+                "name": "SalesOrderID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesOrderID"
+              },
+              {
+                "name": "SalesReasonID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesReasonID"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesOrderHeaderSalesReason"
+        },
+        {
+          "tableId": "Sales_x2E_SalesPerson",
+          "rowCount": 17,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "SalesQuota",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: SalesQuota"
+              },
+              {
+                "name": "Bonus",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Bonus"
+              },
+              {
+                "name": "CommissionPct",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CommissionPct"
+              },
+              {
+                "name": "SalesYTD",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesYTD"
+              },
+              {
+                "name": "SalesLastYear",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesLastYear"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesPerson"
+        },
+        {
+          "tableId": "Sales_x2E_SalesPersonQuotaHistory",
+          "rowCount": 163,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "QuotaDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: QuotaDate"
+              },
+              {
+                "name": "SalesQuota",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesQuota"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesPersonQuotaHistory"
+        },
+        {
+          "tableId": "Sales_x2E_SalesReason",
+          "rowCount": 10,
+          "schema": {
+            "fields": [
+              {
+                "name": "SalesReasonID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesReasonID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "ReasonType",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ReasonType"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesReason"
+        },
+        {
+          "tableId": "Sales_x2E_SalesTaxRate",
+          "rowCount": 29,
+          "schema": {
+            "fields": [
+              {
+                "name": "SalesTaxRateID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesTaxRateID"
+              },
+              {
+                "name": "StateProvinceID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: StateProvinceID"
+              },
+              {
+                "name": "TaxType",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TaxType"
+              },
+              {
+                "name": "TaxRate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TaxRate"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesTaxRate"
+        },
+        {
+          "tableId": "Sales_x2E_SalesTerritory",
+          "rowCount": 10,
+          "schema": {
+            "fields": [
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "CountryRegionCode",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CountryRegionCode"
+              },
+              {
+                "name": "Group",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Group"
+              },
+              {
+                "name": "SalesYTD",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesYTD"
+              },
+              {
+                "name": "SalesLastYear",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: SalesLastYear"
+              },
+              {
+                "name": "CostYTD",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CostYTD"
+              },
+              {
+                "name": "CostLastYear",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: CostLastYear"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesTerritory"
+        },
+        {
+          "tableId": "Sales_x2E_SalesTerritoryHistory",
+          "rowCount": 17,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "TerritoryID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: TerritoryID"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SalesTerritoryHistory"
+        },
+        {
+          "tableId": "Sales_x2E_ShoppingCartItem",
+          "rowCount": 3,
+          "schema": {
+            "fields": [
+              {
+                "name": "ShoppingCartItemID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ShoppingCartItemID"
+              },
+              {
+                "name": "ShoppingCartID",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ShoppingCartID"
+              },
+              {
+                "name": "Quantity",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: Quantity"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "DateCreated",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DateCreated"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.ShoppingCartItem"
+        },
+        {
+          "tableId": "Sales_x2E_SpecialOffer",
+          "rowCount": 16,
+          "schema": {
+            "fields": [
+              {
+                "name": "SpecialOfferID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SpecialOfferID"
+              },
+              {
+                "name": "Description",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Description"
+              },
+              {
+                "name": "DiscountPct",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DiscountPct"
+              },
+              {
+                "name": "Type",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Type"
+              },
+              {
+                "name": "Category",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Category"
+              },
+              {
+                "name": "StartDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: StartDate"
+              },
+              {
+                "name": "EndDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: EndDate"
+              },
+              {
+                "name": "MinQty",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: MinQty"
+              },
+              {
+                "name": "MaxQty",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: MaxQty"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SpecialOffer"
+        },
+        {
+          "tableId": "Sales_x2E_SpecialOfferProduct",
+          "rowCount": 538,
+          "schema": {
+            "fields": [
+              {
+                "name": "SpecialOfferID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SpecialOfferID"
+              },
+              {
+                "name": "ProductID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ProductID"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.SpecialOfferProduct"
+        },
+        {
+          "tableId": "Sales_x2E_Store",
+          "rowCount": 701,
+          "schema": {
+            "fields": [
+              {
+                "name": "BusinessEntityID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: BusinessEntityID"
+              },
+              {
+                "name": "Name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Name"
+              },
+              {
+                "name": "SalesPersonID",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: SalesPersonID"
+              },
+              {
+                "name": "Demographics",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Demographics"
+              },
+              {
+                "name": "rowguid",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: rowguid"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "Sales.Store"
+        },
+        {
+          "tableId": "dbo_x2E_AWBuildVersion",
+          "rowCount": 1,
+          "schema": {
+            "fields": [
+              {
+                "name": "SystemInformationID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: SystemInformationID"
+              },
+              {
+                "name": "Database_x20_Version",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Database Version"
+              },
+              {
+                "name": "VersionDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: VersionDate"
+              },
+              {
+                "name": "ModifiedDate",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ModifiedDate"
+              }
+            ]
+          },
+          "sourceTable": "dbo.AWBuildVersion"
+        },
+        {
+          "tableId": "dbo_x2E_DatabaseLog",
+          "rowCount": 0,
+          "schema": {
+            "fields": [
+              {
+                "name": "DatabaseLogID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: DatabaseLogID"
+              },
+              {
+                "name": "PostTime",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: PostTime"
+              },
+              {
+                "name": "DatabaseUser",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: DatabaseUser"
+              },
+              {
+                "name": "Event",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: Event"
+              },
+              {
+                "name": "Schema",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Schema"
+              },
+              {
+                "name": "Object",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: Object"
+              },
+              {
+                "name": "TSQL",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: TSQL"
+              },
+              {
+                "name": "XmlEvent",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: XmlEvent"
+              }
+            ]
+          },
+          "sourceTable": "dbo.DatabaseLog"
+        },
+        {
+          "tableId": "dbo_x2E_ErrorLog",
+          "rowCount": 0,
+          "schema": {
+            "fields": [
+              {
+                "name": "ErrorLogID",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ErrorLogID"
+              },
+              {
+                "name": "ErrorTime",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ErrorTime"
+              },
+              {
+                "name": "UserName",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: UserName"
+              },
+              {
+                "name": "ErrorNumber",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: ErrorNumber"
+              },
+              {
+                "name": "ErrorSeverity",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ErrorSeverity"
+              },
+              {
+                "name": "ErrorState",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ErrorState"
+              },
+              {
+                "name": "ErrorProcedure",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: ErrorProcedure"
+              },
+              {
+                "name": "ErrorLine",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Source field: ErrorLine"
+              },
+              {
+                "name": "ErrorMessage",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: ErrorMessage"
+              }
+            ]
+          },
+          "sourceTable": "dbo.ErrorLog"
+        }
+      ]
+    },
+    {
+      "id": "employees",
+      "datasetId": "employees",
+      "sourceRevision": "2069e26e8fdb60bdb16507f75569a579cf3da7cf",
+      "sourceSqliteSha256": "46b49dd0e141cd8db66d57680a10febfccc15e6f54dc7b8f3c2316b55e11c5f0",
+      "tableCount": 6,
+      "rowCount": 13584,
+      "tables": [
+        {
+          "tableId": "departments",
+          "rowCount": 9,
+          "schema": {
+            "fields": [
+              {
+                "name": "dept_no",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: dept_no"
+              },
+              {
+                "name": "dept_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: dept_name"
+              }
+            ]
+          },
+          "sourceTable": "departments"
+        },
+        {
+          "tableId": "dept_emp",
+          "rowCount": 1127,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_no",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_no"
+              },
+              {
+                "name": "dept_no",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: dept_no"
+              },
+              {
+                "name": "from_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: from_date"
+              },
+              {
+                "name": "to_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: to_date"
+              }
+            ]
+          },
+          "sourceTable": "dept_emp"
+        },
+        {
+          "tableId": "dept_manager",
+          "rowCount": 24,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_no",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_no"
+              },
+              {
+                "name": "dept_no",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: dept_no"
+              },
+              {
+                "name": "from_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: from_date"
+              },
+              {
+                "name": "to_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: to_date"
+              }
+            ]
+          },
+          "sourceTable": "dept_manager"
+        },
+        {
+          "tableId": "employees",
+          "rowCount": 1024,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_no",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_no"
+              },
+              {
+                "name": "birth_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: birth_date"
+              },
+              {
+                "name": "first_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: first_name"
+              },
+              {
+                "name": "last_name",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: last_name"
+              },
+              {
+                "name": "gender",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: gender"
+              },
+              {
+                "name": "hire_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: hire_date"
+              }
+            ]
+          },
+          "sourceTable": "employees"
+        },
+        {
+          "tableId": "salaries",
+          "rowCount": 9876,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_no",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_no"
+              },
+              {
+                "name": "salary",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: salary"
+              },
+              {
+                "name": "from_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: from_date"
+              },
+              {
+                "name": "to_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: to_date"
+              }
+            ]
+          },
+          "sourceTable": "salaries"
+        },
+        {
+          "tableId": "titles",
+          "rowCount": 1524,
+          "schema": {
+            "fields": [
+              {
+                "name": "emp_no",
+                "type": "INTEGER",
+                "mode": "REQUIRED",
+                "description": "Source field: emp_no"
+              },
+              {
+                "name": "title",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: title"
+              },
+              {
+                "name": "from_date",
+                "type": "STRING",
+                "mode": "REQUIRED",
+                "description": "Source field: from_date"
+              },
+              {
+                "name": "to_date",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Source field: to_date"
+              }
+            ]
+          },
+          "sourceTable": "titles"
+        }
+      ]
+    }
+  ],
+  "secretsIncluded": false,
+  "sourceTableBindingMethod": "Independently matched pinned SQLite table row counts and ordered source field descriptions; exact unique one-to-one binding for all128 tables."
+}

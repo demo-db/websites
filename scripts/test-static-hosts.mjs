@@ -175,7 +175,7 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   const rules = async (host) => (await readFile(join(out, host, '_redirects'), 'utf8')).split('\n').filter(Boolean);
   const catalogue = await rules('demodb.dev');
   assert.deepEqual(redirect(catalogue, '/ovdb/v1'), { to: OVDB_API, status: 308 });
-  assert.deepEqual(redirect(catalogue, '/ovdb/v1/databases/chinook/dtql'), { to: `${OVDB_API}/databases/chinook/dtql`, status: 308 });
+  assert.deepEqual(redirect(catalogue, '/ovdb/v1/databases/chinook/tugql'), { to: `${OVDB_API}/databases/chinook/tugql`, status: 308 });
   assert.deepEqual(redirect(catalogue, '/ovdb/dbs/northwind/'), { to: 'https://demodb.dev/northwind/', status: 308 });
   // As in the retired Worker, a storage route wins: /ovdb/db/northwind has its own storage page.
   assert.deepEqual(redirect(catalogue, '/ovdb/db/northwind'), { to: 'https://demodb.dev/ovdb/db/northwind/', status: 308 });
@@ -184,12 +184,12 @@ test('_redirects reproduce the former Worker redirects with 308 and absolute tar
   assert.equal(redirect(catalogue, '/'), null);
   for (const id of ['shipping', 'shipping-logs']) {
     const activated = await rules(`${id}.demodb.dev`);
-    assert.deepEqual(redirect(activated, `/ovdb/v1/databases/${id}/dtql`), { to: `${OVDB_API}/databases/${id}/dtql`, status: 308 });
+    assert.deepEqual(redirect(activated, `/ovdb/v1/databases/${id}/tugql`), { to: `${OVDB_API}/databases/${id}/tugql`, status: 308 });
   }
   const chinook = await rules('chinook.demodb.dev');
   assert.deepEqual(redirect(chinook, '/ovdb/'), { to: 'https://cloud.openvaultdb.com/ovdb/dbs/chinook', status: 308 });
   assert.deepEqual(redirect(chinook, '/ovdb/dbs/chinook/collections/Artist'), { to: 'https://cloud.openvaultdb.com/ovdb/dbs/chinook/collections/Artist', status: 308 });
-  assert.deepEqual(redirect(chinook, '/ovdb/v1/databases/chinook/dtql'), { to: `${OVDB_API}/databases/chinook/dtql`, status: 308 });
+  assert.deepEqual(redirect(chinook, '/ovdb/v1/databases/chinook/tugql'), { to: `${OVDB_API}/databases/chinook/tugql`, status: 308 });
   assert.equal(redirect(chinook, '/data/chinook.sqlite'), null);
   for (const host of manifest.hosts) {
     const lines = await rules(host.host).catch(() => []);

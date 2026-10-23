@@ -130,10 +130,10 @@ test('generated PostgreSQL DataTug links equal the datatug-apps catalogue routes
   }
 });
 
-test('the PostgreSQL limits say read-only, DTQL, 100 rows and never imply editing it', () => {
+test('the PostgreSQL limits say read-only, TugQL, 100 rows and never imply editing it', () => {
   const lines = datatugPostgresqlLimitLines().join(' ');
   assert.match(lines, /read-only by design/);
-  assert.match(lines, /DTQL/);
+  assert.match(lines, /TugQL/);
   assert.match(lines, /first 100 rows/);
   assert.match(lines, /editable local SQLite copy/);
   assert.doesNotMatch(lines, /wasm/i);

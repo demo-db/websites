@@ -10,7 +10,7 @@
 // server (datatug-apps demo-ovdb-page.component.ts, ovdb-database-browser.component.ts):
 //  - it is read-only by design: the page offers browsing only, because every control is
 //    decided by the descriptor's capabilities, and the page holds no credentials;
-//  - it browses with read-only DTQL (the API does not accept the legacy collection-key query);
+//  - it browses with read-only TugQL (the API does not accept the legacy collection-key query);
 //  - a table opens with one page of OVDB_PAGE_SIZE (100) rows, noted as "Showing the first 100 rows".
 // The counts are computed from each dataset's own generated metadata, so no page names
 // a dataset or table by hand.
@@ -54,7 +54,7 @@ export function datatugLocalLimitLines(limits: DataTugLocalLimits): string[] {
 export function datatugPostgresqlLimitLines(pageSize: number = DATATUG_BROWSER_PAGE_SIZE): string[] {
   return [
     'Explore PostgreSQL in DataTug is read-only by design: you can browse tables and records, but nothing can be edited, deleted or reset.',
-    'It reads the hosted PostgreSQL copy through the public OpenVaultDB server with read-only DTQL queries, never the database directly.',
+    'It reads the hosted PostgreSQL copy through the public OpenVaultDB server with read-only TugQL queries, never the database directly.',
     `A table opens with its first ${pageSize} rows. There is no paging yet.`,
     'To change data, use the editable local SQLite copy that Explore SQLite in DataTug opens in your browser.',
   ];

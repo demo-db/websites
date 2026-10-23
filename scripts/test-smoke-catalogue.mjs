@@ -42,8 +42,8 @@ test('wrong totals and falsely admitted pending APIs fail against actual built H
 });
 
 test('actual built PostgreSQL introduction cannot overclaim or underclaim readiness', () => {
-  const honest = postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only DTQL endpoints' : 'have public API access pending';
-  const misleading = postgresqlPublicApiVerified ? 'have public API access pending' : 'are hosted on Neon with separate public read-only DTQL endpoints';
+  const honest = postgresqlPublicApiVerified ? 'are hosted on Neon with separate public read-only TugQL endpoints' : 'have public API access pending';
+  const misleading = postgresqlPublicApiVerified ? 'have public API access pending' : 'are hosted on Neon with separate public read-only TugQL endpoints';
   assert.ok(catalogueProblems(html.replace(honest, misleading), storageGroups).some((p) => p.includes('PostgreSQL introduction')));
 });
 
@@ -52,7 +52,7 @@ test('both PostgreSQL config states enforce catalogue and detail readiness', () 
     const entry = { id: 'chinook-postgresql', engine: 'PostgreSQL', readiness: verified ? 'public-api' : 'hosted-api-pending', apiUrl: verified ? 'https://cloud.openvaultdb.com/v1/databases/chinook-postgresql' : undefined };
     const groups = [{ storages: [entry] }];
     const label = verified ? 'Public read-only API' : 'PostgreSQL edition · public API pending';
-    const body = `<h2>1 datasets across 1 storage editions.</h2><span>${verified ? 1 : 0} public OVDB APIs</span><a href="/ovdb/db/chinook-postgresql/">${label}</a>demodb-dev your own execution project PostgreSQL copies ${verified ? 'are hosted on Neon with separate public read-only DTQL endpoints' : 'have public API access pending'}`;
+    const body = `<h2>1 datasets across 1 storage editions.</h2><span>${verified ? 1 : 0} public OVDB APIs</span><a href="/ovdb/db/chinook-postgresql/">${label}</a>demodb-dev your own execution project PostgreSQL copies ${verified ? 'are hosted on Neon with separate public read-only TugQL endpoints' : 'have public API access pending'}`;
     assert.deepEqual(catalogueProblems(body, groups), []);
     assert.ok(catalogueProblems(body.replace(label, verified ? 'PostgreSQL edition · public API pending' : 'Public read-only API'), groups).length);
     const detail = `https://demodb.dev/ovdb/db/chinook-postgresql/ ${verified ? `${entry.apiUrl} Open read-only API does not expose the SQLite snapshot’s immutable build pin or a general SQL query endpoint` : 'Public OpenVaultDB API access is being prepared'}`;

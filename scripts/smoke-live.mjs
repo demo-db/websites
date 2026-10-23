@@ -25,7 +25,7 @@ if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('BUILD_COMMIT must be
 const OVDB_API = 'https://ovdb.demodb.dev/v1';
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const requiredQueryableDatabaseIds = ['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees'];
-const requiredPublishedDatabaseIds = [...requiredQueryableDatabaseIds, 'shipping', 'shipping-logs', 'countries'];
+const requiredPublishedDatabaseIds = [...requiredQueryableDatabaseIds, 'shipping', 'shipping-logs'];
 const comparisonFixture = {
   sha256: '3369d25729dea9e21facc7226aee3d5247fa0f3d8d4be4678aa9247fd064845f',
   bytes: 1007616,
@@ -41,7 +41,6 @@ const sites = [
   ['https://employees.demodb.dev', ['/', '/theme.js', '/tables/titles/', '/tables/current_dept_emp/', '/.well-known/openvaultdb']],
   ['https://shipping.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
   ['https://shipping-logs.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
-  ['https://countries.demodb.dev', ['/', '/theme.js', '/.well-known/openvaultdb']],
 ];
 const storageEntries = storageGroups.flatMap(({ storages }) => storages);
 

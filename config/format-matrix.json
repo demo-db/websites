@@ -103,16 +103,6 @@
         "mysql": "missing",
         "sqlserver": "missing",
         "oracle": "missing"
-      },
-      "countries": {
-        "sqlite": "provider prepared, publication pending",
-        "postgresql": "missing",
-        "json": "per-table provider files only",
-        "yaml": "missing",
-        "ingitdb": "missing",
-        "mysql": "missing",
-        "sqlserver": "missing",
-        "oracle": "missing"
       }
     }
   },
@@ -387,40 +377,6 @@
       "oracle": {
         "state": "unavailable",
         "reason": "The original native inGitDB logs are not converted into an Oracle script."
-      }
-    },
-    "countries": {
-      "sqlite": {
-        "state": "download",
-        "origin": "provider"
-      },
-      "postgresql": {
-        "state": "unavailable",
-        "reason": "The pinned Countries provider has no verified PostgreSQL script for this SQLite schema."
-      },
-      "json": {
-        "state": "download",
-        "origin": "derived"
-      },
-      "yaml": {
-        "state": "download",
-        "origin": "derived"
-      },
-      "ingitdb": {
-        "state": "unavailable",
-        "reason": "This SQLite provider does not publish a native inGitDB edition."
-      },
-      "mysql": {
-        "state": "unavailable",
-        "reason": "No verified MySQL script has been generated for this provider."
-      },
-      "sqlserver": {
-        "state": "unavailable",
-        "reason": "No verified SQL Server script has been generated for this provider."
-      },
-      "oracle": {
-        "state": "unavailable",
-        "reason": "No verified Oracle script has been generated for this provider."
       }
     }
   }

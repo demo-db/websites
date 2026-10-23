@@ -80,16 +80,17 @@ async function B(o, t, r, e) {
   });
   if (!i?.apiUrl) throw new Error("OVDB discovery does not list this database connection URL.");
   const l = A(i.apiUrl, n.href), p = await (await S(await fetch(l, { signal: e, credentials: "same-origin", headers: { Accept: "application/json" } }), "OVDB database metadata")).json(), b = p.capabilities ?? i.capabilities;
-  if (!(Array.isArray(b) ? b.includes("dtql") : q(b) && b.dtql === !0) || !p.endpoints?.dtql) throw new Error("This OVDB database does not advertise DTQL queries.");
-  const k = A(p.endpoints.dtql, l.href);
+  const tgEp = p.endpoints?.tugql || p.endpoints?.dtql?.replace(/\/dtql(?=$|[?#])/u, "/tugql"), tgFmt = p.queryFormat?.replace(/^dtql-/u, "tugql-");
+  if (!(Array.isArray(b) ? b.includes("tugql") || b.includes("dtql") : q(b) && (b.tugql ?? b.dtql) === !0) || !tgEp) throw new Error("This OVDB database does not advertise TugQL queries.");
+  const k = A(tgEp, l.href);
   let w, v;
-  if (p.queryFormat === "dtql-yaml+json")
+  if (tgFmt === "tugql-yaml+json")
     w = JSON.stringify({ query: t, parameters: r }), v = "application/json";
-  else if (p.queryFormat === "dtql-yaml") {
-    if (Object.keys(r).length) throw new Error("This OVDB endpoint does not support bound DTQL parameters.");
+  else if (tgFmt === "tugql-yaml") {
+    if (Object.keys(r).length) throw new Error("This OVDB endpoint does not support bound TugQL parameters.");
     w = t, v = "application/yaml";
-  } else throw new Error(`Unsupported OVDB query format: ${p.queryFormat ?? "missing"}.`);
-  const N = await S(await fetch(k, { method: "POST", signal: e, credentials: "same-origin", headers: { "Content-Type": v, Accept: "application/json" }, body: w }), "DTQL query");
+  } else throw new Error(`Unsupported OVDB query format: ${tgFmt ?? "missing"}.`);
+  const N = await S(await fetch(k, { method: "POST", signal: e, credentials: "same-origin", headers: { "Content-Type": v, Accept: "application/json" }, body: w }), "TugQL query");
   return $(await N.json());
 }
 const F = `
@@ -117,7 +118,7 @@ function Q(o, t) {
     return o === "true";
   }
   if (t === "null") return null;
-  throw new Error(`Unsupported DTQL parameter type: ${t}.`);
+  throw new Error(`Unsupported TugQL parameter type: ${t}.`);
 }
 class z extends HTMLElement {
   connectedCallback() {
@@ -127,7 +128,7 @@ class z extends HTMLElement {
     this.observer?.disconnect();
   }
   notify() {
-    this.dispatchEvent(new Event("dtql-change", { bubbles: !0 }));
+    this.dispatchEvent(new Event("tugql-change", { bubbles: !0 }));
   }
 }
 class J extends HTMLElement {
@@ -141,7 +142,7 @@ class J extends HTMLElement {
     return this.propertySet ? this.propertyValue : Q(this.getAttribute("value") ?? "", this.getAttribute("type"));
   }
   set value(t) {
-    if (t !== null && !["string", "number", "boolean"].includes(typeof t)) throw new TypeError("DTQL parameter value must be a JSON scalar.");
+    if (t !== null && !["string", "number", "boolean"].includes(typeof t)) throw new TypeError("TugQL parameter value must be a JSON scalar.");
     this.propertySet = !0, this.propertyValue = t, this.notify();
   }
   attributeChangedCallback(t) {
@@ -151,7 +152,7 @@ class J extends HTMLElement {
     this.style.display = "none", this.notify();
   }
   notify() {
-    this.dispatchEvent(new Event("dtql-change", { bubbles: !0 }));
+    this.dispatchEvent(new Event("tugql-change", { bubbles: !0 }));
   }
 }
 class U extends HTMLElement {
@@ -162,10 +163,10 @@ class U extends HTMLElement {
     return ["connection", "data-url", "format", "type", "page-size"];
   }
   connectedCallback() {
-    this.addEventListener("dtql-change", this.onChildChange), this.observer = new MutationObserver(() => this.schedule()), this.observer.observe(this, { childList: !0, subtree: !1 }), this.schedule();
+    this.addEventListener("tugql-change", this.onChildChange), this.observer = new MutationObserver(() => this.schedule()), this.observer.observe(this, { childList: !0, subtree: !1 }), this.schedule();
   }
   disconnectedCallback() {
-    this.removeEventListener("dtql-change", this.onChildChange), this.observer?.disconnect(), this.controller?.abort(), this.revision++;
+    this.removeEventListener("tugql-change", this.onChildChange), this.observer?.disconnect(), this.controller?.abort(), this.revision++;
   }
   attributeChangedCallback() {
     this.schedule();
@@ -182,17 +183,17 @@ class U extends HTMLElement {
     const r = ++this.revision;
     this.state = "loading", this.message = "Loading data…", this.render();
     try {
-      const e = this.getAttribute("connection"), s = this.getAttribute("data-url"), n = [...this.children].filter((f) => f.localName === "dtql-query"), a = n[0], c = [...this.children].filter((f) => f.localName === "dtql-param");
+      const e = this.getAttribute("connection"), s = this.getAttribute("data-url"), n = [...this.children].filter((f) => f.localName === "tugql-query"), a = n[0], c = [...this.children].filter((f) => f.localName === "tugql-param");
       if (!!e == !!s) throw new Error("Set exactly one of connection or data-url.");
-      if (s && (n.length || c.length)) throw new Error("data-url cannot be combined with DTQL query or parameters.");
-      if (e && (n.length !== 1 || !a?.textContent?.trim())) throw new Error("A connection requires one nonempty <dtql-query>.");
+      if (s && (n.length || c.length)) throw new Error("data-url cannot be combined with TugQL query or parameters.");
+      if (e && (n.length !== 1 || !a?.textContent?.trim())) throw new Error("A connection requires one nonempty <tugql-query>.");
       const i = /* @__PURE__ */ Object.create(null);
       for (const f of c) {
         const p = f.getAttribute("name");
-        if (!p || Object.hasOwn(i, p)) throw new Error("Every <dtql-param> needs a unique nonempty name.");
+        if (!p || Object.hasOwn(i, p)) throw new Error("Every <tugql-param> needs a unique nonempty name.");
         i[p] = f.value;
       }
-      if (!s && (!e || !a?.textContent)) throw new Error("A connection requires one nonempty <dtql-query>.");
+      if (!s && (!e || !a?.textContent)) throw new Error("A connection requires one nonempty <tugql-query>.");
       const l = s ? await R(s, this.getAttribute("format"), t.signal) : await B(e, a?.textContent?.trim() ?? "", i, t.signal);
       if (t.signal.aborted || r !== this.revision) return;
       this.validateData(l), this.data = l, this.state = l.rows.length ? "ready" : "empty", this.message = l.rows.length ? "" : "No rows found.", this.render(), this.dispatchEvent(new CustomEvent("datatug-data-loaded", { detail: { rows: l.rows.length, columns: l.columns, metadata: l.metadata }, bubbles: !0 }));
@@ -326,14 +327,14 @@ class I extends U {
     t.append(c);
   }
 }
-customElements.get("dtql-query") || customElements.define("dtql-query", z);
-customElements.get("dtql-param") || customElements.define("dtql-param", J);
+customElements.get("tugql-query") || customElements.define("tugql-query", z);
+customElements.get("tugql-param") || customElements.define("tugql-param", J);
 customElements.get("datatug-grid") || customElements.define("datatug-grid", H);
 customElements.get("datatug-chart") || customElements.define("datatug-chart", I);
 export {
   I as DataTugChart,
   H as DataTugGrid,
-  J as DtqlParam,
-  z as DtqlQuery
+  J as TugqlParam,
+  z as TugqlQuery
 };
 //# sourceMappingURL=datatug.js.map

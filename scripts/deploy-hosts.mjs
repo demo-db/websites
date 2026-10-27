@@ -113,7 +113,8 @@ export function capacityPlan(existing, names, limit) {
   const have = new Set(existing);
   const created = [...new Set(names)].filter((name) => !have.has(name));
   const after = have.size + created.length;
-  return { existing: have.size, created, after, limit, free: Math.max(0, limit - have.size), ok: after <= limit };
+  // Updating existing scripts consumes no new capacity, even if the account already exceeds this limit.
+  return { existing: have.size, created, after, limit, free: Math.max(0, limit - have.size), ok: created.length === 0 || after <= limit };
 }
 
 export function parseLimit(value) {

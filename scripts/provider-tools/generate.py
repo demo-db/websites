@@ -379,6 +379,8 @@ def build_meaning(database_id: str, config: dict[str, Any], native_to_entity: di
                         raise GenerationError(f"meaning concept {concept_id!r} binding note must be a non-empty string")
                     model_binding[optional] = binding[optional]
             out_bindings.append(model_binding)
+        if sum(binding["role"] == "entity" for binding in out_bindings) > 1:
+            raise GenerationError(f"meaning concept {concept_id!r} may have only one entity binding; describe each recordset with its own concept")
         result["bindings"] = out_bindings
         generated.append(result)
     for start in local_extends:

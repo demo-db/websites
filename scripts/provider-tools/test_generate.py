@@ -239,6 +239,15 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertTrue(bindings)
         self.assertTrue(all(binding["model"].startswith("modelspec:///fixture_module.") for binding in bindings))
 
+    def test_meaning_entity_cannot_bind_multiple_recordsets(self) -> None:
+        self.manifest["generator"]["meaning"]["concepts"].append({
+            "id": "ambiguous-entity", "kind": "entity", "label": "Ambiguous", "description": "Two collections are not one entity binding.",
+            "bindings": [{"recordset": table, "role": "entity"} for table in ["Order Details", "HumanResources.Employee"]],
+        })
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest), encoding="utf-8")
+        with self.assertRaisesRegex(generator.GenerationError, "one entity binding"):
+            generator.generate(self.root)
+
     def test_other_formats_keep_their_own_vocabulary(self) -> None:
         generator.generate(self.root)
         manifest = json.loads((self.root / "ovdb.yaml").read_text(encoding="utf-8"))

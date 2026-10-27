@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const GRAPH_FORMAT = 'codegrapher-database-graph/v1';
-const registered = new Set(['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees']);
+const registered = new Set(['chinook', 'northwind', 'pubs', 'sakila', 'adventureworks', 'employees', 'shipping', 'shipping-logs']);
 const segment = encodeURIComponent;
 
 export function meaningGraphHref(repository, concept) {

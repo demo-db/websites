@@ -19,6 +19,18 @@ for (const db of databases) {
     const bytes = await readFile(new URL(db.graph.path, dir));
     assert.equal(createHash('sha256').update(bytes).digest('hex'), db.graph.sha256);
     const graph = JSON.parse(bytes);
+    if (['shipping', 'shipping-logs'].includes(db.id)) {
+      assert.ok(graph.concepts.some((concept) => concept.kind === 'entity'), 'Shipping profiles must publish meaningful entity lists');
+      assert.deepEqual(graph.diagnostics, [], 'Every authored Shipping binding must resolve to its native schema');
+      assert.ok(graph.concepts.every((concept) => concept.definitionHref.startsWith(`https://meaninggraph.io/registry/github.com/demo-db/${db.id}/`)));
+    }
+    if (db.id === 'shipping-logs') {
+      const recovery = graph.concepts.find((concept) => concept.id === 'recovery-example');
+      assert.ok(recovery && recovery.bindings.length > 0);
+      assert.ok(recovery.bindings.every((binding) => /recovery/i.test(binding.table)), 'Recovery examples must not be classified as baseline observations');
+      const attempt = graph.concepts.find((concept) => concept.id === 'attempt-reference');
+      assert.equal(attempt?.valuesOf, `meaning://github.com/demo-db/shipping/shipping-attempt?ref=${databases.find((database) => database.id === 'shipping').sourceCommit}`);
+    }
     assert.equal(graph.source.revision, db.sourceCommit);
     assert.equal(graph.tables.length, db.tables.length);
     assert.equal(graph.tables.reduce((n, t) => n + t.foreignKeys.length, 0), db.tables.reduce((n, t) => n + t.foreignKeys.length, 0));

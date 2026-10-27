@@ -25,7 +25,14 @@ test('never matches a concept by label or publishes unresolved field bindings', 
 });
 
 test('unregistered graphs link to the exact authored local definition', () => {
-  const graph = databaseGraph({ ...db, id: 'shipping', canonicalUrl: 'https://shipping.demodb.dev/' }, { concepts: [{ id: 'customer', kind: 'entity', bindings: [{ model: 'modelspec:///chinook.Sales_Customer', role: 'entity' }] }] }, model);
-  assert.equal(graph.concepts[0].definitionHref, 'https://shipping.demodb.dev/model/#concept-customer');
+  const graph = databaseGraph({ ...db, id: 'unlisted', canonicalUrl: 'https://unlisted.demodb.dev/' }, { concepts: [{ id: 'customer', kind: 'entity', bindings: [{ model: 'modelspec:///chinook.Sales_Customer', role: 'entity' }] }] }, model);
+  assert.equal(graph.concepts[0].definitionHref, 'https://unlisted.demodb.dev/model/#concept-customer');
   assert.equal(graph.concepts[0].definitionLabel, 'Authored meaning');
+});
+
+for (const id of ['shipping', 'shipping-logs']) test(`${id} links bound concepts to registered MeaningGraph definitions`, () => {
+  const graph = databaseGraph({ ...db, id, sourceRepository: `https://github.com/demo-db/${id}` }, { concepts: [{ id: 'observation', kind: 'entity', bindings: [{ model: 'modelspec:///chinook.Sales_Customer', role: 'entity' }] }] }, model);
+  assert.equal(graph.concepts[0].definitionHref, `https://meaninggraph.io/registry/github.com/demo-db/${id}/entities/observation/`);
+  assert.equal(graph.concepts[0].definitionLabel, 'MeaningGraph definition');
+  assert.equal(graph.meaningHref, `https://meaninggraph.io/registry/github.com/demo-db/${id}/`);
 });

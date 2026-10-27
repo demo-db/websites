@@ -67,14 +67,14 @@
     {
       "id": "shipping",
       "repository": "https://github.com/demo-db/shipping",
-      "commit": "5eff414052ea417502549c5f80b92b558804305f",
-      "contractSha256": "e9899b1d70ac5d75a52183ee35bc06a0f4bddce37b9894b32897f267b5631f46"
+      "commit": "03a158c07bb726ac2c4ad7f524bddf696ac2e6bb",
+      "contractSha256": "eb296ddb128eba261a1946098b16f980bbeb693523312be10b2aa648192c8961"
     },
     {
       "id": "shipping-logs",
       "repository": "https://github.com/demo-db/shipping-logs",
-      "commit": "78bc3e52fa535c68ead96eb2a8d4c25d5d072c86",
-      "contractSha256": "520dc9b530f8f048de3b4f9df06c08e5872c53bd956f35ac3a248eee5e1e6c6b"
+      "commit": "39a6b61126ea6c55fc1615ff078853a479834fb6",
+      "contractSha256": "9466535c8d1c57169a61ea80ef373b2027830de61d8dcfbcf8f7c35d56ff820d"
     }
   ],
   "comparisonFixtures": [

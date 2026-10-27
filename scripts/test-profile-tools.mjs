@@ -25,9 +25,12 @@ for (const db of databases) {
       assert.ok(graph.concepts.every((concept) => concept.definitionHref.startsWith(`https://meaninggraph.io/registry/github.com/demo-db/${db.id}/`)));
     }
     if (db.id === 'shipping-logs') {
-      const recovery = graph.concepts.find((concept) => concept.id === 'recovery-example');
-      assert.ok(recovery && recovery.bindings.length > 0);
-      assert.ok(recovery.bindings.every((binding) => /recovery/i.test(binding.table)), 'Recovery examples must not be classified as baseline observations');
+      const entities = graph.concepts.filter((concept) => concept.kind === 'entity');
+      assert.ok(entities.every((concept) => concept.bindings.filter((binding) => binding.role === 'entity').length === 1), 'Each log entity concept must bind one record type');
+      assert.deepEqual(entities.map((concept) => concept.bindings.find((binding) => binding.role === 'entity').table).sort(), graph.tables.map((table) => table.name).sort());
+      const recovery = entities.filter((concept) => concept.id.includes('recovery'));
+      assert.equal(recovery.length, 4);
+      assert.ok(recovery.every((concept) => concept.bindings.every((binding) => /recovery/i.test(binding.table))), 'Recovery examples must not be classified as baseline observations');
       const attempt = graph.concepts.find((concept) => concept.id === 'attempt-reference');
       assert.equal(attempt?.valuesOf, `meaning://github.com/demo-db/shipping/shipping-attempt?ref=${databases.find((database) => database.id === 'shipping').sourceCommit}`);
     }

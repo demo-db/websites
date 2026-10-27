@@ -73,8 +73,8 @@
     {
       "id": "shipping-logs",
       "repository": "https://github.com/demo-db/shipping-logs",
-      "commit": "39a6b61126ea6c55fc1615ff078853a479834fb6",
-      "contractSha256": "9466535c8d1c57169a61ea80ef373b2027830de61d8dcfbcf8f7c35d56ff820d"
+      "commit": "9322a1b42726166e136dc9d5181393a1ec70cc76",
+      "contractSha256": "52588fb98ff89e132e2242ceb9a27ed103181c70537b833030e1c53d273f7ee8"
     }
   ],
   "comparisonFixtures": [

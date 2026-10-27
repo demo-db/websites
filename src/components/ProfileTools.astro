@@ -1,0 +1,21 @@
+---
+import databaseIcon from '../assets/tabler/database.svg?url';
+import schemaIcon from '../assets/tabler/schema.svg?url';
+import terminalIcon from '../assets/tabler/terminal-2.svg?url';
+import type { Database } from '../data/types';
+import type { ExploreActions } from '../data/explore';
+interface Props { db: Database; explore: ExploreActions }
+const { db, explore } = Astro.props;
+---
+<section class="shell section profile-tools" aria-labelledby="tools-heading">
+  <div class="section-heading compact"><div><p class="eyebrow">Useful next steps</p><h2 id="tools-heading">Tools for your next step.</h2></div></div>
+  <div class="profile-tool-list">
+    <div><img class="tool-icon" src={databaseIcon} width="28" height="28" alt="" /><h3>DataTug</h3><p>Explore {db.name} visually.<br />Browse tables and query your data.</p>{explore.primary ? <a class="text-link" href={explore.primary.href}>Open {db.name} in DataTug →</a> : <a class="text-link" href="https://datatug.app/">Explore DataTug ↗</a>}</div>
+    <div><img class="tool-icon" src={schemaIcon} width="28" height="28" alt="" /><h3>CodeGrapher</h3><p>See how {db.name} connects.<br />Explore tables, relationships and linked meanings.</p><a class="text-link" href={db.graph.href}>Open schema graph ↗</a></div>
+    <div><img class="tool-icon" src={terminalIcon} width="28" height="28" alt="" /><h3>QueryDock <span class="tool-status">Coming soon</span></h3><p>A home for SQL experiments.<br />A focused SQL playground in development.</p><a class="text-link" href="https://querydock.run/en/">Preview QueryDock ↗</a></div>
+  </div>
+</section>
+<style>
+.tool-icon{float:left;margin:0 16px 12px 0;width:28px;height:28px}.profile-tools{border-bottom:1px solid var(--line);padding-bottom:36px}.profile-tool-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:30px}.profile-tool-list>div{min-width:0;padding-right:26px;border-right:1px solid var(--line)}.profile-tool-list>div:last-child{padding-right:0;border-right:0}.profile-tool-list h3{font-size:22px;margin:0 0 10px;letter-spacing:-.035em}.profile-tool-list p{clear:both;font-size:14px;line-height:1.7;color:var(--muted);margin:0 0 18px}.tool-status{display:inline-block;vertical-align:middle;font:10px 'DM Mono',monospace;color:var(--cyan);border:1px solid var(--line);border-radius:20px;padding:3px 7px;letter-spacing:0}.profile-tool-list a{font-size:14px;overflow-wrap:anywhere}@media(max-width:800px){.profile-tool-list{grid-template-columns:1fr;gap:20px}.profile-tool-list>div{border-right:0;border-bottom:1px solid var(--line);padding:0 0 20px}.profile-tool-list>div:last-child{border-bottom:0;padding:0}}
+:global(html[data-theme="dark"]) .tool-icon{filter:invert(1)}
+</style>

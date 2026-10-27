@@ -13,6 +13,7 @@ import { formatAvailability, validateMatrix } from './format-matrix.mjs';
 import { isCompatibleProviderSchema } from './provider-schema-compat.mjs';
 import { publishNorthwindOrdersEvidence } from './northwind-orders-evidence.mjs';
 import { projectRelatedDatabases } from './related-databases.mjs';
+import { databaseGraph, graphAsset } from './database-graph.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(join(root, 'config/databases.json'), 'utf8'));
@@ -369,6 +370,12 @@ async function materializeModels(db, source) {
     await writeFile(target, bytes);
   }
   if (modelChecksumsBytes) await writeFile(join(internalAssets, db.id, 'model/checksums.json'), modelChecksumsBytes);
+  const meaning = db.meaning.file ? parseYaml((await source.read(db.meaning.file)).toString('utf8')) : null;
+  const model = db.model.modelspec ? JSON.parse((await source.read(db.model.modelspec)).toString('utf8')) : null;
+  const graph = databaseGraph(db, meaning, model, source.manifest.generator?.modelEntityAliases);
+  const asset = graphAsset(graph);
+  await writeFile(join(internalAssets, db.id, asset.path), asset.bytes);
+  db.graph = { href: asset.href, path: asset.path, sha256: asset.sha256, concepts: asset.concepts, meaningHref: asset.meaningHref, diagnostics: asset.diagnostics };
 }
 
 // A provider may publish `metadata/checksums.json`, "every other published data file with its SHA-256 and size". Chinook does. The site moves

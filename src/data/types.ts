@@ -106,6 +106,7 @@ export type Database = {
   exportByPublicPath: Record<string, ExportFile>;
   model: { modelspec?: string; hcl?: string };
   meaning: { file?: string };
+  graph: { href: string; path: string; sha256: string; meaningHref: string; diagnostics: string[]; concepts: MeaningConcept[] };
   ovdb: { url: string; deploymentUrl: string; discovery: string; recordsetPage: string | null; connection: string; available: boolean; readOnly: boolean; query: boolean };
 };
 
@@ -150,4 +151,10 @@ export type OVDBServer = {
   homepage: string;
   apiUrl: string;
   databases: { id: string; localId: string; serverDbBaseUrl: string; manifestUrl: string; apiUrl: string }[];
+};
+
+export type MeaningConcept = {
+  id: string; kind: string; label: string; description: string; extends?: string; valuesOf?: string;
+  definitionHref: string; definitionLabel: string;
+  bindings: { table: string; column?: string; role: string; note?: string }[];
 };

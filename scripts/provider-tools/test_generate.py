@@ -229,6 +229,16 @@ class ProviderGeneratorTests(unittest.TestCase):
         self.assertEqual(manifest["recordset_entities"]["Order Details"], "Order_Details")
         self.assertEqual(manifest["recordset_entities"]["dbo.DatabaseLog"], "dbo_DatabaseLog")
 
+    def test_meaning_bindings_use_the_configured_model_module_name(self) -> None:
+        self.manifest["generator"]["model"]["name"] = "fixture_module"
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest), encoding="utf-8")
+        generator.generate(self.root)
+        meaning = json.loads((self.root / "model/fixture.meaning.yaml").read_text())
+        self.assertEqual(meaning["models"], {"fixture_module": "fixture.modelspec.hcl"})
+        bindings = [binding for concept in meaning["concepts"] for binding in concept["bindings"]]
+        self.assertTrue(bindings)
+        self.assertTrue(all(binding["model"].startswith("modelspec:///fixture_module.") for binding in bindings))
+
     def test_other_formats_keep_their_own_vocabulary(self) -> None:
         generator.generate(self.root)
         manifest = json.loads((self.root / "ovdb.yaml").read_text(encoding="utf-8"))

@@ -220,11 +220,11 @@ def model_files(database_id: str, config: dict[str, Any], recordsets: list[dict[
         hcl_lines.append("}")
     hcl = ("\n".join(hcl_lines) + "\n").encode("utf-8")
 
-    meaning = build_meaning(database_id, meaning_config, native_to_entity, native_to_property)
+    meaning = build_meaning(database_id, meaning_config, native_to_entity, native_to_property, module_name=module_name)
     return model, canonical_json(model), hcl, canonical_json(meaning)
 
 
-def build_meaning(database_id: str, config: dict[str, Any], native_to_entity: dict[str, str], native_to_property: dict[str, dict[str, str]]) -> dict[str, Any]:
+def build_meaning(database_id: str, config: dict[str, Any], native_to_entity: dict[str, str], native_to_property: dict[str, dict[str, str]], *, module_name: str) -> dict[str, Any]:
     graph_id = config.get("id", database_id)
     address = config.get("address")
     name = config.get("name")
@@ -363,7 +363,7 @@ def build_meaning(database_id: str, config: dict[str, Any], native_to_entity: di
             role = binding.get("role")
             if recordset not in native_to_entity or role not in ("entity", "identifier", "display-name", "foreign-key", "value"):
                 raise GenerationError(f"meaning concept {concept_id!r} binding has unknown recordset or role")
-            model_binding: dict[str, Any] = {"model": f"modelspec:///{database_id}.{native_to_entity[recordset]}", "role": role}
+            model_binding: dict[str, Any] = {"model": f"modelspec:///{module_name}.{native_to_entity[recordset]}", "role": role}
             prop = binding.get("property")
             if role != "entity" and not prop:
                 raise GenerationError(f"meaning concept {concept_id!r} binding with role {role!r} requires property")
@@ -395,7 +395,7 @@ def build_meaning(database_id: str, config: dict[str, Any], native_to_entity: di
         "name": name,
         "description": description,
         "license": license_id,
-        "models": {database_id: f"{database_id}.modelspec.hcl"},
+        "models": {module_name: f"{database_id}.modelspec.hcl"},
         **({"sources": normalized_sources} if normalized_sources else {}),
         "concepts": generated,
     }

@@ -58,6 +58,20 @@ test('a failed preflight deploys nothing and says how many slots are needed', as
   assert.deepEqual(calls, []);
 });
 
+test('an account above the configured limit can update existing Workers without creating any', async () => {
+  const configs = await hostConfigs();
+  const calls = [];
+  await deployHosts({ configs, env, fetch: mockFetch([scripts(103, [CATALOGUE_SCRIPT, ...ESTABLISHED_DATASET_WORKERS])]), wrangler: (args) => calls.push(args), log: () => {} });
+  assert.equal(calls.length, configs.length);
+});
+
+test('an account above the configured limit still refuses a new Worker before deploying anything', async () => {
+  const configs = await hostConfigs();
+  const calls = [];
+  await assert.rejects(deployHosts({ configs, env, fetch: mockFetch([scripts(103, [CATALOGUE_SCRIPT, ...ESTABLISHED_DATASET_WORKERS.slice(1)])]), wrangler: (args) => calls.push(args), log: () => {} }), /needs 1 free Worker slot/);
+  assert.deepEqual(calls, []);
+});
+
 test('a dry run calls no API and passes --dry-run to every wrangler deploy', async () => {
   const configs = await hostConfigs();
   const calls = [];

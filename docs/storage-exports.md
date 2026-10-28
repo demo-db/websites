@@ -66,9 +66,30 @@ decimal strings. The six hosted DemoDB BigQuery editions are listed in the
 checked-in [`config/bigquery-hosting.json`](../config/bigquery-hosting.json)
 receipt. It records source hashes and revisions, independently verified table
 and row counts, the DataTug CLI release, and the authenticated-reader access
-check. This script still only prepares local load bundles and does not provision
-BigQuery. Queries run in a user-selected execution project; neither the website
-nor its Worker proxies query jobs.
+check. The verifier's SHA-bound [`config/bigquery-schema-baseline.json`](../config/bigquery-schema-baseline.json),
+referenced by [`config/hosted-snapshot-verification.json`](../config/hosted-snapshot-verification.json),
+records observed schemas and row counts for each hosted table, with explicit
+source-table bindings to the pinned SQLite fixtures. This verifier contract is
+separate from the published hosting manifest. The baseline does not claim
+BigQuery full-cell equality.
+
+The `Verify hosted snapshots` GitHub Actions workflow runs manually or weekly
+on `main`. It checks SQLite/inGitDB metadata and full rows, PostgreSQL schema
+and full rows, and BigQuery dataset/table metadata and row counts. BigQuery
+checks use the read-only REST metadata API and submit no SQL jobs. CI uses
+dedicated read-only PostgreSQL URL secrets and a GitHub workload-identity token
+scoped to `bigquery.readonly`; it has no BigQuery job or write grant and uses no
+human ADC. Public BigQuery `READER` access can read table data, but the verifier
+itself only requests metadata. It does not claim BigQuery full-cell equality.
+The repository variables are `DEMODB_VERIFY_WIF_PROVIDER` and
+`DEMODB_VERIFY_SERVICE_ACCOUNT`; the six PostgreSQL secrets are named
+`DEMODB_PG_VERIFY_URL_{CHINOOK,NORTHWIND,PUBS,SAKILA,ADVENTUREWORKS,EMPLOYEES}`.
+The Google workload-identity condition must require repository ID `1404022070`,
+owner ID `337601529`, `refs/heads/main`,
+`demo-db/websites/.github/workflows/verify-hosted-snapshots.yml@refs/heads/main`,
+and only `schedule` or `workflow_dispatch` events.
+Interactive queries continue to use a user-selected execution project; neither
+the website nor its Worker proxies query jobs.
 
 Each Downloads page also links a deterministic research snapshot ZIP. During
 the site build, `research_snapshots.py` packages each pinned provider's checked

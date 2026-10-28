@@ -1,0 +1,15 @@
+{
+  "format": "demodb-hosted-snapshot-verification/v1",
+  "projectId": "demodb-dev",
+  "location": "US",
+  "schemaBaseline": {
+    "path": "config/bigquery-schema-baseline.json",
+    "sha256": "0325c53e3bce185630b6156a5449b5cbee3f6170f9dd287828414fa9687a42b0"
+  },
+  "scope": {
+    "bigQuery": "Dataset/table metadata and row counts only; no SQL jobs or full-cell equality claim.",
+    "postgresql": "Pinned schema and full typed row equality; connection set default_transaction_read_only=on.",
+    "sqliteInGitDB": "Pinned metadata, full typed rows, and SQLite foreign-key checks."
+  },
+  "secretsIncluded": false
+}

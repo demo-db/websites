@@ -12,7 +12,7 @@ const { db, explore } = Astro.props;
   <div class="profile-tool-list">
     <div><img class="tool-icon" src={databaseIcon} width="28" height="28" alt="" /><h3>DataTug</h3><p>Explore {db.name} visually.<br />Browse tables and query your data.</p>{explore.primary ? <a class="text-link" href={explore.primary.href}>Open {db.name} in DataTug →</a> : <a class="text-link" href="https://datatug.app/">Explore DataTug ↗</a>}</div>
     <div><img class="tool-icon" src={schemaIcon} width="28" height="28" alt="" /><h3>CodeGrapher</h3><p>See how {db.name} connects.<br />Explore tables, relationships and linked meanings.</p><a class="text-link" href={db.graph.href}>Open schema graph ↗</a></div>
-    <div><img class="tool-icon" src={terminalIcon} width="28" height="28" alt="" /><h3>QueryDock</h3><p>A home for SQL experiments.<br />Run PostgreSQL, SQLite and DuckDB in your browser.</p><a class="text-link" href="https://querydock.run/en/">Open QueryDock ↗</a></div>
+    <div><img class="tool-icon" src={terminalIcon} width="28" height="28" alt="" /><h3>QueryDock</h3><p>A home for SQL experiments.<br />Run PostgreSQL, SQLite and DuckDB in your browser.</p><a class="text-link" href={db.queries.length ? "/queries/" : "https://querydock.run/en/"}>{db.queries.length ? "Try prepared SQL examples →" : "Open QueryDock ↗"}</a></div>
   </div>
 </section>
 <style>

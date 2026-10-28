@@ -1,0 +1,10 @@
+---
+import type { Database, MeaningConcept } from '../data/types';
+import { recordsetPath } from '../data/db';
+interface Props { db: Database; concept: MeaningConcept }
+const { db, concept } = Astro.props;
+const reference = concept.extends ?? concept.valuesOf;
+const label = reference?.split('?')[0].split('/').at(-1)?.replaceAll('-', ' ');
+---
+<li id={`concept-${concept.id}`}><div><a class="meaning-name" href={concept.definitionHref}>{concept.label} ↗</a><p>{concept.description}</p></div><div class="meaning-bindings"><span class="eyebrow">Mapped tables and fields</span>{[...new Set(concept.bindings.map((binding) => `${binding.table}${binding.column ? `.${binding.column}` : ''}`))].map((label) => { const binding = concept.bindings.find((binding) => `${binding.table}${binding.column ? `.${binding.column}` : ''}` === label)!; return <a href={recordsetPath(binding.table)}>{label}</a>; })}</div><div class="meaning-scope">{reference ? <><span>{concept.extends ? 'Extends' : 'Values of'} {reference.includes('://') ? 'shared' : 'local'} concept</span><strong>{label}</strong></> : <span>{db.name} concept</span>}<a href={concept.definitionHref}>{concept.definitionLabel} ↗</a></div></li>
+<style>li{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:30px;padding:22px 0;border-bottom:1px solid var(--line)}.meaning-name{font-size:18px;font-weight:700;color:var(--cyan)}p{margin:7px 0 0;color:var(--muted);font-size:14px;max-width:65ch;line-height:1.65}.meaning-bindings,.meaning-scope{display:flex;flex-direction:column;align-items:start;gap:7px;min-width:0;font-size:13px}.meaning-bindings a,.meaning-scope a{overflow-wrap:anywhere;color:var(--cyan);min-height:44px;display:flex;align-items:center}.eyebrow{font-size:9px;margin:0}.meaning-scope span{color:var(--muted)}.meaning-scope strong{text-transform:capitalize;font-weight:500}@media(max-width:680px){li{grid-template-columns:minmax(0,1fr);gap:12px}.meaning-bindings{flex-direction:row;flex-wrap:wrap;align-items:center}}</style>

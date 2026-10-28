@@ -1,0 +1,32 @@
+---
+import DatabaseCard from './DatabaseCard.astro';
+import type { Database } from '../data/types';
+interface Props { databases: Database[] }
+const { databases } = Astro.props;
+const facts = databases.map((db) => {
+ const files = db.exports.filter((file) => !file.table && file.format !== 'metadata');
+ const fixture = files.find((file) => file.format === 'sqlite') ?? files.find((file) => file.format === 'ingitdb');
+ const bytes = fixture?.decodedBytes ?? fixture?.bytes ?? null;
+ return { id: db.id, formats: [...new Set(files.map((file) => file.format))], engines: db.formatAvailability.filter((format) => format.state === 'download').map((format) => format.format).filter((format) => ['sqlite','postgresql','mysql','sqlserver','oracle','ingitdb'].includes(format)), licence: String(db.source.license ?? 'Unknown'), size: bytes === null ? 'unknown' : bytes <= 5 * 1024 ** 2 ? 'small' : bytes <= 50 * 1024 ** 2 ? 'medium' : 'large', purposes: [db.queries.length ? 'learn' : '', db.ovdb.available ? 'api' : '', db.graph.concepts.length ? 'meanings' : ''].filter(Boolean) };
+});
+const entries = databases.flatMap((db) => db.tables.map((table) => ({ dataset: db.id, label: table.name, database: db.name, href: new URL(`/tables/${encodeURIComponent(table.name)}/`, db.canonicalUrl).href, text: [db.name, db.domain, table.name, table.description, ...table.columns.map((column) => column.name), ...db.graph.concepts.filter((concept) => concept.bindings.some((binding) => binding.table === table.name)).map((concept) => concept.label)].join(' ').toLocaleLowerCase() })));
+const formats = [...new Set(facts.flatMap((fact) => fact.formats))].sort();
+const engines = [...new Set(facts.flatMap((fact) => fact.engines))].sort();
+const licences = [...new Set(facts.map((fact) => fact.licence))].sort();
+---
+<div data-catalogue-explorer data-facts={JSON.stringify(facts)} data-search-index={JSON.stringify(entries)}>
+ <form class="discovery-controls" role="search" aria-label="Find a sample database">
+  <label class="search-label">Dataset, table, column or meaning<input name="q" type="search" placeholder="Try Customer, shipping, Album or invoice…" autocomplete="off" /></label>
+  <label>Start with<select name="purpose"><option value="">Any purpose</option><option value="learn">Learn SQL</option><option value="api">Test a read-only API</option><option value="meanings">Explore business concepts</option></select></label>
+  <label>Engine edition<select name="engine"><option value="">Any engine</option>{engines.map((engine) => <option value={engine}>{engine}</option>)}</select></label>
+  <label>Download format<select name="format"><option value="">Any format</option>{formats.map((format) => <option value={format}>{format}</option>)}</select></label>
+  <label>Fixture size<select name="size"><option value="">Any size</option><option value="small">Up to 5 MiB</option><option value="medium">5–50 MiB</option><option value="large">Over 50 MiB</option><option value="unknown">Unknown size</option></select></label>
+  <label>Data licence<select name="licence"><option value="">Any licence</option>{licences.map((licence) => <option value={licence}>{licence}</option>)}</select></label>
+  <button type="reset" class="button button-quiet">Reset</button>
+ </form>
+ <p class="discovery-count" role="status" aria-live="polite" data-result-count>{databases.length} datasets</p>
+ <ul class="search-hits" data-search-hits aria-label="Matching tables" hidden></ul>
+ <div class="database-grid">{databases.map((db) => <div data-dataset={db.id} data-dataset-search={`${db.name} ${db.description} ${db.domain}`.toLocaleLowerCase()}><DatabaseCard db={db} /></div>)}</div>
+ <p class="discovery-empty" data-empty hidden>No datasets match these filters. Choose another format or reset the filters.</p>
+ <p class="muted discovery-note">Size describes the published SQLite fixture, or native inGitDB archive. Engine editions may have different capabilities; the download page identifies verified and upstream files.</p>
+</div>

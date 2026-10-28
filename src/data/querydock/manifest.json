@@ -1,0 +1,1742 @@
+{
+  "format": "demodb-querydock/1",
+  "datasets": {
+    "chinook": {
+      "catalogDigest": "510d1f61b1fbf6d6ea21d9b198e551b613822403a13ad6622f08d122fbee60d0",
+      "datasetDigest": "3a107d21b87eca221c3221ecab353f3aaa7d525e0087d494a420225ab962dcb8",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "bbb0ff328199377f17d3f29aba9bf8d2a6565833",
+      "fixtureSha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15",
+      "licence": "MIT",
+      "sourceRepository": "https://github.com/demo-db/chinook",
+      "rowCounts": {
+        "Album": 3,
+        "Artist": 2,
+        "Customer": 8,
+        "Employee": 5,
+        "Genre": 1,
+        "Invoice": 8,
+        "InvoiceLine": 0,
+        "MediaType": 2,
+        "Playlist": 0,
+        "PlaylistTrack": 0,
+        "Track": 8
+      },
+      "rootTables": [
+        "Track",
+        "Invoice"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Artists by track count",
+          "sql": "SELECT Artist.Name, COUNT(Track.TrackId) AS Tracks FROM Artist JOIN Album USING (ArtistId) JOIN Track USING (AlbumId) GROUP BY Artist.ArtistId ORDER BY Tracks DESC LIMIT 10;",
+          "expected": {
+            "columns": [
+              "Name",
+              "Tracks"
+            ],
+            "rowCount": 2,
+            "rows": [
+              [
+                "Accept",
+                4
+              ],
+              [
+                "AC/DC",
+                4
+              ]
+            ],
+            "allRows": [
+              [
+                "Accept",
+                4
+              ],
+              [
+                "AC/DC",
+                4
+              ]
+            ]
+          },
+          "snapshotDigest": "62590a09c3854e97f329f898c648a3d962b9396fd44ec0c2e5e08b15b3a1c114",
+          "href": "https://querydock.run/sql/example/510d1f61b1fbf6d6ea21d9b198e551b613822403a13ad6622f08d122fbee60d0/example-1/62590a09c3854e97f329f898c648a3d962b9396fd44ec0c2e5e08b15b3a1c114/"
+        },
+        {
+          "id": "example-2",
+          "title": "Sales by billing country",
+          "sql": "SELECT BillingCountry, ROUND(SUM(Total), 2) AS Sales FROM Invoice GROUP BY BillingCountry ORDER BY Sales DESC LIMIT 10;",
+          "expected": {
+            "columns": [
+              "BillingCountry",
+              "Sales"
+            ],
+            "rowCount": 6,
+            "rows": [
+              [
+                "USA",
+                13.86
+              ],
+              [
+                "Canada",
+                8.91
+              ],
+              [
+                "Belgium",
+                5.94
+              ],
+              [
+                "Germany",
+                4.95
+              ],
+              [
+                "Norway",
+                3.96
+              ]
+            ],
+            "allRows": [
+              [
+                "USA",
+                13.86
+              ],
+              [
+                "Canada",
+                8.91
+              ],
+              [
+                "Belgium",
+                5.94
+              ],
+              [
+                "Germany",
+                4.95
+              ],
+              [
+                "Norway",
+                3.96
+              ],
+              [
+                "France",
+                1.98
+              ]
+            ]
+          },
+          "snapshotDigest": "08dfcf7d63ef3fc478f698fb0ce0c533182137ae908e16a314753cc3776b9498",
+          "href": "https://querydock.run/sql/example/510d1f61b1fbf6d6ea21d9b198e551b613822403a13ad6622f08d122fbee60d0/example-2/08dfcf7d63ef3fc478f698fb0ce0c533182137ae908e16a314753cc3776b9498/"
+        }
+      ]
+    },
+    "northwind": {
+      "catalogDigest": "e369668afc88d50b92816d79c8f7e62fcbef8ea11671c497e0ecc62d6298d444",
+      "datasetDigest": "be4701a07d439a3821374180752f722e15ea37ccbd36a607d8018cc8c0df80e2",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "a0714f427b0ffcf938ac9d5a5192b69c624ab385",
+      "fixtureSha256": "279b34136771aee75d802094b3329515a2b01da65d2a20a4a9e3b58c29b4fd20",
+      "licence": "MIT",
+      "sourceRepository": "https://github.com/demo-db/northwind",
+      "rowCounts": {
+        "Categories": 3,
+        "CustomerCustomerDemo": 0,
+        "CustomerDemographics": 0,
+        "Customers": 7,
+        "EmployeeTerritories": 0,
+        "Employees": 6,
+        "Order Details": 0,
+        "Orders": 8,
+        "Products": 8,
+        "Regions": 0,
+        "Shippers": 3,
+        "Suppliers": 3,
+        "Territories": 0
+      },
+      "rootTables": [
+        "Orders",
+        "Products"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Orders by country",
+          "sql": "SELECT ShipCountry, COUNT(*) AS Orders FROM Orders GROUP BY ShipCountry ORDER BY Orders DESC LIMIT 10;",
+          "expected": {
+            "columns": [
+              "ShipCountry",
+              "Orders"
+            ],
+            "rowCount": 5,
+            "rows": [
+              [
+                "Switzerland",
+                2
+              ],
+              [
+                "France",
+                2
+              ],
+              [
+                "Brazil",
+                2
+              ],
+              [
+                "Germany",
+                1
+              ],
+              [
+                "Belgium",
+                1
+              ]
+            ],
+            "allRows": [
+              [
+                "Switzerland",
+                2
+              ],
+              [
+                "France",
+                2
+              ],
+              [
+                "Brazil",
+                2
+              ],
+              [
+                "Germany",
+                1
+              ],
+              [
+                "Belgium",
+                1
+              ]
+            ]
+          },
+          "snapshotDigest": "bce332356ec2e5c37df9b2171681068d31bdea8faca611e83837448cd4e82c3b",
+          "href": "https://querydock.run/sql/example/e369668afc88d50b92816d79c8f7e62fcbef8ea11671c497e0ecc62d6298d444/example-1/bce332356ec2e5c37df9b2171681068d31bdea8faca611e83837448cd4e82c3b/"
+        },
+        {
+          "id": "example-2",
+          "title": "Products by supplier",
+          "sql": "SELECT Products.ProductName, Suppliers.CompanyName FROM Products JOIN Suppliers USING (SupplierID) ORDER BY Suppliers.CompanyName, Products.ProductName LIMIT 20;",
+          "expected": {
+            "columns": [
+              "ProductName",
+              "CompanyName"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "Aniseed Syrup",
+                "Exotic Liquids"
+              ],
+              [
+                "Chai",
+                "Exotic Liquids"
+              ],
+              [
+                "Chang",
+                "Exotic Liquids"
+              ],
+              [
+                "Grandma's Boysenberry Spread",
+                "Grandma Kelly's Homestead"
+              ],
+              [
+                "Northwoods Cranberry Sauce",
+                "Grandma Kelly's Homestead"
+              ]
+            ],
+            "allRows": [
+              [
+                "Aniseed Syrup",
+                "Exotic Liquids"
+              ],
+              [
+                "Chai",
+                "Exotic Liquids"
+              ],
+              [
+                "Chang",
+                "Exotic Liquids"
+              ],
+              [
+                "Grandma's Boysenberry Spread",
+                "Grandma Kelly's Homestead"
+              ],
+              [
+                "Northwoods Cranberry Sauce",
+                "Grandma Kelly's Homestead"
+              ],
+              [
+                "Uncle Bob's Organic Dried Pears",
+                "Grandma Kelly's Homestead"
+              ],
+              [
+                "Chef Anton's Cajun Seasoning",
+                "New Orleans Cajun Delights"
+              ],
+              [
+                "Chef Anton's Gumbo Mix",
+                "New Orleans Cajun Delights"
+              ]
+            ]
+          },
+          "snapshotDigest": "1cc27a1f8f4bbbb173ebb55f0ef3462661ffc2e217c7e50753c85fe9a03cdfb5",
+          "href": "https://querydock.run/sql/example/e369668afc88d50b92816d79c8f7e62fcbef8ea11671c497e0ecc62d6298d444/example-2/1cc27a1f8f4bbbb173ebb55f0ef3462661ffc2e217c7e50753c85fe9a03cdfb5/"
+        }
+      ]
+    },
+    "pubs": {
+      "catalogDigest": "bd31bcfddae668c6a69cbfc8d993f1cb39ed13230dab6f443d07104334a3eb5b",
+      "datasetDigest": "4664fda93209b2cd97af0e6eb517f063149c92cb99612e8c61ed2d7370e492a4",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "6a62e1dcaa8bea891bd86a9b94793721fb4d75fe",
+      "fixtureSha256": "b45b08b7c06441cc0b138b031ea5bd32bd5866aebf874c89d2ebf7fc6abb3691",
+      "licence": "MIT",
+      "sourceRepository": "https://github.com/demo-db/pubs",
+      "rowCounts": {
+        "authors": 6,
+        "discounts": 0,
+        "employee": 0,
+        "jobs": 0,
+        "pub_info": 0,
+        "publishers": 3,
+        "roysched": 0,
+        "sales": 8,
+        "stores": 5,
+        "titleauthor": 8,
+        "titles": 13
+      },
+      "rootTables": [
+        "titles",
+        "titleauthor",
+        "sales"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Titles by publisher",
+          "sql": "SELECT titles.title, publishers.pub_name, titles.price FROM titles LEFT JOIN publishers USING (pub_id) ORDER BY publishers.pub_name, titles.title;",
+          "expected": {
+            "columns": [
+              "title",
+              "pub_name",
+              "price"
+            ],
+            "rowCount": 13,
+            "rows": [
+              [
+                "But Is It User Friendly?",
+                "Algodata Infosystems",
+                22.95
+              ],
+              [
+                "Cooking with Computers: Surreptitious Balance Sheets",
+                "Algodata Infosystems",
+                11.95
+              ],
+              [
+                "Net Etiquette",
+                "Algodata Infosystems",
+                null
+              ],
+              [
+                "Secrets of Silicon Valley",
+                "Algodata Infosystems",
+                20
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                "Algodata Infosystems",
+                19.99
+              ]
+            ],
+            "allRows": [
+              [
+                "But Is It User Friendly?",
+                "Algodata Infosystems",
+                22.95
+              ],
+              [
+                "Cooking with Computers: Surreptitious Balance Sheets",
+                "Algodata Infosystems",
+                11.95
+              ],
+              [
+                "Net Etiquette",
+                "Algodata Infosystems",
+                null
+              ],
+              [
+                "Secrets of Silicon Valley",
+                "Algodata Infosystems",
+                20
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                "Algodata Infosystems",
+                19.99
+              ],
+              [
+                "Fifty Years in Buckingham Palace Kitchens",
+                "Binnet & Hardley",
+                11.95
+              ],
+              [
+                "Silicon Valley Gastronomic Treats",
+                "Binnet & Hardley",
+                19.99
+              ],
+              [
+                "Sushi, Anyone?",
+                "Binnet & Hardley",
+                14.99
+              ],
+              [
+                "The Gourmet Microwave",
+                "Binnet & Hardley",
+                2.99
+              ],
+              [
+                "Emotional Security: A New Algorithm",
+                "New Moon Books",
+                7.99
+              ],
+              [
+                "Is Anger the Enemy?",
+                "New Moon Books",
+                10.95
+              ],
+              [
+                "Prolonged Data Deprivation: Four Case Studies",
+                "New Moon Books",
+                19.99
+              ],
+              [
+                "You Can Combat Computer Stress!",
+                "New Moon Books",
+                2.99
+              ]
+            ]
+          },
+          "snapshotDigest": "631bfb63f8d11cf44eba3e6b53bc54f0e10ad4aeccb33b008d85b45e1c874722",
+          "href": "https://querydock.run/sql/example/bd31bcfddae668c6a69cbfc8d993f1cb39ed13230dab6f443d07104334a3eb5b/example-1/631bfb63f8d11cf44eba3e6b53bc54f0e10ad4aeccb33b008d85b45e1c874722/"
+        },
+        {
+          "id": "example-2",
+          "title": "Books by author",
+          "sql": "SELECT titles.title, authors.au_lname, authors.au_fname, titleauthor.au_ord FROM titleauthor JOIN authors USING (au_id) JOIN titles USING (title_id) ORDER BY titles.title, titleauthor.au_ord;",
+          "expected": {
+            "columns": [
+              "title",
+              "au_lname",
+              "au_fname",
+              "au_ord"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "But Is It User Friendly?",
+                "Carson",
+                "Cheryl",
+                1
+              ],
+              [
+                "Emotional Security: A New Algorithm",
+                "Locksley",
+                "Charlene",
+                1
+              ],
+              [
+                "Net Etiquette",
+                "Locksley",
+                "Charlene",
+                1
+              ],
+              [
+                "Prolonged Data Deprivation: Four Case Studies",
+                "White",
+                "Johnson",
+                1
+              ],
+              [
+                "Silicon Valley Gastronomic Treats",
+                "del Castillo",
+                "Innes",
+                1
+              ]
+            ],
+            "allRows": [
+              [
+                "But Is It User Friendly?",
+                "Carson",
+                "Cheryl",
+                1
+              ],
+              [
+                "Emotional Security: A New Algorithm",
+                "Locksley",
+                "Charlene",
+                1
+              ],
+              [
+                "Net Etiquette",
+                "Locksley",
+                "Charlene",
+                1
+              ],
+              [
+                "Prolonged Data Deprivation: Four Case Studies",
+                "White",
+                "Johnson",
+                1
+              ],
+              [
+                "Silicon Valley Gastronomic Treats",
+                "del Castillo",
+                "Innes",
+                1
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                "Bennet",
+                "Abraham",
+                1
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                "Green",
+                "Marjorie",
+                2
+              ],
+              [
+                "You Can Combat Computer Stress!",
+                "Green",
+                "Marjorie",
+                1
+              ]
+            ]
+          },
+          "snapshotDigest": "58cbfba5ce76c698c32227b58f212c11825276dd79ac9d6e743c717029105740",
+          "href": "https://querydock.run/sql/example/bd31bcfddae668c6a69cbfc8d993f1cb39ed13230dab6f443d07104334a3eb5b/example-2/58cbfba5ce76c698c32227b58f212c11825276dd79ac9d6e743c717029105740/"
+        },
+        {
+          "id": "example-3",
+          "title": "Units sold by title",
+          "sql": "SELECT titles.title, SUM(sales.qty) AS units_sold FROM sales JOIN titles USING (title_id) GROUP BY titles.title_id ORDER BY units_sold DESC, titles.title LIMIT 10;",
+          "expected": {
+            "columns": [
+              "title",
+              "units_sold"
+            ],
+            "rowCount": 3,
+            "rows": [
+              [
+                "Is Anger the Enemy?",
+                108
+              ],
+              [
+                "The Gourmet Microwave",
+                40
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                15
+              ]
+            ],
+            "allRows": [
+              [
+                "Is Anger the Enemy?",
+                108
+              ],
+              [
+                "The Gourmet Microwave",
+                40
+              ],
+              [
+                "The Busy Executive's Database Guide",
+                15
+              ]
+            ]
+          },
+          "snapshotDigest": "b12ff2e1d76ae04e60a0a9f2a5612f02c2f8fe489375b3d957f8456d94785e22",
+          "href": "https://querydock.run/sql/example/bd31bcfddae668c6a69cbfc8d993f1cb39ed13230dab6f443d07104334a3eb5b/example-3/b12ff2e1d76ae04e60a0a9f2a5612f02c2f8fe489375b3d957f8456d94785e22/"
+        }
+      ]
+    },
+    "sakila": {
+      "catalogDigest": "9d13d6c1493c4707e28afb85a7fbb4ebe6ba4beeeb1a085a37a032ba46726290",
+      "datasetDigest": "10f4c51f5095e6c2e288791004ef953646c5f6977211a15fb0a6d9f583d565e6",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "b6cc930ef820fd7032ca8b94a17a566088bf60a2",
+      "fixtureSha256": "9bebeee50fecb1fee115c206a4f380f2f6d1f009e7796b18b8a8cfba7c810454",
+      "licence": "BSD-3-Clause",
+      "sourceRepository": "https://github.com/demo-db/sakila",
+      "rowCounts": {
+        "actor": 0,
+        "address": 13,
+        "category": 0,
+        "city": 11,
+        "country": 11,
+        "customer": 9,
+        "film": 24,
+        "film_actor": 0,
+        "film_category": 0,
+        "film_text": 0,
+        "inventory": 16,
+        "language": 1,
+        "payment": 8,
+        "rental": 16,
+        "staff": 2,
+        "store": 2
+      },
+      "rootTables": [
+        "film",
+        "rental",
+        "payment"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Films by category",
+          "sql": "SELECT film_list.title, film_list.category, film_list.price FROM film_list ORDER BY film_list.category, film_list.title;",
+          "expected": {
+            "columns": [
+              "title",
+              "category",
+              "price"
+            ],
+            "rowCount": 24,
+            "rows": [
+              [
+                "ACADEMY DINOSAUR",
+                null,
+                0.99
+              ],
+              [
+                "ACE GOLDFINGER",
+                null,
+                4.99
+              ],
+              [
+                "ADAPTATION HOLES",
+                null,
+                2.99
+              ],
+              [
+                "AFFAIR PREJUDICE",
+                null,
+                2.99
+              ],
+              [
+                "AFRICAN EGG",
+                null,
+                2.99
+              ]
+            ],
+            "allRows": [
+              [
+                "ACADEMY DINOSAUR",
+                null,
+                0.99
+              ],
+              [
+                "ACE GOLDFINGER",
+                null,
+                4.99
+              ],
+              [
+                "ADAPTATION HOLES",
+                null,
+                2.99
+              ],
+              [
+                "AFFAIR PREJUDICE",
+                null,
+                2.99
+              ],
+              [
+                "AFRICAN EGG",
+                null,
+                2.99
+              ],
+              [
+                "AGENT TRUMAN",
+                null,
+                2.99
+              ],
+              [
+                "AIRPLANE SIERRA",
+                null,
+                4.99
+              ],
+              [
+                "AIRPORT POLLOCK",
+                null,
+                4.99
+              ],
+              [
+                "ATTACKS HATE",
+                null,
+                4.99
+              ],
+              [
+                "BLANKET BEVERLY",
+                null,
+                2.99
+              ],
+              [
+                "CLOSER BANG",
+                null,
+                4.99
+              ],
+              [
+                "DETECTIVE VISION",
+                null,
+                0.99
+              ],
+              [
+                "FERRIS MOTHER",
+                null,
+                2.99
+              ],
+              [
+                "FREAKY POCUS",
+                null,
+                2.99
+              ],
+              [
+                "GRADUATE LORD",
+                null,
+                2.99
+              ],
+              [
+                "IDOLS SNATCHERS",
+                null,
+                2.99
+              ],
+              [
+                "LAWLESS VISION",
+                null,
+                4.99
+              ],
+              [
+                "LOVE SUICIDES",
+                null,
+                0.99
+              ],
+              [
+                "MUSKETEERS WAIT",
+                null,
+                4.99
+              ],
+              [
+                "MYSTIC TRUMAN",
+                null,
+                0.99
+              ],
+              [
+                "PATIENT SISTER",
+                null,
+                0.99
+              ],
+              [
+                "SAVANNAH TOWN",
+                null,
+                0.99
+              ],
+              [
+                "SWARM GOLD",
+                null,
+                0.99
+              ],
+              [
+                "TALENTED HOMICIDE",
+                null,
+                0.99
+              ]
+            ]
+          },
+          "snapshotDigest": "4a3e8ebca500bb40443404099258c754164c4385ae4899f85cf0cab65e027373",
+          "href": "https://querydock.run/sql/example/9d13d6c1493c4707e28afb85a7fbb4ebe6ba4beeeb1a085a37a032ba46726290/example-1/4a3e8ebca500bb40443404099258c754164c4385ae4899f85cf0cab65e027373/"
+        },
+        {
+          "id": "example-2",
+          "title": "Customer rentals",
+          "sql": "SELECT customer_list.name AS customer, rental.rental_date, film.title, staff_list.name AS staff FROM rental JOIN inventory USING (inventory_id) JOIN film USING (film_id) JOIN customer_list ON customer_list.ID = rental.customer_id JOIN staff_list ON staff_list.ID = rental.staff_id ORDER BY rental.rental_date DESC LIMIT 20;",
+          "expected": {
+            "columns": [
+              "customer",
+              "rental_date",
+              "title",
+              "staff"
+            ],
+            "rowCount": 16,
+            "rows": [
+              [
+                "MARY SMITH",
+                "2005-06-18 13:33:59",
+                "SAVANNAH TOWN",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-18 08:41:48",
+                "ATTACKS HATE",
+                "Jon Stephens"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-16 15:18:57",
+                "CLOSER BANG",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-15 21:08:46",
+                "FERRIS MOTHER",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-15 18:02:53",
+                "DETECTIVE VISION",
+                "Jon Stephens"
+              ]
+            ],
+            "allRows": [
+              [
+                "MARY SMITH",
+                "2005-06-18 13:33:59",
+                "SAVANNAH TOWN",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-18 08:41:48",
+                "ATTACKS HATE",
+                "Jon Stephens"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-16 15:18:57",
+                "CLOSER BANG",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-15 21:08:46",
+                "FERRIS MOTHER",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-15 18:02:53",
+                "DETECTIVE VISION",
+                "Jon Stephens"
+              ],
+              [
+                "MARY SMITH",
+                "2005-06-15 00:54:12",
+                "MUSKETEERS WAIT",
+                "Jon Stephens"
+              ],
+              [
+                "MARY SMITH",
+                "2005-05-28 10:35:23",
+                "TALENTED HOMICIDE",
+                "Mike Hillyer"
+              ],
+              [
+                "MARY SMITH",
+                "2005-05-25 11:30:37",
+                "PATIENT SISTER",
+                "Jon Stephens"
+              ],
+              [
+                "MINNIE ROMERO",
+                "2005-05-24 23:31:46",
+                "LAWLESS VISION",
+                "Jon Stephens"
+              ],
+              [
+                "CASSANDRA WALTERS",
+                "2005-05-24 23:11:53",
+                "SWARM GOLD",
+                "Jon Stephens"
+              ],
+              [
+                "NELSON CHRISTENSON",
+                "2005-05-24 23:08:07",
+                "MYSTIC TRUMAN",
+                "Mike Hillyer"
+              ],
+              [
+                "DELORES HANSEN",
+                "2005-05-24 23:05:21",
+                "IDOLS SNATCHERS",
+                "Mike Hillyer"
+              ],
+              [
+                "ANDREW PURDY",
+                "2005-05-24 23:04:41",
+                "LOVE SUICIDES",
+                "Jon Stephens"
+              ],
+              [
+                "MANUEL MURRELL",
+                "2005-05-24 23:03:39",
+                "GRADUATE LORD",
+                "Mike Hillyer"
+              ],
+              [
+                "TOMMY COLLAZO",
+                "2005-05-24 22:54:33",
+                "FREAKY POCUS",
+                "Mike Hillyer"
+              ],
+              [
+                "CHARLOTTE HUNTER",
+                "2005-05-24 22:53:30",
+                "BLANKET BEVERLY",
+                "Mike Hillyer"
+              ]
+            ]
+          },
+          "snapshotDigest": "1420a4c91b4bfc67272d4ddb7a93eb70e899cdd4652cbca664f6d40cede6a1b4",
+          "href": "https://querydock.run/sql/example/9d13d6c1493c4707e28afb85a7fbb4ebe6ba4beeeb1a085a37a032ba46726290/example-2/1420a4c91b4bfc67272d4ddb7a93eb70e899cdd4652cbca664f6d40cede6a1b4/"
+        },
+        {
+          "id": "example-3",
+          "title": "Sales by store",
+          "sql": "SELECT store, manager, total_sales FROM sales_by_store ORDER BY total_sales DESC;",
+          "expected": {
+            "columns": [
+              "store",
+              "manager",
+              "total_sales"
+            ],
+            "rowCount": 2,
+            "rows": [
+              [
+                "Lethbridge,Canada",
+                "Mike Hillyer",
+                26.95
+              ],
+              [
+                "Woodridge,Australia",
+                "Jon Stephens",
+                4.970000000000001
+              ]
+            ],
+            "allRows": [
+              [
+                "Lethbridge,Canada",
+                "Mike Hillyer",
+                26.95
+              ],
+              [
+                "Woodridge,Australia",
+                "Jon Stephens",
+                4.970000000000001
+              ]
+            ]
+          },
+          "snapshotDigest": "6a297e0f05bb2a915c213dbcc0697fb710b30628467abc31962647f17ea54a1d",
+          "href": "https://querydock.run/sql/example/9d13d6c1493c4707e28afb85a7fbb4ebe6ba4beeeb1a085a37a032ba46726290/example-3/6a297e0f05bb2a915c213dbcc0697fb710b30628467abc31962647f17ea54a1d/"
+        }
+      ]
+    },
+    "adventureworks": {
+      "catalogDigest": "027cf4548ff4f671523eea992fbbfbfd85c26e82424c2b09f275fa29a3ec16f7",
+      "datasetDigest": "c355f347d150cdbc07c50be561e817fabdd0eb8904da90fe492e018ea9a5ea0f",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "7b718b80513e9f9afa158d4f69183f73b3ed4c8b",
+      "fixtureSha256": "6a105e1982becfe003fc7a307d7cad9d738390cedd79d166c2167fd817168109",
+      "licence": "MIT",
+      "sourceRepository": "https://github.com/demo-db/adventureworks",
+      "rowCounts": {
+        "HumanResources.Department": 0,
+        "HumanResources.Employee": 14,
+        "HumanResources.EmployeeDepartmentHistory": 0,
+        "HumanResources.EmployeePayHistory": 0,
+        "HumanResources.JobCandidate": 0,
+        "HumanResources.Shift": 0,
+        "Person.Address": 8,
+        "Person.AddressType": 0,
+        "Person.BusinessEntity": 38,
+        "Person.BusinessEntityAddress": 0,
+        "Person.BusinessEntityContact": 0,
+        "Person.ContactType": 0,
+        "Person.CountryRegion": 2,
+        "Person.EmailAddress": 0,
+        "Person.Password": 0,
+        "Person.Person": 22,
+        "Person.PersonPhone": 0,
+        "Person.PhoneNumberType": 0,
+        "Person.StateProvince": 4,
+        "Production.BillOfMaterials": 0,
+        "Production.Culture": 0,
+        "Production.Document": 0,
+        "Production.Illustration": 0,
+        "Production.Location": 3,
+        "Production.Product": 11,
+        "Production.ProductCategory": 2,
+        "Production.ProductCostHistory": 0,
+        "Production.ProductDescription": 0,
+        "Production.ProductDocument": 0,
+        "Production.ProductInventory": 8,
+        "Production.ProductListPriceHistory": 0,
+        "Production.ProductModel": 2,
+        "Production.ProductModelIllustration": 0,
+        "Production.ProductModelProductDescriptionCulture": 0,
+        "Production.ProductPhoto": 0,
+        "Production.ProductProductPhoto": 0,
+        "Production.ProductReview": 0,
+        "Production.ProductSubcategory": 2,
+        "Production.ScrapReason": 0,
+        "Production.TransactionHistory": 0,
+        "Production.TransactionHistoryArchive": 0,
+        "Production.UnitMeasure": 2,
+        "Production.WorkOrder": 0,
+        "Production.WorkOrderRouting": 0,
+        "Purchasing.ProductVendor": 0,
+        "Purchasing.PurchaseOrderDetail": 0,
+        "Purchasing.PurchaseOrderHeader": 8,
+        "Purchasing.ShipMethod": 4,
+        "Purchasing.Vendor": 8,
+        "Sales.CountryRegionCurrency": 0,
+        "Sales.CreditCard": 8,
+        "Sales.Currency": 2,
+        "Sales.CurrencyRate": 1,
+        "Sales.Customer": 8,
+        "Sales.PersonCreditCard": 0,
+        "Sales.SalesOrderDetail": 8,
+        "Sales.SalesOrderHeader": 8,
+        "Sales.SalesOrderHeaderSalesReason": 0,
+        "Sales.SalesPerson": 6,
+        "Sales.SalesPersonQuotaHistory": 0,
+        "Sales.SalesReason": 0,
+        "Sales.SalesTaxRate": 0,
+        "Sales.SalesTerritory": 4,
+        "Sales.SalesTerritoryHistory": 0,
+        "Sales.ShoppingCartItem": 0,
+        "Sales.SpecialOffer": 1,
+        "Sales.SpecialOfferProduct": 8,
+        "Sales.Store": 8,
+        "dbo.AWBuildVersion": 0,
+        "dbo.DatabaseLog": 0,
+        "dbo.ErrorLog": 0
+      },
+      "rootTables": [
+        "Sales.SalesOrderHeader",
+        "Sales.SalesOrderDetail",
+        "Purchasing.PurchaseOrderHeader",
+        "Production.ProductInventory"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Orders by customer",
+          "sql": "SELECT h.\"SalesOrderNumber\", c.\"CustomerID\", h.\"OrderDate\", h.\"TotalDue\" FROM \"Sales.SalesOrderHeader\" AS h JOIN \"Sales.Customer\" AS c USING (\"CustomerID\") ORDER BY h.\"OrderDate\" DESC LIMIT 20;",
+          "expected": {
+            "columns": [
+              "SalesOrderNumber",
+              "CustomerID",
+              "OrderDate",
+              "TotalDue"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "SO43659",
+                29825,
+                "2022-05-30 00:00:00.000",
+                "23153.2339"
+              ],
+              [
+                "SO43660",
+                29672,
+                "2022-05-30 00:00:00.000",
+                "1457.3288"
+              ],
+              [
+                "SO43661",
+                29734,
+                "2022-05-30 00:00:00.000",
+                "36865.8012"
+              ],
+              [
+                "SO43662",
+                29994,
+                "2022-05-30 00:00:00.000",
+                "32474.9324"
+              ],
+              [
+                "SO43663",
+                29565,
+                "2022-05-30 00:00:00.000",
+                "472.3108"
+              ]
+            ],
+            "allRows": [
+              [
+                "SO43659",
+                29825,
+                "2022-05-30 00:00:00.000",
+                "23153.2339"
+              ],
+              [
+                "SO43660",
+                29672,
+                "2022-05-30 00:00:00.000",
+                "1457.3288"
+              ],
+              [
+                "SO43661",
+                29734,
+                "2022-05-30 00:00:00.000",
+                "36865.8012"
+              ],
+              [
+                "SO43662",
+                29994,
+                "2022-05-30 00:00:00.000",
+                "32474.9324"
+              ],
+              [
+                "SO43663",
+                29565,
+                "2022-05-30 00:00:00.000",
+                "472.3108"
+              ],
+              [
+                "SO43664",
+                29898,
+                "2022-05-30 00:00:00.000",
+                "27510.4109"
+              ],
+              [
+                "SO43665",
+                29580,
+                "2022-05-30 00:00:00.000",
+                "16158.6961"
+              ],
+              [
+                "SO43666",
+                30052,
+                "2022-05-30 00:00:00.000",
+                "5694.8564"
+              ]
+            ]
+          },
+          "snapshotDigest": "dd97bd27fd00122977e62fcddc4414d9e9e8e22893c04172ff9bd79d58db84a0",
+          "href": "https://querydock.run/sql/example/027cf4548ff4f671523eea992fbbfbfd85c26e82424c2b09f275fa29a3ec16f7/example-1/dd97bd27fd00122977e62fcddc4414d9e9e8e22893c04172ff9bd79d58db84a0/"
+        },
+        {
+          "id": "example-2",
+          "title": "Products on sales orders",
+          "sql": "SELECT p.\"Name\", d.\"OrderQty\", d.\"UnitPrice\", d.\"LineTotal\" FROM \"Sales.SalesOrderDetail\" AS d JOIN \"Production.Product\" AS p USING (\"ProductID\") ORDER BY d.\"SalesOrderID\", d.\"SalesOrderDetailID\" LIMIT 20;",
+          "expected": {
+            "columns": [
+              "Name",
+              "OrderQty",
+              "UnitPrice",
+              "LineTotal"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "Mountain-100 Black, 42",
+                1,
+                "2024.9940",
+                "2024.994000"
+              ],
+              [
+                "Mountain-100 Black, 44",
+                3,
+                "2024.9940",
+                "6074.982000"
+              ],
+              [
+                "Mountain-100 Black, 48",
+                1,
+                "2024.9940",
+                "2024.994000"
+              ],
+              [
+                "Mountain-100 Silver, 38",
+                1,
+                "2039.9940",
+                "2039.994000"
+              ],
+              [
+                "Mountain-100 Silver, 42",
+                1,
+                "2039.9940",
+                "2039.994000"
+              ]
+            ],
+            "allRows": [
+              [
+                "Mountain-100 Black, 42",
+                1,
+                "2024.9940",
+                "2024.994000"
+              ],
+              [
+                "Mountain-100 Black, 44",
+                3,
+                "2024.9940",
+                "6074.982000"
+              ],
+              [
+                "Mountain-100 Black, 48",
+                1,
+                "2024.9940",
+                "2024.994000"
+              ],
+              [
+                "Mountain-100 Silver, 38",
+                1,
+                "2039.9940",
+                "2039.994000"
+              ],
+              [
+                "Mountain-100 Silver, 42",
+                1,
+                "2039.9940",
+                "2039.994000"
+              ],
+              [
+                "Mountain-100 Silver, 44",
+                2,
+                "2039.9940",
+                "4079.988000"
+              ],
+              [
+                "Mountain-100 Silver, 48",
+                1,
+                "2039.9940",
+                "2039.994000"
+              ],
+              [
+                "Long-Sleeve Logo Jersey, M",
+                3,
+                "28.8404",
+                "86.521200"
+              ]
+            ]
+          },
+          "snapshotDigest": "631f2b2b495c1b3061ec7bfd828acb51d54d8e64178b65154a0ccd6d95ba8026",
+          "href": "https://querydock.run/sql/example/027cf4548ff4f671523eea992fbbfbfd85c26e82424c2b09f275fa29a3ec16f7/example-2/631f2b2b495c1b3061ec7bfd828acb51d54d8e64178b65154a0ccd6d95ba8026/"
+        },
+        {
+          "id": "example-3",
+          "title": "Purchase orders by vendor",
+          "sql": "SELECT v.\"Name\", h.\"PurchaseOrderID\", h.\"OrderDate\", h.\"TotalDue\" FROM \"Purchasing.PurchaseOrderHeader\" AS h JOIN \"Purchasing.Vendor\" AS v ON v.\"BusinessEntityID\" = h.\"VendorID\" ORDER BY h.\"OrderDate\" DESC LIMIT 20;",
+          "expected": {
+            "columns": [
+              "Name",
+              "PurchaseOrderID",
+              "OrderDate",
+              "TotalDue"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "American Bikes",
+                5,
+                "2022-04-29 00:00:00.000",
+                "22539.0165"
+              ],
+              [
+                "Anderson's Custom Bikes",
+                6,
+                "2022-04-29 00:00:00.000",
+                "16164.0229"
+              ],
+              [
+                "Proseware, Inc.",
+                7,
+                "2022-04-29 00:00:00.000",
+                "64847.5328"
+              ],
+              [
+                "Aurora Bike Center",
+                8,
+                "2022-04-29 00:00:00.000",
+                "766.1827"
+              ],
+              [
+                "Litware, Inc.",
+                1,
+                "2022-04-15 00:00:00.000",
+                "222.1492"
+              ]
+            ],
+            "allRows": [
+              [
+                "American Bikes",
+                5,
+                "2022-04-29 00:00:00.000",
+                "22539.0165"
+              ],
+              [
+                "Anderson's Custom Bikes",
+                6,
+                "2022-04-29 00:00:00.000",
+                "16164.0229"
+              ],
+              [
+                "Proseware, Inc.",
+                7,
+                "2022-04-29 00:00:00.000",
+                "64847.5328"
+              ],
+              [
+                "Aurora Bike Center",
+                8,
+                "2022-04-29 00:00:00.000",
+                "766.1827"
+              ],
+              [
+                "Litware, Inc.",
+                1,
+                "2022-04-15 00:00:00.000",
+                "222.1492"
+              ],
+              [
+                "Advanced Bicycles",
+                2,
+                "2022-04-15 00:00:00.000",
+                "300.6721"
+              ],
+              [
+                "Allenson Cycles",
+                3,
+                "2022-04-15 00:00:00.000",
+                "9776.2665"
+              ],
+              [
+                "American Bicycles and Wheels",
+                4,
+                "2022-04-15 00:00:00.000",
+                "189.0395"
+              ]
+            ]
+          },
+          "snapshotDigest": "ded7eb83ec15886dd1ef09ca672dcb09a8387c014b98a049cfb969dc87faf62b",
+          "href": "https://querydock.run/sql/example/027cf4548ff4f671523eea992fbbfbfd85c26e82424c2b09f275fa29a3ec16f7/example-3/ded7eb83ec15886dd1ef09ca672dcb09a8387c014b98a049cfb969dc87faf62b/"
+        },
+        {
+          "id": "example-4",
+          "title": "Inventory by location",
+          "sql": "SELECT p.\"Name\", l.\"Name\" AS \"Location\", i.\"Quantity\" FROM \"Production.ProductInventory\" AS i JOIN \"Production.Product\" AS p USING (\"ProductID\") JOIN \"Production.Location\" AS l USING (\"LocationID\") ORDER BY p.\"Name\", l.\"Name\" LIMIT 20;",
+          "expected": {
+            "columns": [
+              "Name",
+              "Location",
+              "Quantity"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                "Adjustable Race",
+                "Miscellaneous Storage",
+                324
+              ],
+              [
+                "Adjustable Race",
+                "Subassembly",
+                353
+              ],
+              [
+                "Adjustable Race",
+                "Tool Crib",
+                408
+              ],
+              [
+                "BB Ball Bearing",
+                "Miscellaneous Storage",
+                443
+              ],
+              [
+                "BB Ball Bearing",
+                "Tool Crib",
+                585
+              ]
+            ],
+            "allRows": [
+              [
+                "Adjustable Race",
+                "Miscellaneous Storage",
+                324
+              ],
+              [
+                "Adjustable Race",
+                "Subassembly",
+                353
+              ],
+              [
+                "Adjustable Race",
+                "Tool Crib",
+                408
+              ],
+              [
+                "BB Ball Bearing",
+                "Miscellaneous Storage",
+                443
+              ],
+              [
+                "BB Ball Bearing",
+                "Tool Crib",
+                585
+              ],
+              [
+                "Bearing Ball",
+                "Miscellaneous Storage",
+                318
+              ],
+              [
+                "Bearing Ball",
+                "Subassembly",
+                364
+              ],
+              [
+                "Bearing Ball",
+                "Tool Crib",
+                427
+              ]
+            ]
+          },
+          "snapshotDigest": "ef90ebf1747c9e01c9dfdca9d5a941c3bfef29b0dbdacf0fd935917ac0d79c39",
+          "href": "https://querydock.run/sql/example/027cf4548ff4f671523eea992fbbfbfd85c26e82424c2b09f275fa29a3ec16f7/example-4/ef90ebf1747c9e01c9dfdca9d5a941c3bfef29b0dbdacf0fd935917ac0d79c39/"
+        }
+      ]
+    },
+    "employees": {
+      "catalogDigest": "35d6874aa28336031329d458a14d5854b376452ffca0d4fecca3b0d0e9bcc516",
+      "datasetDigest": "d3b98957c0251cb00b41c32dada18c5427938227cdf54184b071f110d022125a",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "1693587fca1d0966d4ef74a149f7105965fe6b56",
+      "fixtureSha256": "46b49dd0e141cd8db66d57680a10febfccc15e6f54dc7b8f3c2316b55e11c5f0",
+      "licence": "CC-BY-SA-3.0",
+      "sourceRepository": "https://github.com/demo-db/employees",
+      "rowCounts": {
+        "departments": 5,
+        "dept_emp": 8,
+        "dept_manager": 0,
+        "employees": 8,
+        "salaries": 8,
+        "titles": 0
+      },
+      "rootTables": [
+        "salaries",
+        "dept_emp"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Current department assignments",
+          "sql": "SELECT e.emp_no, e.first_name, e.last_name, d.dept_name, c.from_date FROM current_dept_emp AS c JOIN employees AS e USING (emp_no) JOIN departments AS d USING (dept_no) ORDER BY d.dept_name, e.last_name, e.first_name LIMIT 25;",
+          "expected": {
+            "columns": [
+              "emp_no",
+              "first_name",
+              "last_name",
+              "dept_name",
+              "from_date"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                10001,
+                "Georgi",
+                "Facello",
+                "Development",
+                "1986-06-26"
+              ],
+              [
+                10008,
+                "Saniya",
+                "Kalloufi",
+                "Development",
+                "1998-03-11"
+              ],
+              [
+                10006,
+                "Anneke",
+                "Preusig",
+                "Development",
+                "1990-08-05"
+              ],
+              [
+                10005,
+                "Kyoichi",
+                "Maliniak",
+                "Human Resources",
+                "1989-09-12"
+              ],
+              [
+                10003,
+                "Parto",
+                "Bamford",
+                "Production",
+                "1995-12-03"
+              ]
+            ],
+            "allRows": [
+              [
+                10001,
+                "Georgi",
+                "Facello",
+                "Development",
+                "1986-06-26"
+              ],
+              [
+                10008,
+                "Saniya",
+                "Kalloufi",
+                "Development",
+                "1998-03-11"
+              ],
+              [
+                10006,
+                "Anneke",
+                "Preusig",
+                "Development",
+                "1990-08-05"
+              ],
+              [
+                10005,
+                "Kyoichi",
+                "Maliniak",
+                "Human Resources",
+                "1989-09-12"
+              ],
+              [
+                10003,
+                "Parto",
+                "Bamford",
+                "Production",
+                "1995-12-03"
+              ],
+              [
+                10004,
+                "Chirstian",
+                "Koblick",
+                "Production",
+                "1986-12-01"
+              ],
+              [
+                10007,
+                "Tzvetan",
+                "Zielinski",
+                "Research",
+                "1989-02-10"
+              ],
+              [
+                10002,
+                "Bezalel",
+                "Simmel",
+                "Sales",
+                "1996-08-03"
+              ]
+            ]
+          },
+          "snapshotDigest": "10da51d7f33c114a4427127de395a04d1b2ed5376a61198196029082158cf079",
+          "href": "https://querydock.run/sql/example/35d6874aa28336031329d458a14d5854b376452ffca0d4fecca3b0d0e9bcc516/example-1/10da51d7f33c114a4427127de395a04d1b2ed5376a61198196029082158cf079/"
+        },
+        {
+          "id": "example-2",
+          "title": "Salary history for selected employees",
+          "sql": "SELECT emp_no, salary, from_date, to_date FROM salaries ORDER BY emp_no, from_date LIMIT 25;",
+          "expected": {
+            "columns": [
+              "emp_no",
+              "salary",
+              "from_date",
+              "to_date"
+            ],
+            "rowCount": 8,
+            "rows": [
+              [
+                10001,
+                60117,
+                "1986-06-26",
+                "1987-06-26"
+              ],
+              [
+                10001,
+                62102,
+                "1987-06-26",
+                "1988-06-25"
+              ],
+              [
+                10001,
+                66074,
+                "1988-06-25",
+                "1989-06-25"
+              ],
+              [
+                10001,
+                66596,
+                "1989-06-25",
+                "1990-06-25"
+              ],
+              [
+                10001,
+                66961,
+                "1990-06-25",
+                "1991-06-25"
+              ]
+            ],
+            "allRows": [
+              [
+                10001,
+                60117,
+                "1986-06-26",
+                "1987-06-26"
+              ],
+              [
+                10001,
+                62102,
+                "1987-06-26",
+                "1988-06-25"
+              ],
+              [
+                10001,
+                66074,
+                "1988-06-25",
+                "1989-06-25"
+              ],
+              [
+                10001,
+                66596,
+                "1989-06-25",
+                "1990-06-25"
+              ],
+              [
+                10001,
+                66961,
+                "1990-06-25",
+                "1991-06-25"
+              ],
+              [
+                10001,
+                71046,
+                "1991-06-25",
+                "1992-06-24"
+              ],
+              [
+                10001,
+                74333,
+                "1992-06-24",
+                "1993-06-24"
+              ],
+              [
+                10001,
+                75286,
+                "1993-06-24",
+                "1994-06-24"
+              ]
+            ]
+          },
+          "snapshotDigest": "6780b7676f316b3a33ff810c7d4e9df765ca40734d1cb86896e127631457d9c4",
+          "href": "https://querydock.run/sql/example/35d6874aa28336031329d458a14d5854b376452ffca0d4fecca3b0d0e9bcc516/example-2/6780b7676f316b3a33ff810c7d4e9df765ca40734d1cb86896e127631457d9c4/"
+        }
+      ]
+    },
+    "shipping": {
+      "catalogDigest": "73f60204e75558cfb53f93851e2fc595d08bc70feb4fba58dfd84df754ff53ba",
+      "datasetDigest": "2b95807f0ac2e44b05cc4408091cfc27c1ea8eae1c1c92d048466f2df4eace24",
+      "engine": "sqlite",
+      "engineVersion": "3.54.1",
+      "sourceRevision": "03a158c07bb726ac2c4ad7f524bddf696ac2e6bb",
+      "fixtureSha256": "73f0d871607ee5b24de68b5398c25806f556a3126a31e1865fee79b2881977e0",
+      "licence": "CC0-1.0",
+      "sourceRepository": "https://github.com/demo-db/shipping",
+      "rowCounts": {
+        "assignments": 1,
+        "attempts": 8,
+        "configurations": 1,
+        "events": 8,
+        "partners": 2,
+        "publications": 8,
+        "receipts": 7,
+        "requests": 8,
+        "routes": 4,
+        "workspace_state": 1
+      },
+      "rootTables": [
+        "assignments",
+        "attempts",
+        "configurations",
+        "events",
+        "partners",
+        "publications",
+        "receipts",
+        "requests",
+        "routes",
+        "workspace_state"
+      ],
+      "scope": "Up to eight initial rows from the question-relevant tables, with all declared foreign-key parent records retained. Other tables may be empty. Aggregates describe this teaching subset only.",
+      "examples": [
+        {
+          "id": "example-1",
+          "title": "Blocked request and current routing",
+          "sql": "SELECT * FROM current_routes WHERE order_id = 11045;",
+          "expected": {
+            "columns": [
+              "request_id",
+              "order_id",
+              "route_id",
+              "partner_id",
+              "valid_from",
+              "valid_until",
+              "current_config",
+              "business_clock"
+            ],
+            "rowCount": 1,
+            "rows": [
+              [
+                "request-11045",
+                11045,
+                null,
+                null,
+                null,
+                null,
+                17,
+                "2018-05-20T10:00:00Z"
+              ]
+            ],
+            "allRows": [
+              [
+                "request-11045",
+                11045,
+                null,
+                null,
+                null,
+                null,
+                17,
+                "2018-05-20T10:00:00Z"
+              ]
+            ]
+          },
+          "snapshotDigest": "25710e5c37e877fdc45a92151cd2ac1627543865d4704df890d73098b766be5d",
+          "href": "https://querydock.run/sql/example/73f60204e75558cfb53f93851e2fc595d08bc70feb4fba58dfd84df754ff53ba/example-1/25710e5c37e877fdc45a92151cd2ac1627543865d4704df890d73098b766be5d/"
+        }
+      ]
+    }
+  }
+}

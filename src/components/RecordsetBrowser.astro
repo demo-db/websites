@@ -1,0 +1,21 @@
+---
+import RecordsetCard from './RecordsetCard.astro';
+import type { Database } from '../data/types';
+interface Props { db: Database }
+const { db } = Astro.props;
+const groups = [...new Set(db.tables.map((table) => table.name.includes('.') ? table.name.slice(0, table.name.indexOf('.')) : 'Unqualified names'))].sort();
+const defaultLayout = db.tables.length > 24 ? 'list' : 'grid';
+---
+<div data-recordset-browser data-default-layout={defaultLayout}>
+ <form class="discovery-controls" role="search" aria-label={`Find a table in ${db.name}`}>
+  <label class="search-label">Table, column or meaning<input type="search" name="q" placeholder="Find customers, invoice totals, ArtistId…" autocomplete="off" /></label>
+  <label>Kind<select name="kind"><option value="">Tables and views</option><option value="table">Tables</option><option value="view">Views</option></select></label>
+  {groups.length > 1 && <label>Name namespace<select name="group"><option value="">All names</option>{groups.map((group) => <option value={group}>{group}</option>)}</select></label>}
+  <label>Sort<select name="sort"><option value="name">Name</option><option value="rows">Most rows</option><option value="links">Most relationships</option></select></label>
+  <label>Layout<select name="layout"><option value="grid" selected={defaultLayout === 'grid'}>Cards</option><option value="list" selected={defaultLayout === 'list'}>Compact list</option></select></label>
+  <button type="reset" class="button button-quiet">Reset</button>
+ </form>
+ <p class="discovery-count" role="status" aria-live="polite" data-result-count>{db.tables.length} recordsets</p>
+ <div class:list={['table-grid', { 'compact-recordsets': defaultLayout === 'list' }]} data-recordset-results>{db.tables.map((table) => <RecordsetCard db={db} recordset={table} />)}</div>
+ <p class="discovery-empty" data-empty hidden>No matching tables or views. Try another name, column or meaning, or reset the filters.</p>
+</div>

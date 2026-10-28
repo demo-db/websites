@@ -1,0 +1,15 @@
+---
+import { meaningsFor } from '../data/handoffs';
+import type { Database } from '../data/types';
+interface Props { db: Database; table: string; column?: string }
+const { db, table, column } = Astro.props;
+const concepts = meaningsFor(db, table, column);
+const roleLabel = (concept: typeof concepts[number]) => {
+  const bindings = concept.bindings.filter((binding) => binding.table === table && (column === undefined || binding.column === column));
+  return bindings.some((binding) => binding.role === 'entity') ? 'Entity binding' : bindings.some((binding) => binding.role === 'foreign-key') ? 'Entity reference' : bindings.some((binding) => binding.role === 'label') ? 'Entity label' : 'Field meaning';
+};
+---
+{concepts.length > 0 && <ul class="inline-meanings" aria-label={`Meanings of ${column ?? table}`}>{concepts.map((concept) => <li><a href={concept.definitionHref}>{concept.label} <span aria-hidden="true">↗</span></a><small>{roleLabel(concept)}{concept.extends ? ' · inherited concept' : concept.valuesOf ? ' · semantic reference' : ''}</small><details><summary>Definition and binding</summary><p>{concept.description}</p>{concept.bindings.filter((binding) => binding.table === table && (column === undefined || binding.column === column)).map((binding) => <p><code>{binding.column ?? table}</code> · {binding.role}{binding.note ? ` · ${binding.note}` : ''}</p>)}</details></li>)}</ul>}
+<style>
+.inline-meanings{padding:0;margin:8px 0;list-style:none;display:grid;gap:10px}.inline-meanings li{min-width:0}.inline-meanings a{font-size:13px;color:var(--cyan);font-weight:650;overflow-wrap:anywhere}.inline-meanings small{display:block;color:var(--muted);font-size:11px}.inline-meanings details{font-size:12px;margin-top:5px;white-space:normal}.inline-meanings summary{cursor:pointer;color:var(--muted);min-height:44px;display:flex;align-items:center}.inline-meanings p{margin:6px 0;max-width:65ch;white-space:normal}
+</style>

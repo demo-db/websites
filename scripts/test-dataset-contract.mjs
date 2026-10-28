@@ -139,7 +139,7 @@ test('every DataTug catalogue entry matches its SQLite-capable registry file, SH
   }
   const sqliteIds = ids.filter((id) => completeDownloads(providerOf(id)).some((file) => file.format === 'sqlite'));
   const catalogueIds = [...catalog.demoSqliteDatasetIds].sort();
-  assert.deepEqual(catalogueIds.filter((id) => !sqliteIds.includes(id)), [], 'the DataTug catalogue contains only SQLite-capable DemoDB datasets');
+  assert.deepEqual(catalogueIds, [...sqliteIds].sort(), 'every advertised SQLite edition must be supported by the released DataTug catalogue');
   for (const id of catalogueIds) {
     const file = completeDownloads(providerOf(id)).find((candidate) => candidate.format === 'sqlite');
     const entry = catalog.demoSqliteCatalog[id];

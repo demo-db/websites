@@ -1,11 +1,18 @@
 ---
-import type { Recordset } from '../data/types';
+import type { Database, Recordset } from '../data/types';
 import { displayCount, recordsetPath } from '../data/db';
-const { recordset, relatedCount = 0 } = Astro.props as { recordset: Recordset; relatedCount?: number };
+import TableActions from './TableActions.astro';
+const { db, recordset, relatedCount = 0 } = Astro.props as { db: Database; recordset: Recordset; relatedCount?: number };
+const concepts = db.graph.concepts.filter((concept) => concept.bindings.some((binding) => binding.table === recordset.name));
+const search = [recordset.name, recordset.description, ...recordset.columns.map((column) => column.name), ...concepts.map((concept) => concept.label)].join(' ').toLocaleLowerCase();
 ---
-<a class="table-card" href={recordsetPath(recordset.name)}>
+<article class="table-card" data-recordset data-name={recordset.name} data-kind={recordset.kind} data-rows={recordset.rowCount ?? -1} data-links={recordset.foreignKeys.length} data-search={search} data-group={recordset.name.includes('.') ? recordset.name.slice(0, recordset.name.indexOf('.')) : 'Unqualified names'}>
+ <a class="table-card-main" href={recordsetPath(recordset.name)}>
   <span class="table-card-top"><span class="table-icon">{recordset.name.slice(0, 1)}</span><span class="kind-badge">{recordset.kind}</span></span>
   <strong>{recordset.name}</strong>
   {recordset.description && <span class="table-card-description">{recordset.description}</span>}
   <span class="table-card-columns">{recordset.columns.length} columns · {recordset.foreignKeys.length} links · {displayCount(recordset.rowCount)} rows{relatedCount > 0 ? ` · ${relatedCount} matches in other samples` : ''}<span aria-hidden="true"> →</span></span>
-</a>
+ </a>
+ <TableActions db={db} table={recordset} compact />
+</article>
+<style>.table-card-main{display:flex;flex-direction:column;gap:13px;min-width:0;flex:1}.table-card-main>strong{font-size:18px;letter-spacing:-.03em;overflow-wrap:anywhere}.table-card{display:flex;flex-direction:column;gap:14px}.table-card-main:focus-visible{outline:2px solid var(--cyan);outline-offset:5px}</style>

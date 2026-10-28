@@ -12,6 +12,8 @@ export type ForeignKey = {
   column: string;
   table: string;
   referencedColumn: string;
+  constraint?: number;
+  position?: number;
 };
 
 export type UniqueKey = { name: string; origin: string; columns: string[] };

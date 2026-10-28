@@ -1,0 +1,30 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import TableActions from '../../components/TableActions.astro';
+import { databases } from '../../data/db';
+const bindings = databases.flatMap((db) => db.graph.concepts.flatMap((concept) => concept.bindings.map((binding) => ({ db, concept, binding, table: db.tables.find((table) => table.name === binding.table)! }))));
+const shared = [...new Set(bindings.flatMap(({ concept }) => [concept.extends, concept.valuesOf].filter((reference): reference is string => !!reference?.includes('://'))))].sort();
+---
+<SiteLayout title="Business concepts across sample databases | DemoDB" description="Compare declared MeaningGraph bindings across DemoDB schemas, with explicit evidence and source pins." canonical="/concepts/">
+ <section class="page-intro shell"><p class="eyebrow">MeaningGraph across DemoDB</p><h1>One concept, different schemas.</h1><p>Find how a shared concept is represented in each dataset. A semantic binding explains meaning; a similar name or shape is structural evidence. Neither establishes compatible identifiers or a join across databases.</p></section>
+ <section class="shell section" data-concept-browser>
+  <form class="discovery-controls" role="search" aria-label="Find concept bindings"><label class="search-label">Concept, dataset, table or field<input name="q" type="search" placeholder="Customer, price, country…" /></label><label>Shared reference<select name="reference"><option value="">All meanings, including local</option>{shared.map((reference) => <option value={reference}>{reference.split('?')[0].split('/').at(-1)} · {new URL(reference).searchParams.get('ref')?.slice(0,7)}</option>)}</select></label><button type="reset" class="button button-quiet">Reset</button></form>
+  <p class="discovery-count" role="status" data-result-count>{bindings.length} declared bindings</p>
+  <div class="concept-comparison">{bindings.map(({ db, concept, binding, table }) => <article data-concept-entry data-search={`${db.name} ${concept.label} ${concept.description} ${binding.table} ${binding.column ?? ''}`.toLowerCase()} data-reference={concept.extends ?? concept.valuesOf ?? ''}>
+   <p class="eyebrow">{db.name} · {concept.kind}</p><h2><a href={concept.definitionHref}>{concept.label} ↗</a></h2><p>{concept.description}</p>
+   <p><a href={new URL(`/tables/${encodeURIComponent(binding.table)}/#${binding.column ? 'schema' : 'meanings'}`,db.canonicalUrl).href}><code>{binding.table}{binding.column ? `.${binding.column}` : ''}</code></a> · {binding.role}</p>
+   <details class="utility-details"><summary>Semantic evidence and source</summary><p>{concept.extends ? `Extends ${concept.extends.includes('://') ? 'shared' : 'local'} concept` : concept.valuesOf ? `Values refer to ${concept.valuesOf.includes('://') ? 'shared' : 'local'} concept` : 'Provider-local concept'}{concept.extends || concept.valuesOf ? <>: <code>{concept.extends ?? concept.valuesOf}</code></> : ''}</p>{binding.note && <p>{binding.note}</p>}<p>Provider revision <code>{db.sourceCommit}</code>. Structural resemblance and shared labels alone are not semantic bindings.</p></details>
+   <TableActions db={db} table={table} compact />
+  </article>)}</div><p data-empty hidden>No published bindings match. Reset the filters to see all concepts.</p>
+ </section>
+</SiteLayout>
+<script>
+ const root = document.querySelector<HTMLElement>('[data-concept-browser]')!;
+ const form = root.querySelector<HTMLFormElement>('form')!;
+ const entries = [...root.querySelectorAll<HTMLElement>('[data-concept-entry]')];
+ const q = form.elements.namedItem('q') as HTMLInputElement, reference = form.elements.namedItem('reference') as HTMLSelectElement;
+ const restore = () => { const params = new URLSearchParams(location.search); q.value = params.get('q') ?? ''; reference.value = params.get('reference') ?? ''; };
+ const update = (save = true) => { const terms = q.value.toLowerCase().trim().split(/\s+/); let count = 0; for (const entry of entries) { entry.hidden = !terms.every((term) => entry.dataset.search?.includes(term)) || !!reference.value && entry.dataset.reference !== reference.value; if (!entry.hidden) count++; } root.querySelector('[data-result-count]')!.textContent = `${count} of ${entries.length} declared bindings`; root.querySelector<HTMLElement>('[data-empty]')!.hidden = count > 0; if (save) { const url = new URL(location.href); for (const [key,value] of [['q',q.value],['reference',reference.value]]) value ? url.searchParams.set(key,value) : url.searchParams.delete(key); history.replaceState(null,'',url); } };
+ restore(); update(false); form.addEventListener('submit',(event) => event.preventDefault()); form.addEventListener('input',()=>update()); form.addEventListener('reset',()=>queueMicrotask(()=>update())); window.addEventListener('popstate',()=>{restore();update(false);});
+</script>
+<style>.concept-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.concept-comparison article{border-top:1px solid var(--line);padding:22px 0;min-width:0}.concept-comparison h2{font-size:21px}.concept-comparison p{font-size:14px;color:var(--muted)}.concept-comparison code{overflow-wrap:anywhere}.concept-comparison a{color:var(--cyan)}@media(max-width:800px){.concept-comparison{grid-template-columns:1fr}}</style>

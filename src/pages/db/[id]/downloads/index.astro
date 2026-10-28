@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import SiteLayout from '../../../../layouts/SiteLayout.astro';
 import { completeDownloads, databases, downloadLabel, exportHref, gapLabel, licenceNotice, unavailableFormats } from '../../../../data/db';
+import { humanBytes } from '../../../../data/handoffs';
 import type { Database } from '../../../../data/types';
 export function getStaticPaths() { return databases.map((db) => ({ params: { id: db.id }, props: { db } })); }
 const { db } = Astro.props as { db: Database };
@@ -12,8 +13,8 @@ const fullFiles = completeDownloads(db);
 const missingFormats = unavailableFormats(db);
 const tables = db.tables.filter((item) => item.kind === 'table');
 const transferLabel = (item: Database['exports'][number]) => item.compression === 'gzip' && item.decodedBytes != null
-  ? `${item.decodedBytes.toLocaleString()} bytes file · ${item.bytes?.toLocaleString() ?? 'unknown'} gzip transfer`
-  : item.bytes != null ? `${item.bytes.toLocaleString()} bytes` : null;
+  ? `${humanBytes(item.decodedBytes)} file · ${humanBytes(item.bytes)} gzip transfer`
+  : item.bytes != null ? humanBytes(item.bytes) : null;
 const importExports = db.exports.filter((item) => item.format === 'json' && item.table && tables.some((table) => table.name === item.table));
 const canBrowserImport = tables.length > 0 && tables.every((table) => importExports.some((item) => item.table === table.name && item.sha256));
 const importConfig = {
@@ -24,17 +25,19 @@ const importConfig = {
 };
 ---
 <SiteLayout db={db} title={`Downloads — ${db.name} | DemoDB`} description={`Download ${db.name} in the formats supported by its provider contract.`} canonical="/downloads/">
-  <section class="page-intro shell"><p class="eyebrow">Data access</p><h1>Downloads</h1><p>Download the complete database or choose a focused table export. Provider files are checked against the provider’s pinned checksums at build time; files DemoDB generates (complete JSON, YAML, PostgreSQL script, inGitDB archive, and the MySQL, SQL Server and Oracle scripts written by DataTug and loaded into the real engine) are pinned by a lock and validated against the SQLite fixture; the licence notice below names the ones generated for this dataset.</p><p class="muted licence-notice">{licenceNotice(db)} <a href="/about/">Source and licence →</a></p></section>
-  <section class="shell section download-layout"><div><div class="section-heading compact"><div><p class="eyebrow">Complete database</p><h2>Files ready to use.</h2></div></div><div class="big-download-list">{fullFiles.map((item) => <a href={exportHref(item)} download><span><strong>{downloadLabel(db, item.format)}</strong><small>{transferLabel(item) ? `${transferLabel(item)} · ` : ''}Complete {db.name} export</small></span><b>↓</b></a>)}</div>{missingFormats.length > 0 && <div class="content-card format-gaps"><p class="eyebrow">Not offered</p><h2>Formats without a download.</h2><ul>{missingFormats.map((item) => <li><strong>{item.label}</strong><span>{gapLabel(item)}: {item.reason}</span></li>)}</ul></div>}<div class="content-card download-note"><p class="eyebrow">Machine-readable schema</p><h2>Use the contract too.</h2><p>Schema JSON describes native table and view names, columns, keys, relationships, sample rows, and row counts.</p><a class="text-link" href="/schema.json">Download schema JSON →</a><p><a class="text-link" href="https://demodb.dev/corpus.json">Open the machine-readable DemoDB corpus index →</a></p></div></div><aside class="download-aside"><div class="content-card"><p class="eyebrow">Table files</p><h2>{tables.length} tables</h2><p>Each table uses its original identifier in the download name. URL encoding keeps names with spaces usable as ordinary links.</p><div class="mini-table-list">{tables.map((table) => <a href={`/tables/${encodeURIComponent(table.name)}/`}><span>{table.name}</span><small>{table.rowCount?.toLocaleString() ?? '—'} rows →</small></a>)}</div></div></aside></section>
+  <section class="page-intro shell"><p class="eyebrow">Data access</p><h1>Downloads</h1><p>Choose a complete engine edition, one table, or a pinned research bundle.</p><details class="utility-details"><summary>How files are checked and licensed</summary><p>Provider files are checked against the provider’s pinned checksums at build time; files DemoDB generates (complete JSON, YAML, PostgreSQL script, inGitDB archive, and the MySQL, SQL Server and Oracle scripts written by DataTug and loaded into the real engine) are pinned by a lock and validated against the SQLite fixture; the licence notice below names the ones generated for this dataset.</p><p class="muted licence-notice">{licenceNotice(db)} <a href="/about/">Source and licence →</a></p></details></section>
+  <nav class="shell context-actions" aria-label="Choose a download task"><a class="button button-quiet" href="#complete">Use an engine edition</a><a class="button button-quiet" href="#table-files">Export one table</a><a class="button button-quiet" href="#research">Reproduce a result</a><a class="button button-quiet" href="#browser-copy">Work in this browser</a><a class="button button-quiet" href="/model/#developers">Build with the API and contracts</a></nav>
+  <section id="complete" class="shell section download-layout"><div><div class="section-heading compact"><div><p class="eyebrow">Complete database</p><h2>Files ready to use.</h2></div></div><div class="big-download-list">{fullFiles.map((item) => <a href={exportHref(item)} download><span><strong>{downloadLabel(db, item.format)}</strong><small>{transferLabel(item) ? `${transferLabel(item)} · ` : ''}Complete {db.name} export</small></span><b>↓</b></a>)}</div>{missingFormats.length > 0 && <div class="content-card format-gaps"><p class="eyebrow">Not offered</p><h2>Formats without a download.</h2><ul>{missingFormats.map((item) => <li><strong>{item.label}</strong><span>{gapLabel(item)}: {item.reason}</span></li>)}</ul></div>}<div class="content-card download-note"><p class="eyebrow">Machine-readable schema</p><h2>Use the contract too.</h2><p>Schema JSON describes native table and view names, columns, keys, relationships, sample rows, and row counts.</p><a class="text-link" href="/schema.json">Download schema JSON →</a><p><a class="text-link" href="https://demodb.dev/corpus.json">Open the machine-readable DemoDB corpus index →</a></p></div></div><aside id="table-files" class="download-aside"><div class="content-card"><p class="eyebrow">Table files</p><h2>{tables.length} tables</h2><p>Each table uses its original identifier in the download name. URL encoding keeps names with spaces usable as ordinary links.</p><div class="mini-table-list">{tables.map((table) => <a href={`/tables/${encodeURIComponent(table.name)}/`}><span>{table.name}</span><small>{table.rowCount?.toLocaleString() ?? '—'} rows →</small></a>)}</div></div></aside></section>
 
-  <section class="shell section">
+  <section class="shell section"><h2>Verify before loading.</h2><p class="muted">Upstream scripts labelled “unverified, drops database” can remove a database. Review their SQL before running them in an isolated environment. Chunked downloads are manifests; download and assemble every listed part before checking the decoded file checksum.</p><div class="integrity-list">{fullFiles.map((item,index) => <details class="utility-details"><summary>{downloadLabel(db,item.format)} · integrity and setup</summary><p><code>{item.publicPath}</code> · {transferLabel(item)}</p><p>SHA-256 ({item.compression ? 'joined gzip transfer' : 'file'}): <code>{item.sha256 ?? 'Not published'}</code></p>{item.decodedSha256 && <p>Decoded file SHA-256: <code>{item.decodedSha256}</code></p>}{!item.compression && <><pre class="query-code"><code id={`download-command-${index}`}>{`curl --fail --location '${new URL(exportHref(item),db.canonicalUrl).href}' --output '${item.publicPath.split('/').at(-1)}'`}{item.sha256 ? `\nprintf '%s  %s\n' '${item.sha256}' '${item.publicPath.split('/').at(-1)}' | shasum -a 256 -c -` : ''}{item.format === 'sqlite' ? `\nsqlite3 '${item.publicPath.split('/').at(-1)}' '.tables'` : ''}</code></pre><button type="button" class="copy-button" data-copy-target={`download-command-${index}`}>Copy download and verification commands</button></>}</details>)}</div></section>
+  <section id="research" class="shell section">
     <div class="content-card download-note">
       <p class="eyebrow">Reproducible research</p>
       <h2>One checked snapshot.</h2>
       <p>The deterministic bundle contains the checked table exports, schema, provider model files, licences, source revision, and example queries. Its manifest lists a SHA-256 checksum for every bundled file and archive part.</p>
       {db.id === 'northwind' && <p><a class="text-link" href="/evidence/public-orders/">Inspect the separately pinned public Orders comparison →</a> The receipt records one observation of SQLite and PostgreSQL responses; it is not a live API rights assertion.</p>}
       <div class="big-download-list">
-        {snapshotParts.map((part, index) => <a href={`https://demodb.dev/research-snapshots/${part.file}`} download><span><strong>Research ZIP part {index + 1} of {snapshotParts.length}</strong><small>{part.bytes.toLocaleString()} bytes · SHA-256 {part.sha256}</small></span><b>↓</b></a>)}
+        {snapshotParts.map((part, index) => <a href={`https://demodb.dev/research-snapshots/${part.file}`} download><span><strong>Research ZIP part {index + 1} of {snapshotParts.length}</strong><small>{humanBytes(part.bytes)} · SHA-256 {part.sha256}</small></span><b>↓</b></a>)}
         <a href={`https://demodb.dev/research-snapshots/${db.id}.manifest.json`}><span><strong>Bundle manifest</strong><small>Contents, source revision, and file checksums</small></span><b>↗</b></a>
         <a href={`https://demodb.dev/research-snapshots/${db.id}.zip.sha256`}><span><strong>Archive SHA-256</strong><small>Verify the downloaded ZIP</small></span><b>↗</b></a>
       </div>
@@ -42,7 +45,7 @@ const importConfig = {
     </div>
   </section>
 
-  <section class="shell section">
+  <section id="browser-copy" class="shell section">
     <div class="content-card snapshot-import" data-import-root data-config={JSON.stringify(importConfig)}>
       <p class="eyebrow">Optional browser copy</p>
       <h2>Explore locally in this browser.</h2>

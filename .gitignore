@@ -16,3 +16,7 @@ dist-hosts/
 
 # Python provider-tool caches
 __pycache__/
+
+# Local browser acceptance artifacts
+test-results/
+playwright-report/

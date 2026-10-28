@@ -11,7 +11,7 @@ for (const db of databases) {
     const html = await readFile(new URL('index.html', dir), 'utf8');
     assert.match(html, /Tools for your next step/);
     assert.match(html, /CodeGrapher/);
-    assert.match(html, /Open QueryDock/);
+    assert.match(html, db.queries.length ? /Try prepared SQL examples/ : /Open QueryDock/);
     const tools = html.indexOf('id="tools-heading"');
     const tables = html.indexOf('Browse the recordsets.');
     const meanings = html.indexOf('id="meanings-heading"');

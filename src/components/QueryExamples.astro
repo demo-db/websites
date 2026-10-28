@@ -1,0 +1,19 @@
+---
+import { teachingDatasets, preparedQuery } from '../data/querydock';
+import type { Database } from '../data/types';
+interface Props { db: Database; compact?: boolean; table?: string }
+const { db, compact = false, table } = Astro.props;
+const dataset = teachingDatasets[db.id];
+const examples = dataset?.examples.filter((example) => !table || example.sql.includes(table)).slice(0, compact ? 1 : undefined) ?? [];
+---
+{examples.length > 0 && <section class="prepared-queries" aria-label="Prepared QueryDock examples">
+ <p class="eyebrow">SQLite {dataset.engineVersion} · prepared in QueryDock</p>
+ <p class="muted">{dataset.scope} Opening prepares the schema, seed and query. Choose Run to execute; no account is needed.</p>
+ {!compact && <details class="utility-details"><summary>Subset contents and source pin</summary><p>Source revision <code>{dataset.sourceRevision}</code>. Fixture SHA-256 <code>{dataset.fixtureSha256}</code>.</p><ul>{Object.entries(dataset.rowCounts).filter(([, count]) => count > 0).map(([name, count]) => <li><code>{name}</code> · {count} rows</li>)}</ul><p>Native columns and declared foreign-key pairs are retained. This teaching schema defers foreign-key checks until the seed transaction commits, so circular references can be imported with checks enabled. Empty tables are included as schema metadata. Full-database totals require the complete download.</p></details>}
+ {examples.map((example) => <article class="prepared-query" id={`query-${example.id}`}>
+  <h2>{example.title}</h2><pre class="query-code"><code id={`sql-${example.id}`}>{example.sql}</code></pre>
+  <div class="context-actions"><a class="button button-primary" data-handoff="querydock" data-dataset={db.id} data-object={example.id} href={preparedQuery(db.id, example, table ? `/tables/${encodeURIComponent(table)}/` : '/queries/')}>Open prepared query in QueryDock ↗</a><button type="button" class="copy-button" data-copy-target={`sql-${example.id}`}>Copy SQL</button></div>
+  <details class="utility-details"><summary>Expected result · {example.expected.rowCount} rows in this subset</summary><p class="muted">First {example.expected.rows.length} rows of the pinned teaching input, before your edits. Result ordering can vary where SQL does not break ties.</p><div class="table-scroll"><table class="data-table"><thead><tr>{example.expected.columns.map((name) => <th scope="col">{name}</th>)}</tr></thead><tbody>{example.expected.rows.map((row) => <tr>{row.map((value) => <td>{value === null ? 'NULL' : typeof value === 'object' ? JSON.stringify(value) : String(value)}</td>)}</tr>)}</tbody></table></div></details>
+ </article>)}
+</section>}
+<style>.prepared-queries{min-width:0}.prepared-queries>.muted{max-width:85ch}.prepared-query{padding:24px 0;border-bottom:1px solid var(--line);min-width:0}.prepared-query h2{font-size:23px;line-height:1.3}.prepared-queries code{overflow-wrap:anywhere}.prepared-queries th,.prepared-queries td{padding:10px;font-size:13px;text-align:left;max-width:320px;overflow-wrap:anywhere}.table-scroll{overflow-x:auto}.query-code{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--code-surface);padding:18px;border:1px solid var(--line);border-radius:5px;color:var(--cyan)}</style>

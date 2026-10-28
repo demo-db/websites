@@ -16,7 +16,8 @@
     "deploy:dry-run": "node scripts/assert-deployable-build.mjs && node scripts/deploy-hosts.mjs --dry-run",
     "docs:format-matrix": "node scripts/format-matrix-doc.mjs --write",
     "typecheck": "tsc --noEmit",
-    "deploy:hosts": "node scripts/assert-deployable-build.mjs && node scripts/deploy-hosts.mjs"
+    "deploy:hosts": "node scripts/assert-deployable-build.mjs && node scripts/deploy-hosts.mjs",
+    "test:browser": "node scripts/test-browser.mjs"
   },
   "dependencies": {
     "ajv": "8.20.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
+    "@playwright/test": "1.64.1",
     "@types/node": "^22.15.0",
     "fake-indexeddb": "6.2.4",
     "tsx": "^4.19.2",

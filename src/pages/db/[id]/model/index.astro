@@ -1,4 +1,5 @@
 ---
+import DeveloperQuickstart from '../../../../components/DeveloperQuickstart.astro';
 import ProfileMeanings from '../../../../components/ProfileMeanings.astro';
 import SiteLayout from '../../../../layouts/SiteLayout.astro';
 import { databases } from '../../../../data/db';
@@ -11,4 +12,5 @@ const modelFiles = [db.model.hcl && { path: db.model.hcl, label: 'ModelSpec HCL'
   <section class="page-intro shell"><p class="eyebrow">Model and meaning</p><h1>Data model</h1><p>The provider publishes storage-neutral descriptions alongside the native database schema. These files complement the schema pages and remain owned by the database repository.</p></section>
   <section class="shell section"><div class="download-layout"><div><div class="section-heading compact"><div><p class="eyebrow">Published files</p><h2>Provider-owned metadata.</h2></div></div><div class="big-download-list">{modelFiles.map((file) => <a href={`/model/${file.path.split('/').pop()}`}><span><strong>{file.label}</strong><small><code>{file.path}</code></small></span><b>↓</b></a>)}</div></div><aside class="download-aside"><div class="content-card"><p class="eyebrow">Bound to the schema</p><h2>{db.tables.filter((table) => table.kind === 'table').length} record types.</h2><p>The model files are generated and validated by the provider. Native recordset names continue to appear in table and download URLs.</p><a class="text-link" href="/schema/">Explore schema →</a></div></aside></div></section>
   <ProfileMeanings db={db} all />
+  <DeveloperQuickstart db={db} />
 </SiteLayout>
